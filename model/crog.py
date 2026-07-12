@@ -1,93 +1,74 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
-from .clip import build_model
-from .layers import Neck, Decoder, Projector
-from .fusion import Fusion
-from .dinov2.models.vision_transformer import vit_base,vit_large
-from .projector_builder import build_projector
 
-class DROG(nn.Module):
+from .crog_clip import build_model
+
+from .crog_layers import FPN, Projector, TransformerDecoder, MultiTaskProjector
+
+
+class CROG(nn.Module):
     def __init__(self, cfg):
         super().__init__()
-        # Text Encoder
+        
+        # Flags for ablation study
+        self.use_contrastive = cfg.use_contrastive
+        self.use_pretrained_clip = cfg.use_pretrained_clip
         self.use_grasp_masks = cfg.use_grasp_masks
-
+        
+        # Vision & Text Encoder
         clip_model = torch.jit.load(cfg.clip_pretrain,
                                     map_location="cpu").eval()
-        self.txt_backbone = build_model(clip_model.state_dict(), cfg.word_len, cfg.input_size, cfg.txtual_adapter_layer,cfg.txt_adapter_dim).float()
-        self.fusion = Fusion(d_model=cfg.ladder_dim, nhead=cfg.nhead,dino_layers=cfg.dino_layers, output_dinov2=cfg.output_dinov2)
-    
-       # Fix Backbone
-        for param_name, param in self.txt_backbone.named_parameters():
-            if 'adapter' not in param_name : 
-                param.requires_grad = False       
-   
-
-        state_dict = torch.load(cfg.dino_pretrain) 
-        if cfg.dino_name=='dino-base':
-            self.dinov2 = vit_base(
-                patch_size=14,
-                num_register_tokens=4,
-                img_size=526,
-                init_values=1.0,
-                block_chunks=0,
-                add_adapter_layer=cfg.visual_adapter_layer,
-                visual_adapter_dim=cfg.visual_adapter_dim,                
-            )
-        else:
-            self.dinov2=vit_large(
-                patch_size=14,
-                num_register_tokens=4,
-                img_size=526,
-                init_values=1.0,
-                block_chunks=0,
-                add_adapter_layer=cfg.visual_adapter_layer,
-                visual_adapter_dim=cfg.visual_adapter_dim,                
-            )
-        self.dinov2.load_state_dict(state_dict, strict=False)
-
-        for param_name, param in self.dinov2.named_parameters():
-            if 'adapter' not in param_name:
-                param.requires_grad = False
+        print(f"Load pretrained CLIP: {self.use_pretrained_clip}")
+        self.backbone = build_model(clip_model.state_dict(), cfg.word_len, self.use_pretrained_clip).float()
+        # Multi-Modal FPN
+        self.neck = FPN(in_channels=cfg.fpn_in, out_channels=cfg.fpn_out)
         
-        # Multi-Modal Decoder
-        self.neck = Neck(in_channels=cfg.fpn_in, out_channels=cfg.fpn_out, stride=cfg.stride)
-        self.decoder = Decoder(num_layers=cfg.num_layers,
-                                          d_model=cfg.vis_dim,
-                                          nhead=cfg.num_head,
-                                          dim_ffn=cfg.dim_ffn,
-                                          dropout=cfg.dropout,
-                                          return_intermediate=cfg.intermediate)
-
-        # Projector
+        # Decoder
+        if self.use_contrastive:
+            print("Use contrastive learning module")
+            # Decoder
+            self.decoder = TransformerDecoder(num_layers=cfg.num_layers,
+                                            d_model=cfg.vis_dim,
+                                            nhead=cfg.num_head,
+                                            dim_ffn=cfg.dim_ffn,
+                                            dropout=cfg.dropout,
+                                            return_intermediate=cfg.intermediate)
+        else:
+            print("Disable contrastive learning module")
         if self.use_grasp_masks:
             # Projector
             print("Use grasp masks")
-            self.proj = build_projector(cfg)
+            self.proj = MultiTaskProjector(cfg.word_dim, cfg.vis_dim // 2, 3)
         else:
             print("Disable grasp masks")
             self.proj = Projector(cfg.word_dim, cfg.vis_dim // 2, 3)
 
-
     def forward(self, img, word, mask=None, grasp_qua_mask=None, grasp_sin_mask=None,
                 grasp_cos_mask=None, grasp_wid_mask=None, grasp_off_mask=None,
                 grasp_off_weight=None):
-
+        '''
+            img: b, 3, h, w
+            word: b, words
+            word_mask: b, words
+            mask: b, 1, h, w
+        '''
+        # padding mask used in decoder
         pad_mask = torch.zeros_like(word).masked_fill_(word == 0, 1).bool()
 
-
-        vis, word, state= self.fusion(img, word, self.txt_backbone, self.dinov2)
+        # vis: C3 / C4 / C5
+        # word: b, length, 1024
+        # state: b, 1024
+        vis = self.backbone.encode_image(img)
+        word, state = self.backbone.encode_text(word)
 
         # b, 512, 26, 26 (C4)
         fq = self.neck(vis, state)
         b, c, h, w = fq.size()
-        fq = self.decoder(fq, word, pad_mask)
-        fq = fq.reshape(b, c, h, w)
-
-        # b, 1, 104, 104
-        pred = self.proj(fq, state)
+        
+        if self.use_contrastive:
+            fq = self.decoder(fq, word, pad_mask)
+            fq = fq.reshape(b, c, h, w)
 
         if self.use_grasp_masks:
             
@@ -116,14 +97,18 @@ class DROG(nn.Module):
                 grasp_cos_loss = F.smooth_l1_loss(grasp_cos_pred, grasp_cos_mask)
                 grasp_wid_loss = F.smooth_l1_loss(grasp_wid_pred, grasp_wid_mask)
 
+                # @TODO adjust coef of different loss items
                 total_loss = loss + grasp_qua_loss + grasp_sin_loss + grasp_cos_loss + grasp_wid_loss
 
                 loss_dict = {}
-                loss_dict["m_ins"] = loss.detach()
-                loss_dict["m_qua"] = grasp_qua_loss.detach()
-                loss_dict["m_sin"] = grasp_sin_loss.detach()
-                loss_dict["m_cos"] = grasp_cos_loss.detach()
-                loss_dict["m_wid"] = grasp_wid_loss.detach()
+                loss_dict["m_ins"] = loss.item()
+                loss_dict["m_qua"] = grasp_qua_loss.item()
+                loss_dict["m_sin"] = grasp_sin_loss.item()
+                loss_dict["m_cos"] = grasp_cos_loss.item()
+                loss_dict["m_wid"] = grasp_wid_loss.item()
+
+                # loss = F.binary_cross_entropy_with_logits(pred, mask, reduction="none").sum(dim=(2,3))
+                # loss = torch.dot(coef.squeeze(), loss.squeeze()) / (mask.shape[0] * mask.shape[2] * mask.shape[3])
 
                 return (pred.detach(), grasp_qua_pred.detach(), grasp_sin_pred.detach(), grasp_cos_pred.detach(), grasp_wid_pred.detach()), (mask, grasp_qua_mask, grasp_sin_mask, grasp_cos_mask, grasp_wid_mask), total_loss, loss_dict
             else:
@@ -140,11 +125,11 @@ class DROG(nn.Module):
                                         mode='nearest').detach()
                 loss = F.binary_cross_entropy_with_logits(pred, mask)
                 loss_dict = {}
-                loss_dict["m_ins"] = loss.detach()
+                loss_dict["m_ins"] = loss.item()
                 loss_dict["m_qua"] = 0
                 loss_dict["m_sin"] = 0
                 loss_dict["m_cos"] = 0
                 loss_dict["m_wid"] = 0
                 return (pred.detach(), None, None, None, None), (mask, None, None, None, None), loss, loss_dict
             else:
-                return pred.detach(), mask        
+                return pred.detach(), mask

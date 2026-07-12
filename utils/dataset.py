@@ -1153,7 +1153,8 @@ class GraspToolTransforms:
 
 class GraspToolDataset(Dataset):
 
-    def __init__(self, root_dir, input_size=416, split='train', word_length=17):
+    def __init__(self, root_dir, input_size=416, split='train', word_length=17,
+                 with_offset=False, offset_radius=20.0, offset_sigma=None):
         self.root_dir = root_dir
         self.input_size = (input_size, input_size)
         self.word_length = word_length
@@ -1161,6 +1162,9 @@ class GraspToolDataset(Dataset):
         self.mean = torch.tensor([0.48145466, 0.4578275, 0.40821073]).reshape(3, 1, 1)
         self.std = torch.tensor([0.26862954, 0.26130258, 0.27577711]).reshape(3, 1, 1)
         self.grasp_transform = GraspToolTransforms(width_factor=100, width=input_size, height=input_size)
+        self.with_offset = bool(with_offset)
+        self.offset_radius = float(offset_radius)
+        self.offset_sigma = offset_sigma
 
         
         split_dir = os.path.join(root_dir, split)
@@ -1206,12 +1210,13 @@ class GraspToolDataset(Dataset):
                         borderMode=cv2.BORDER_CONSTANT, borderValue=0)
 
         if len(grasps) > 0:
-            grasps = np.stack(grasps, axis=0)  
+            grasps = np.stack(grasps, axis=0)
             ones = np.ones((grasps.shape[0], grasps.shape[1], 1))
             pts = np.concatenate([grasps, ones], axis=-1)
             pts_trans = np.matmul(mat[None, ...], pts.transpose(0, 2, 1)).transpose(0, 2, 1)
             grasps_trans = pts_trans.astype(np.float32)
         else:
+            grasps = np.zeros((0, 4, 2), dtype=np.float32)
             grasps_trans = np.zeros((0, 4, 2), dtype=np.float32)
         
         grasp_target = self.grasp_transform(grasps, target=0)
@@ -1226,6 +1231,28 @@ class GraspToolDataset(Dataset):
         wid = grasp_masks_raw["wid"] / 255.
         sin = np.sin(2 * ang)
         cos = np.cos(2 * ang)
+
+        grasp_masks = {
+            "qua": torch.from_numpy(qua).float(),
+            "sin": torch.from_numpy(sin).float(),
+            "cos": torch.from_numpy(cos).float(),
+            "wid": torch.from_numpy(wid).float(),
+        }
+        if self.with_offset:
+            centers = (
+                grasp_rect_format[:, :2]
+                if len(grasp_rect_format)
+                else np.zeros((0, 2), dtype=np.float32)
+            )
+            off, off_w = make_dense_offset_with_radius_np(
+                centers_xy=centers,
+                img_size_hw=self.input_size,
+                r_pix=self.offset_radius,
+                use_gaussian=True,
+                sigma=self.offset_sigma,
+            )
+            grasp_masks["off"] = torch.from_numpy(off).float()
+            grasp_masks["off_w"] = torch.from_numpy(off_w).float()
 
         # cv2.imwrite("./debug_vis/mask_img.png", mask_img * 255)
         # cv2.imwrite("./debug_vis/mask_resized.png", mask_resized * 255)
@@ -1245,12 +1272,7 @@ class GraspToolDataset(Dataset):
             "img": image,
             "depth": torch.zeros(1, *self.input_size),  
             "mask": torch.from_numpy(mask_resized).float(),
-            "grasp_masks": {
-                "qua": torch.from_numpy(qua).float(),
-                "sin": torch.from_numpy(sin).float(),
-                "cos": torch.from_numpy(cos).float(),
-                "wid": torch.from_numpy(wid).float()
-            },
+            "grasp_masks": grasp_masks,
             "word_vec": word_vec,
             "grasps": grasp_target,
             "target": obj["category"],
@@ -1280,16 +1302,20 @@ class GraspToolDataset(Dataset):
 
     @staticmethod
     def collate_fn(batch):
+        grasp_masks = {
+            key: torch.stack([x["grasp_masks"][key] for x in batch])
+            for key in ("qua", "sin", "cos", "wid")
+        }
+        for key in ("off", "off_w"):
+            if all(key in x["grasp_masks"] for x in batch):
+                grasp_masks[key] = torch.stack(
+                    [x["grasp_masks"][key] for x in batch]
+                )
         return {
             "img": torch.stack([x["img"] for x in batch]),
             "depth": torch.stack([x["depth"] for x in batch]),
             "mask": torch.stack([x["mask"] for x in batch]),
-            "grasp_masks": {
-                "qua": torch.stack([x["grasp_masks"]["qua"] for x in batch]),
-                "sin": torch.stack([x["grasp_masks"]["sin"] for x in batch]),
-                "cos": torch.stack([x["grasp_masks"]["cos"] for x in batch]),
-                "wid": torch.stack([x["grasp_masks"]["wid"] for x in batch])
-            },
+            "grasp_masks": grasp_masks,
             "word_vec": torch.stack([x["word_vec"] for x in batch]),
             "grasps": [x["grasps"] for x in batch],
             "target": [x["target"] for x in batch],

@@ -1,9 +1,9 @@
 import torch.nn as nn
 
-from .layers import MultiTaskProjector   
+from .layers import MultiTaskProjector, OffsetMultiTaskProjector
 from .layers import FiLMProjector            
 
-def build_projector(cfg) -> nn.Module:
+def build_projector(cfg, with_offset=False) -> nn.Module:
     """
     根据 config 里 MODEL.PROJECTOR.TYPE 构建不同的 head：
       - "dynamic" -> MultiTaskProjector (你现在的版本)
@@ -15,19 +15,21 @@ def build_projector(cfg) -> nn.Module:
 
     proj_type   = proj_cfg.lower()
     if proj_type == "dynamic":
-        projector = MultiTaskProjector(
+        projector_cls = OffsetMultiTaskProjector if with_offset else MultiTaskProjector
+        projector = projector_cls(
             word_dim=word_dim,
             in_dim= vis_dim//2,
             kernel_size=3
         )
-    elif proj_type == "film":
+    elif proj_type == "film" and not with_offset:
         projector = FiLMProjector(
             word_dim=word_dim,
             in_dim=vis_dim//2,
             kernel_size=3
         )
     else:
-        raise ValueError(f"Unknown PROJECTOR.TYPE = {proj_cfg.TYPE}")
+        suffix = " with offset" if with_offset else ""
+        raise ValueError(f"Unknown projector type {proj_type!r}{suffix}")
 
     print(f"[build_projector] Use projector type: {proj_type}, "
           f"word_dim={word_dim}, in_dim={vis_dim//2}, k={3}")

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
-from model.clip import build_model
+from .clip import build_model
 from .layers import Neck, Decoder, Projector
 from .fusion import Fusion
 from .dinov2.models.vision_transformer import vit_base,vit_large

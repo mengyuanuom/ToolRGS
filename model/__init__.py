@@ -1,92 +1,70 @@
-from .segmenter import DETRIS
+"""Configuration-driven model registry for ToolRGS."""
+
 from loguru import logger
+
+from .crog import CROG
+from .crogoff import CROGOFF
 from .drog import DROG
+from .drogoff import DROGOFF
+from .segmenter import DETRIS
 
-def build_segmenter(args):
-    model = DETRIS(args)
-    backbone = []
-    head = []
-    neck = []
-    decoder = []
-    proj = []
-    fix = []
-    for k, v in model.named_parameters():
-        if (k.startswith('txt_backbone') and 'positional_embedding' not in k  or 'dinov2' in k) and v.requires_grad:
-            backbone.append(v)
-        elif v.requires_grad:
-            head.append(v)
-            if 'neck' in k:
-                neck.append(v)
-            elif 'decoder' in k:
-                decoder.append(v)
-            elif 'proj' in k:
-                proj.append(v)
+
+MODEL_REGISTRY = {
+    "crog": CROG,
+    "crogoff": CROGOFF,
+    "detris": DETRIS,
+    "drog": DROG,
+    "drogoff": DROGOFF,
+}
+
+
+def build_model(cfg):
+    name = str(getattr(cfg, "architecture", "drog")).lower()
+    try:
+        model_cls = MODEL_REGISTRY[name]
+    except KeyError as exc:
+        available = ", ".join(sorted(MODEL_REGISTRY))
+        raise ValueError(f"Unknown model {name!r}; available: {available}") from exc
+
+    model = model_cls(cfg)
+    backbone, head, frozen = [], [], []
+    for param_name, parameter in model.named_parameters():
+        if not parameter.requires_grad:
+            frozen.append(parameter)
+        elif (
+            param_name.startswith("backbone")
+            or param_name.startswith("txt_backbone")
+            or param_name.startswith("dinov2")
+        ):
+            backbone.append(parameter)
         else:
-            fix.append(v)
-    logger.info('Backbone with decay={}, Head={}'.format(len(backbone), len(head)))
-    param_list = [{
-        'params': backbone,
-        'initial_lr': args.lr_multi * args.base_lr
-    }, {
-        'params': head,
-        'initial_lr': args.base_lr
-    }]
-    
-    n_backbone_parameters = sum(p.numel() for p in backbone)
-    logger.info(f'number of updated params (Backbone): {n_backbone_parameters}.')
-    n_head_parameters = sum(p.numel() for p in head)
-    logger.info(f'number of updated params (Head)    : {n_head_parameters}')
-    n_neck_parameters = sum(p.numel() for p in neck)
-    logger.info(f'number of updated params (neck)    : {n_neck_parameters}')
-    n_decoder_parameters = sum(p.numel() for p in decoder)
-    logger.info(f'number of updated params (decoder)    : {n_decoder_parameters}')
-    n_proj_parameters = sum(p.numel() for p in proj)
-    logger.info(f'number of updated params (proj)    : {n_proj_parameters}')
-    n_fixed_parameters = sum(p.numel() for p in fix)
-    logger.info(f'number of fixed params             : {n_fixed_parameters}')
-    return model, param_list
+            head.append(parameter)
+
+    parameter_groups = [
+        {"params": backbone, "initial_lr": cfg.lr_multi * cfg.base_lr},
+        {"params": head, "initial_lr": cfg.base_lr},
+    ]
+    logger.info(
+        "Build {}: backbone={}, head={}, frozen={}",
+        name,
+        sum(p.numel() for p in backbone),
+        sum(p.numel() for p in head),
+        sum(p.numel() for p in frozen),
+    )
+    return model, parameter_groups
 
 
-def build_drog(args):
-    model = DROG(args)
-    backbone = []
-    head = []
-    neck = []
-    decoder = []
-    proj = []
-    fix = []
-    for k, v in model.named_parameters():
-        if (k.startswith('txt_backbone') and 'positional_embedding' not in k  or 'dinov2' in k) and v.requires_grad:
-            backbone.append(v)
-        elif v.requires_grad:
-            head.append(v)
-            if 'neck' in k:
-                neck.append(v)
-            elif 'decoder' in k:
-                decoder.append(v)
-            elif 'proj' in k:
-                proj.append(v)
-        else:
-            fix.append(v)
-    logger.info('Backbone with decay={}, Head={}'.format(len(backbone), len(head)))
-    param_list = [{
-        'params': backbone,
-        'initial_lr': args.lr_multi * args.base_lr
-    }, {
-        'params': head,
-        'initial_lr': args.base_lr
-    }]
-    
-    n_backbone_parameters = sum(p.numel() for p in backbone)
-    logger.info(f'number of updated params (Backbone): {n_backbone_parameters}.')
-    n_head_parameters = sum(p.numel() for p in head)
-    logger.info(f'number of updated params (Head)    : {n_head_parameters}')
-    n_neck_parameters = sum(p.numel() for p in neck)
-    logger.info(f'number of updated params (neck)    : {n_neck_parameters}')
-    n_decoder_parameters = sum(p.numel() for p in decoder)
-    logger.info(f'number of updated params (decoder)    : {n_decoder_parameters}')
-    n_proj_parameters = sum(p.numel() for p in proj)
-    logger.info(f'number of updated params (proj)    : {n_proj_parameters}')
-    n_fixed_parameters = sum(p.numel() for p in fix)
-    logger.info(f'number of fixed params             : {n_fixed_parameters}')
-    return model, param_list
+# Compatibility aliases for imported DETRIS scripts.
+def build_segmenter(cfg):
+    cfg.architecture = "detris"
+    return build_model(cfg)
+
+
+def build_drog(cfg):
+    cfg.architecture = "drog"
+    return build_model(cfg)
+
+
+def build_drogoff(cfg):
+    cfg.architecture = "drogoff"
+    return build_model(cfg)

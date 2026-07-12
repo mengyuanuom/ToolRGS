@@ -1,8 +1,12 @@
 DATA:
-  dataset: OCID-VLG
-  root_path: ./datasets/OCID-VLG
+  dataset: GraspTool
+  root_path: ./datasets/grasp-tools/aug_graspall_v1128
   train_split: train
   val_split: val
+  offset_r: 20
+  offset_sigma:
+MODEL:
+  architecture: drog
 TRAIN:
   version: multiple
   visual_adapter_dim: 128
@@ -51,15 +55,15 @@ TRAIN:
   manual_seed: 0
   print_freq: 100
   # Resume & Save
-  exp_name: DETRIS_base
-  output_folder: exp/ocid-vlg
+  exp_name: drog_grasp_tools
+  output_folder: exp/grasp_tools
   save_freq: 1
   weight:  # path to initial weight (default: none)
   resume: # path to latest checkpoint (default: none)
   evaluate: True 
   use_grasp_masks: True # evaluate on validation set, extra gpu memory needed and small batch_size_val is recommend
 Distributed:
-  dist_url: tcp://localhost:3681
+  dist_url: env://
   dist_backend: 'nccl'
   multiprocessing_distributed: True
   world_size: 1

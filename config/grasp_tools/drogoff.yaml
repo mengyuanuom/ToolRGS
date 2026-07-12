@@ -1,8 +1,12 @@
 DATA:
-  dataset: OCID-VLG
-  root_path: ./datasets/OCID-VLG
+  dataset: GraspTool
+  root_path: ./datasets/grasp-tools/aug_graspall_v1128
   train_split: train
   val_split: val
+  offset_r: 20
+  offset_sigma:
+MODEL:
+  architecture: drogoff
 TRAIN:
   version: multiple
   visual_adapter_dim: 128
@@ -27,14 +31,14 @@ TRAIN:
   fpn_in: [768, 768, 768] #dinov2 backbone
   fpn_out: [256, 512, 1024]
   sync_bn: True
-
+  projector: dynamic
   # Decoder
   num_layers: 3
   num_head: 8
   dim_ffn: 512
   dropout: 0.1
   intermediate: False 
-  projector: film
+
   # Training Setting
   workers: 32  # data loader workers
   workers_val: 16
@@ -51,15 +55,16 @@ TRAIN:
   manual_seed: 0
   print_freq: 100
   # Resume & Save
-  exp_name: DETRIS_base_film
-  output_folder: exp/ocid-vlg
+  exp_name: drogoff_grasp_tools
+  offset_loss_weight: 1.0
+  output_folder: exp/grasp_tools
   save_freq: 1
   weight:  # path to initial weight (default: none)
   resume: # path to latest checkpoint (default: none)
   evaluate: True 
   use_grasp_masks: True # evaluate on validation set, extra gpu memory needed and small batch_size_val is recommend
 Distributed:
-  dist_url: tcp://localhost:3681
+  dist_url: env://
   dist_backend: 'nccl'
   multiprocessing_distributed: True
   world_size: 1

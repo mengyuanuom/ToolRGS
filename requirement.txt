@@ -10,3 +10,6 @@ tqdm==4.66.1
 opencv-python==4.8.1.78
 fvcore==0.1.5.post20221221
 wandb==0.15.11
+Pillow==10.0.1
+PyYAML==6.0.1
+scikit-image==0.22.0

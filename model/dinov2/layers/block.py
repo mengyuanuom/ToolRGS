@@ -20,7 +20,7 @@ from .attention import Attention, MemEffAttention
 from .drop_path import DropPath
 from .layer_scale import LayerScale
 from .mlp import Mlp
-from model.adapter import DenseAligner
+from ...adapter import DenseAligner
 
 logger = logging.getLogger("dinov2")
 

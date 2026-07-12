@@ -520,4 +520,26 @@ class MultiTaskProjector(nn.Module):
         return mask_out, grasp_qua_out, grasp_sin_out, grasp_cos_out, grasp_wid_out
 
 
+class OffsetMultiTaskProjector(nn.Module):
+    """DROG multi-task projector with an additional normalized (dx, dy) head."""
+
+    def __init__(self, word_dim=1024, in_dim=256, kernel_size=3):
+        super().__init__()
+        self.base = MultiTaskProjector(word_dim, in_dim, kernel_size)
+        # Offset prediction is geometric rather than class-specific. It consumes
+        # the same fused feature map but does not need another dynamic text kernel.
+        self.offset = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+            conv_layer(in_dim * 2, in_dim * 2, 3, padding=1),
+            nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+            conv_layer(in_dim * 2, in_dim, 3, padding=1),
+            nn.Conv2d(in_dim, 2, 1),
+            nn.Tanh(),
+        )
+
+    def forward(self, x, word):
+        outputs = self.base(x, word)
+        return (*outputs, self.offset(x))
+
+
 
