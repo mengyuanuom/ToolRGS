@@ -96,7 +96,6 @@ class Fusion(nn.Module):
         dino_f = dino.norm(dino_f)
         features_dino.append(dino_f)
         
-
         for i, feature_dino in enumerate(features_dino):
             feature_dino=feature_dino[:, 4 + 1 :]
             B,L,C = feature_dino.shape

@@ -184,6 +184,47 @@ class Projector(nn.Module):
         # b, 1, 104, 104
         return out
 
+class FiLMProjector(nn.Module):
+    def __init__(self, word_dim=1024, in_dim=256, kernel_size=3):
+        super().__init__()
+        self.in_dim = in_dim
+        self.kernel_size = kernel_size
+
+        self.vis = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            conv_layer(in_dim * 2, in_dim * 2, 3, padding=1),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+            conv_layer(in_dim * 2, in_dim, 3, padding=1),
+        )
+
+        hidden_dim = in_dim * 2
+        self.gamma_mlp = nn.Sequential(
+            nn.Linear(word_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, in_dim),
+        )
+        self.beta_mlp = nn.Sequential(
+            nn.Linear(word_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, in_dim),
+        )
+
+        self.head = nn.Conv2d(in_dim, 5, kernel_size=kernel_size,
+                              padding=kernel_size // 2)
+
+    def forward(self, x, word):
+        x = self.vis(x)  # [B, C, H, W]
+        B, C, H, W = x.size()
+
+        gamma = self.gamma_mlp(word).view(B, C, 1, 1)
+        beta  = self.beta_mlp(word).view(B, C, 1, 1)
+
+        x = gamma * x + beta
+        out = self.head(x)  # [B, 5, H, W]
+
+        mask_out, qua_out, sin_out, cos_out, wid_out = torch.chunk(out, 5, dim=1)
+        return mask_out, qua_out, sin_out, cos_out, wid_out
+
 
 class Decoder(nn.Module):
     def __init__(self,
@@ -391,6 +432,92 @@ class MLP(nn.Module):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
 
+class MultiTaskProjector(nn.Module):
+    def __init__(self, word_dim=1024, in_dim=256, kernel_size=3):
+        super().__init__()
+        self.in_dim = in_dim
+        self.kernel_size = kernel_size
+        # visual projector
+        self.vis = nn.Sequential(  # os16 -> os4
+            nn.Upsample(scale_factor=2, mode='bilinear'),
+            conv_layer(in_dim * 2, in_dim * 2, 3, padding=1),
+            nn.Upsample(scale_factor=2, mode='bilinear'),
+            conv_layer(in_dim * 2, in_dim, 3, padding=1),
+            nn.Conv2d(in_dim, in_dim*5, 1))
+
+        # textual projector
+        out_dim = 1 * in_dim * kernel_size * kernel_size + 1
+        self.txt = nn.Linear(word_dim, out_dim)
+
+    def forward(self, x, word):
+        '''
+            x: b, 512, 26, 26
+            word: b, 512
+        '''
+        x = self.vis(x)
+        x = torch.tensor_split(x, 5, dim=1) # no tensor_split api in torch 1.7, please use it in higher version
+        # x = torch.chunk(x, 5, dim=1)
+
+        mask_x = x[0]
+        grasp_qua_x = x[1]
+        grasp_sin_x = x[2]
+        grasp_cos_x = x[3]
+        grasp_wid_x = x[4]
+
+        B, C, H, W = mask_x.size()
+
+
+        # 1, b*256, 104, 104
+        mask_x = mask_x.reshape(1, B * C, H, W)
+        grasp_qua_x = grasp_qua_x.reshape(1, B * C, H, W)
+        grasp_sin_x = grasp_sin_x.reshape(1, B * C, H, W)
+        grasp_cos_x = grasp_cos_x.reshape(1, B * C, H, W)
+        grasp_wid_x = grasp_wid_x.reshape(1, B * C, H, W)
+
+
+        # txt: b, (256*3*3 + 1) -> b, 256, 3, 3 / b
+        word = self.txt(word)
+        weight, bias = word[:, :-1], word[:, -1]
+        weight = weight.reshape(B, C, self.kernel_size, self.kernel_size)
+        # Conv2d - 1, b*256, 104, 104 -> 1, b, 104, 104
+        mask_out = F.conv2d(mask_x,
+                       weight,
+                       padding=self.kernel_size // 2,
+                       groups=weight.size(0),
+                       bias=bias)
+        
+        grasp_qua_out = F.conv2d(grasp_qua_x,
+                            weight,
+                            padding=self.kernel_size // 2,
+                            groups=weight.size(0),
+                            bias=bias)
+        
+        grasp_sin_out = F.conv2d(grasp_sin_x,
+                            weight,
+                            padding=self.kernel_size // 2,
+                            groups=weight.size(0),
+                            bias=bias)
+
+        grasp_cos_out = F.conv2d(grasp_cos_x,
+                            weight,
+                            padding=self.kernel_size // 2,
+                            groups=weight.size(0),
+                            bias=bias)
+        
+        grasp_wid_out = F.conv2d(grasp_wid_x,
+                            weight,
+                            padding=self.kernel_size // 2,
+                            groups=weight.size(0),
+                            bias=bias)
+            
+        mask_out = mask_out.transpose(0, 1)
+        grasp_qua_out = grasp_qua_out.transpose(0, 1)
+        grasp_sin_out = grasp_sin_out.transpose(0, 1)
+        grasp_cos_out = grasp_cos_out.transpose(0, 1)
+        grasp_wid_out = grasp_wid_out.transpose(0, 1)
+        # b, 1, 104, 104
+
+        return mask_out, grasp_qua_out, grasp_sin_out, grasp_cos_out, grasp_wid_out
 
 
 

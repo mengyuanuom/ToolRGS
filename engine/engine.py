@@ -1,6 +1,8 @@
 import os
 import time
 from tqdm import tqdm
+
+import os
 import cv2
 import numpy as np
 import torch
@@ -10,38 +12,82 @@ import torch.nn.functional as F
 import wandb
 from loguru import logger
 from utils.dataset import tokenize
-from utils.misc import (AverageMeter, ProgressMeter, concat_all_gather,
-                        trainMetricGPU)
+from utils.misc import (AverageMeter, ProgressMeter, concat_all_gather, trainMetricGPU, get_seg_image)
+from utils.grasp_eval import (detect_grasps, calculate_iou, calculate_max_iou, calculate_jacquard_index, visualization)
+import matplotlib.pyplot as plt
+import colorsys
+from datetime import datetime
+from utils.visualization import draw_gt_grasps_rectangles
+
+def _to_scalar(v):
+    """把 DataParallel 下的张量输出安全地转成 float."""
+    if isinstance(v, torch.Tensor):
+        if v.dim() > 0:
+            return v.mean().item()
+        else:
+            return v.item()
+    return float(v)
 
 
-def train(train_loader, model, optimizer, scheduler, scaler, epoch, args):
+def train_with_grasp(train_loader, model, optimizer, scheduler, scaler, epoch, args):
     batch_time = AverageMeter('Batch', ':2.2f')
     data_time = AverageMeter('Data', ':2.2f')
     lr = AverageMeter('Lr', ':1.6f')
     loss_meter = AverageMeter('Loss', ':2.4f')
-
+    qua_loss_metter = AverageMeter('Loss_qua', ':2.4f')
+    sin_loss_metter = AverageMeter('Loss_sin', ':2.4f')
+    cos_loss_metter = AverageMeter('Loss_cos', ':2.4f')
+    wid_loss_metter = AverageMeter('Loss_wid', ':2.4f')
     iou_meter = AverageMeter('IoU', ':2.2f')
     pr_meter = AverageMeter('Prec@50', ':2.2f')
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, lr, loss_meter, iou_meter, pr_meter],
+        [
+            batch_time, data_time, lr, loss_meter, 
+            qua_loss_metter, sin_loss_metter, cos_loss_metter, wid_loss_metter, 
+            iou_meter, pr_meter
+        ],
         prefix="Training: Epoch=[{}/{}] ".format(epoch, args.epochs))
 
     model.train()
     time.sleep(2)
     end = time.time()
 
-    for i, (image, text, target) in enumerate(train_loader):
+    for i, data in enumerate(train_loader):
+        # image, target, text = data
+        # ins_mask, grasp_quality_mask, grasp_sin_mask, grasp_cos_mask, grasp_width_mask = target
+        
+        image = data["img"]
+        text = data["word_vec"]
+        ins_mask = data["mask"]
+        grasp_qua_mask = data["grasp_masks"]["qua"]
+        grasp_sin_mask = data["grasp_masks"]["sin"]
+        grasp_cos_mask = data["grasp_masks"]["cos"]
+        grasp_wid_mask = data["grasp_masks"]["wid"]
+        
+        
         data_time.update(time.time() - end)
         # data
         image = image.cuda(non_blocking=True)
         text = text.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True).unsqueeze(1)
+        ins_mask = ins_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_qua_mask = grasp_qua_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_sin_mask = grasp_sin_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_cos_mask = grasp_cos_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_wid_mask = grasp_wid_mask.cuda(non_blocking=True).unsqueeze(1)
+
+        # # multi-scale training
+        # image = F.interpolate(image, size=(new_size, new_size), mode='bilinear')
 
         # forward
         with amp.autocast():
-            pred, target, loss = model(image, text, target)
-
+            pred, target, loss, loss_dict = model(image, text, ins_mask, grasp_qua_mask, grasp_sin_mask, grasp_cos_mask, grasp_wid_mask)
+        # pred 假定为 [ins_pred, qua_pred, sin_pred, cos_pred, wid_pred]
+        if loss.dim() > 0:
+            # DataParallel 情况下，loss 可能是 (num_gpus,) 或 (batch_size,)
+            loss = loss.sum()
+        ins_mask_pred = pred[0]
+        ins_mask_target = target[0]
         # backward
         optimizer.zero_grad()
         scaler.scale(loss).backward()
@@ -49,20 +95,21 @@ def train(train_loader, model, optimizer, scheduler, scaler, epoch, args):
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_norm)
         scaler.step(optimizer)
         scaler.update()
-        for name, param in model.named_parameters():
-            if param.requires_grad :
-                if param.grad is None:
-                    print(f"{name} has no gradient.")  
-        # metric
-        iou, pr5 = trainMetricGPU(pred, target, 0.35, 0.5)
-        dist.all_reduce(loss.detach())
-        dist.all_reduce(iou)
-        dist.all_reduce(pr5)
-        loss = loss / dist.get_world_size()
-        iou = iou / dist.get_world_size()
-        pr5 = pr5 / dist.get_world_size()
 
-        loss_meter.update(loss.item(), image.size(0))
+        # metric
+        iou, pr5 = trainMetricGPU(ins_mask_pred, ins_mask_target, 0.35, 0.5)
+        if isinstance(loss, torch.Tensor) and loss.dim() > 0:
+            loss = loss.mean() 
+        if isinstance(iou, torch.Tensor) and iou.dim() > 0:
+            iou = iou.mean()
+        if isinstance(pr5, torch.Tensor) and pr5.dim() > 0:
+            pr5 = pr5.mean()
+
+        loss_meter.update(_to_scalar(loss.item()), image.size(0))
+        qua_loss_metter.update(_to_scalar(loss_dict["m_qua"]), image.size(0))
+        sin_loss_metter.update(_to_scalar(loss_dict["m_sin"]), image.size(0))
+        cos_loss_metter.update(_to_scalar(loss_dict["m_cos"]), image.size(0))
+        wid_loss_metter.update(_to_scalar(loss_dict["m_wid"]), image.size(0))
         iou_meter.update(iou.item(), image.size(0))
         pr_meter.update(pr5.item(), image.size(0))
         lr.update(scheduler.get_last_lr()[-1])
@@ -75,42 +122,153 @@ def train(train_loader, model, optimizer, scheduler, scaler, epoch, args):
 
 
 @torch.no_grad()
-def validate(val_loader, model, epoch, args):
+def validate_with_grasp(val_loader, model, epoch, args):
+    def inverse(img, mat, w, h):
+        inv_img = cv2.warpAffine(img, mat, (w, h),
+                                    flags=cv2.INTER_NEAREST,
+                                    borderValue=0.)
+        return inv_img
+
     iou_list = []
+    num_correct_grasps = 0
+    num_total_grasps = 0
     model.eval()
     time.sleep(2)
-    for imgs, texts, param in val_loader:
+
+    num_grasps = [1,5]
+    num_correct_grasps = [0, 0]
+    num_total_grasps = [0, 0]
+
+    pbar = tqdm(val_loader)
+ 
+    for data in pbar:
         # data
-        imgs = imgs.cuda(non_blocking=True)
-        texts = texts.cuda(non_blocking=True)
-        # inference
-        preds = model(imgs, texts)
-        preds = torch.sigmoid(preds)
-        if preds.shape[-2:] != imgs.shape[-2:]:
-            preds = F.interpolate(preds,
-                                  size=imgs.shape[-2:],
+        image = data["img"]
+        text = data["word_vec"]
+        ins_mask = data["mask"]
+        grasp_qua_mask = data["grasp_masks"]["qua"]
+        grasp_sin_mask = data["grasp_masks"]["sin"]
+        grasp_cos_mask = data["grasp_masks"]["cos"]
+        grasp_wid_mask = data["grasp_masks"]["wid"]
+        inverse_matrix = data["inverse"]
+        ori_sizes = data["ori_size"]
+        grasp_targets = data["grasps"]
+        
+        image = image.cuda(non_blocking=True)
+        text = text.cuda(non_blocking=True)
+        ins_mask = ins_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_qua_mask = grasp_qua_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_sin_mask = grasp_sin_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_cos_mask = grasp_cos_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_wid_mask = grasp_wid_mask.cuda(non_blocking=True).unsqueeze(1)
+        
+        # inference & get predictions from model
+        pred, target = model(image, text, ins_mask, grasp_qua_mask, grasp_sin_mask, grasp_cos_mask, grasp_wid_mask)
+
+        ins_mask_preds = pred[0]
+        grasp_qua_mask_preds = pred[1]
+        grasp_sin_mask_preds = pred[2]
+        grasp_cos_mask_preds = pred[3]
+        grasp_wid_mask_preds = pred[4]
+        
+        # targets
+        ins_mask_targets = target[0]
+        grasp_qua_mask_targets = target[1]
+        grasp_sin_mask_targets = target[2]
+        grasp_cos_mask_targets = target[3]
+        grasp_wid_mask_targets = target[4]
+        
+        # Interpolate the predicted ins mask to the same size of input image
+        ins_mask_preds = torch.sigmoid(ins_mask_preds)
+        grasp_qua_mask_preds = torch.sigmoid(grasp_qua_mask_preds)
+        grasp_wid_mask_preds = torch.sigmoid(grasp_wid_mask_preds)
+        # save_prediction_visualization(grasp_qua_mask_preds.cpu(), grasp_qua_mask_targets.cpu())
+        
+        if ins_mask_preds.shape[-2:] != image.shape[-2:]:
+            ins_mask_preds = F.interpolate(ins_mask_preds,
+                                  size=image.shape[-2:],
                                   mode='bicubic',
                                   align_corners=True).squeeze(1)
-        # process one batch
-        for pred, mask_dir, mat, ori_size in zip(preds, param['mask_dir'],
-                                                 param['inverse'],
-                                                 param['ori_size']):
-            h, w = np.array(ori_size)
-            mat = np.array(mat)
-            pred = pred.cpu().numpy()
-            pred = cv2.warpAffine(pred, mat, (w, h),
-                                  flags=cv2.INTER_CUBIC,
-                                  borderValue=0.)
-            pred = np.array(pred > 0.35)
-            mask = cv2.imread(mask_dir, flags=cv2.IMREAD_GRAYSCALE)
-            mask = mask / 255.
-            # iou
-            inter = np.logical_and(pred, mask)
-            union = np.logical_or(pred, mask)
+
+            grasp_qua_mask_preds = F.interpolate(grasp_qua_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+            
+            grasp_sin_mask_preds = F.interpolate(grasp_sin_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+            
+            grasp_cos_mask_preds = F.interpolate(grasp_cos_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+            
+            grasp_wid_mask_preds = F.interpolate(grasp_wid_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+        
+        # iterate over the whole batch
+        for idx in range(ins_mask_preds.shape[0]):
+            inv_mat = inverse_matrix[idx]
+            ori_size = ori_sizes[idx]
+            h, w = ori_size
+            
+            ins_mask_pred = ins_mask_preds[idx].cpu().numpy()
+            grasp_qua_mask_pred = grasp_qua_mask_preds[idx].squeeze().cpu().numpy()
+            grasp_sin_mask_pred = grasp_sin_mask_preds[idx].squeeze().cpu().numpy()
+            grasp_cos_mask_pred = grasp_cos_mask_preds[idx].squeeze().cpu().numpy()
+            grasp_wid_mask_pred = grasp_wid_mask_preds[idx].squeeze().cpu().numpy()
+            
+            ins_mask_target = ins_mask_targets[idx].squeeze().cpu().numpy()
+            grasp_target = grasp_targets[idx]
+            grasp_qua_mask_target = grasp_qua_mask_targets[idx].squeeze().cpu().numpy()
+            grasp_sin_mask_target = grasp_sin_mask_targets[idx].squeeze().cpu().numpy()
+            grasp_cos_mask_target = grasp_cos_mask_targets[idx].squeeze().cpu().numpy()
+            grasp_wid_mask_target = grasp_wid_mask_targets[idx].squeeze().cpu().numpy()
+            
+            # Inverse to original size
+            ins_mask_pred = inverse(ins_mask_pred, inv_mat, w, h)
+            ins_mask_pred = (ins_mask_pred > 0.35)
+            grasp_qua_mask_pred = inverse(grasp_qua_mask_pred, inv_mat, w, h)
+            grasp_sin_mask_pred = inverse(grasp_sin_mask_pred, inv_mat, w, h)
+            grasp_cos_mask_pred = inverse(grasp_cos_mask_pred, inv_mat, w, h)
+            grasp_wid_mask_pred = inverse(grasp_wid_mask_pred, inv_mat, w, h)
+            
+            ins_mask_target = inverse(ins_mask_target, inv_mat, w, h)
+            grasp_qua_mask_target = inverse(grasp_qua_mask_target, inv_mat, w, h)
+            grasp_sin_mask_target = inverse(grasp_sin_mask_target, inv_mat, w, h)
+            grasp_cos_mask_target = inverse(grasp_cos_mask_target, inv_mat, w, h)
+            grasp_wid_mask_target = inverse(grasp_wid_mask_target, inv_mat, w, h)
+            # save_prediction_visualization(ins_mask_pred, ins_mask_target, save_dir="./debug_all_validate")
+
+
+            # Calculate IoU between predicted instance mask and gt
+            inter = np.logical_and(ins_mask_pred, ins_mask_target)
+            union = np.logical_or(ins_mask_pred, ins_mask_target)
+            
             iou = np.sum(inter) / (np.sum(union) + 1e-6)
             iou_list.append(iou)
+
+            # Calculate grasp configurations
+            for i in range(len(num_grasps)):
+                num_g = num_grasps[i]
+                grasp_preds, _ = detect_grasps(grasp_qua_mask_pred, grasp_sin_mask_pred, grasp_cos_mask_pred, grasp_wid_mask_pred, num_g)
+
+                j_index = calculate_jacquard_index(grasp_preds, grasp_target)
+                
+                num_correct_grasps[i] += j_index
+                num_total_grasps[i] += 1
+            # save_grasp_pred_all_gt(grasp_qua_mask_pred, grasp_preds, grasp_target, save_path='./debug_infer/gt_grasp.png')
+    
+    J_index = [0, 0]
+    for i in range(len(num_grasps)):
+        J_index[i] = num_correct_grasps[i]/num_total_grasps[i]
+            
     iou_list = np.stack(iou_list)
-    iou_list = torch.from_numpy(iou_list).to(imgs.device)
+    iou_list = torch.from_numpy(iou_list).to(image.device)
     iou_list = concat_all_gather(iou_list)
     prec_list = []
     for thres in torch.arange(0.5, 1.0, 0.1):
@@ -124,75 +282,267 @@ def validate(val_loader, model, epoch, args):
         value = prec_list[i].item()
         prec[key] = value
         temp += "{}: {:.2f}  ".format(key, 100. * value)
-    head = 'Evaluation: Epoch=[{}/{}]  IoU={:.2f}'.format(
-        epoch, args.epochs, 100. * iou.item())
+    head = 'Evaluation: Epoch=[{}/{}]  IoU={:.2f}  J_index@1: {:.2f}  J_index@5: {:.2f}'.format(
+        epoch, args.epochs, 100. * iou.item(), 100. * J_index[0], 100. * J_index[1])
     logger.info(head + temp)
-    return iou.item(), prec
+    return iou.item(), prec, J_index
 
 
 @torch.no_grad()
-def inference(test_loader, model, args):
-    # evaluation variables from lavt
-    cum_I, cum_U = 0, 0 
+def validate_without_grasp(val_loader, model, epoch, args):
+    def inverse(img, mat, w, h):
+        inv_img = cv2.warpAffine(img, mat, (w, h),
+                                        flags=cv2.INTER_CUBIC,
+                                        borderValue=0.)
+        return inv_img
+
     iou_list = []
-    tbar = tqdm(test_loader, desc='Inference:', ncols=100)
+    num_correct_grasps = 0
+    num_total_grasps = 0
     model.eval()
     time.sleep(2)
-    for img, param in tbar:
-        # data
-        img = img.cuda(non_blocking=True)
-        mask = cv2.imread(param['mask_dir'][0], flags=cv2.IMREAD_GRAYSCALE)
-        # dump image & mask
-        if args.visualize:
-            seg_id = param['seg_id'][0].cpu().numpy()
-            img_name = '{}-img.jpg'.format(seg_id)
-            mask_name = '{}-mask.png'.format(seg_id)
-            cv2.imwrite(filename=os.path.join(args.vis_dir, img_name),
-                        img=param['ori_img'][0].cpu().numpy())
-            cv2.imwrite(filename=os.path.join(args.vis_dir, mask_name),
-                        img=mask)
-        # multiple sentences
-        for sent in param['sents']:
-            mask = mask / 255.
-            text = tokenize(sent, args.word_len, True)
-            text = text.cuda(non_blocking=True)
-            # inference
-            pred = model(img, text)
-            pred = torch.sigmoid(pred)
-            if pred.shape[-2:] != img.shape[-2:]:
-                pred = F.interpolate(pred,
-                                     size=img.shape[-2:],
-                                     mode='bicubic',
-                                     align_corners=True).squeeze()
-            # process one sentence
-            h, w = param['ori_size'].numpy()[0]
-            mat = param['inverse'].numpy()[0]
-            pred = pred.cpu().numpy()
-            pred = cv2.warpAffine(pred, mat, (w, h),
-                                  flags=cv2.INTER_CUBIC,
-                                  borderValue=0.)
-            pred = np.array(pred > 0.35)
-            # iou
-            inter = np.logical_and(pred, mask)
-            union = np.logical_or(pred, mask)
-            I = np.sum(inter)
-            U = np.sum(union)
-            iou = I / (U + 1e-6)
-            iou_list.append(iou)
-            # dump prediction
-            if args.visualize:
-                pred = np.array(pred*255, dtype=np.uint8)
-                sent = "_".join(sent[0].split(" "))
-                pred_name = '{}-iou={:.2f}-{}.png'.format(seg_id, iou*100, sent)
-                cv2.imwrite(filename=os.path.join(args.vis_dir, pred_name),
-                            img=pred)
-            cum_I += I
-            cum_U += U 
 
-                
-    logger.info('=> Metric Calculation <=')
+    num_grasps = [1,5]
+    num_correct_grasps = [0, 0]
+    num_total_grasps = [0, 0]
+
+    pbar = tqdm(val_loader)
+    for data in pbar:
+        # data
+        image = data["img"]
+        text = data["word_vec"]
+        ins_mask = data["mask"]
+        grasp_qua_mask = data["grasp_masks"]["qua"]
+        grasp_sin_mask = data["grasp_masks"]["sin"]
+        grasp_cos_mask = data["grasp_masks"]["cos"]
+        grasp_wid_mask = data["grasp_masks"]["wid"]
+        inverse_matrix = data["inverse"]
+        ori_sizes = data["ori_size"]
+        grasp_targets = data["grasps"]
+        
+        image = image.cuda(non_blocking=True)
+        text = text.cuda(non_blocking=True)
+        ins_mask = ins_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_qua_mask = grasp_qua_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_sin_mask = grasp_sin_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_cos_mask = grasp_cos_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_wid_mask = grasp_wid_mask.cuda(non_blocking=True).unsqueeze(1)
+        
+        # inference & get predictions from model
+        pred, ins_mask_targets = model(image, text, ins_mask, grasp_qua_mask, grasp_sin_mask, grasp_cos_mask, grasp_wid_mask)
+        
+        # Interpolate the predicted ins mask to the same size of input image
+        ins_mask_preds = torch.sigmoid(pred)
+        if ins_mask_preds.shape[-2:] != image.shape[-2:]:
+            ins_mask_preds = F.interpolate(ins_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+        
+        # iterate over the whole batch
+        for idx in range(ins_mask_preds.shape[0]):
+            inv_mat = inverse_matrix[idx]
+            ori_size = ori_sizes[idx]
+            h, w = ori_size
+            
+            ins_mask_pred = ins_mask_preds[idx].squeeze().cpu().numpy()
+            ins_mask_target = ins_mask_targets[idx].squeeze().cpu().numpy()
+            
+            # Inverse to original size
+            ins_mask_pred = inverse(ins_mask_pred, inv_mat, w, h)
+            ins_mask_pred = (ins_mask_pred > 0.35)
+            
+            ins_mask_target = inverse(ins_mask_target, inv_mat, w, h)
+            
+            # Calculate IoU between predicted instance mask and gt
+            inter = np.logical_and(ins_mask_pred, ins_mask_target)
+            union = np.logical_or(ins_mask_pred, ins_mask_target)
+            
+            iou = np.sum(inter) / (np.sum(union) + 1e-6)
+            iou_list.append(iou)
+    
+    J_index = [0, 0]
+    
     iou_list = np.stack(iou_list)
-    iou_list = torch.from_numpy(iou_list).to(img.device)
+    iou_list = torch.from_numpy(iou_list).to(image.device)
+    iou_list = concat_all_gather(iou_list)
+    prec_list = []
+    for thres in torch.arange(0.5, 1.0, 0.1):
+        tmp = (iou_list > thres).float().mean()
+        prec_list.append(tmp)
+    iou = iou_list.mean()
+    prec = {}
+    temp = '  '
+    for i, thres in enumerate(range(5, 10)):
+        key = 'Pr@{}'.format(thres * 10)
+        value = prec_list[i].item()
+        prec[key] = value
+        temp += "{}: {:.2f}  ".format(key, 100. * value)
+    head = 'Evaluation: Epoch=[{}/{}]  IoU={:.2f}  J_index@1: {:.2f}  J_index@5: {:.2f}'.format(
+        epoch, args.epochs, 100. * iou.item(), 100. * J_index[0], 100. * J_index[1])
+    logger.info(head + temp)
+    return iou.item(), prec, J_index
+
+
+
+@torch.no_grad()
+def inference_with_grasp(test_loader, model, args):
+    def inverse(img, mat, w, h):
+        inv_img = cv2.warpAffine(img, mat, (w, h),
+                                    flags=cv2.INTER_CUBIC,
+                                    borderValue=0.)
+        return inv_img
+
+    iou_list = []
+    num_correct_grasps = 0
+    num_total_grasps = 0
+    model.eval()
+    time.sleep(2)
+    
+    num_grasps = [1,5]
+    num_correct_grasps = [0, 0]
+    num_total_grasps = [0, 0]
+    
+    tbar = tqdm(test_loader, desc='Inference:', ncols=100)
+    for cnt, data in enumerate(tbar):
+        
+        # data
+        image = data["img"]
+        text = data["word_vec"]
+        ins_mask = data["mask"]
+        grasp_qua_mask = data["grasp_masks"]["qua"]
+        grasp_sin_mask = data["grasp_masks"]["sin"]
+        grasp_cos_mask = data["grasp_masks"]["cos"]
+        grasp_wid_mask = data["grasp_masks"]["wid"]
+        inverse_matrix = data["inverse"]
+        ori_sizes = data["ori_size"]
+        grasp_targets = data["grasps"]
+        sentences = data["sentence"]
+        img_paths = data["img_path"]
+        
+        image = image.cuda(non_blocking=True)
+        text = text.cuda(non_blocking=True)
+        ins_mask = ins_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_qua_mask = grasp_qua_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_sin_mask = grasp_sin_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_cos_mask = grasp_cos_mask.cuda(non_blocking=True).unsqueeze(1)
+        grasp_wid_mask = grasp_wid_mask.cuda(non_blocking=True).unsqueeze(1)
+        
+        # inference & get predictions from model
+        pred, target = model(image, text, ins_mask, grasp_qua_mask, grasp_sin_mask, grasp_cos_mask, grasp_wid_mask)
+        
+        # predictions
+        ins_mask_preds = pred[0]
+        grasp_qua_mask_preds = pred[1]
+        grasp_sin_mask_preds = pred[2]
+        grasp_cos_mask_preds = pred[3]
+        grasp_wid_mask_preds = pred[4]
+        
+        # targets
+        ins_mask_targets = target[0]
+        grasp_qua_mask_targets = target[1]
+        grasp_sin_mask_targets = target[2]
+        grasp_cos_mask_targets = target[3]
+        grasp_wid_mask_targets = target[4]
+        
+        # Interpolate the predicted ins mask to the same size of input image
+        ins_mask_preds = torch.sigmoid(ins_mask_preds)
+        grasp_qua_mask_preds = torch.sigmoid(grasp_qua_mask_preds)
+        grasp_wid_mask_preds = torch.sigmoid(grasp_wid_mask_preds)
+        
+        if ins_mask_preds.shape[-2:] != image.shape[-2:]:
+            ins_mask_preds = F.interpolate(ins_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+
+            grasp_qua_mask_preds = F.interpolate(grasp_qua_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+            
+            grasp_sin_mask_preds = F.interpolate(grasp_sin_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+            
+            grasp_cos_mask_preds = F.interpolate(grasp_cos_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+            
+            grasp_wid_mask_preds = F.interpolate(grasp_wid_mask_preds,
+                                  size=image.shape[-2:],
+                                  mode='bicubic',
+                                  align_corners=True).squeeze(1)
+        
+
+        # iterate over the whole batch
+        for idx in range(ins_mask_preds.shape[0]):
+            inv_mat = inverse_matrix[idx]
+            ori_size = ori_sizes[idx]
+            h, w = ori_size
+            sent = sentences[idx]
+            img_path = img_paths[idx]
+            
+            ins_mask_pred = ins_mask_preds[idx].cpu().numpy()
+            grasp_qua_mask_pred = grasp_qua_mask_preds[idx].squeeze().cpu().numpy()
+            grasp_sin_mask_pred = grasp_sin_mask_preds[idx].squeeze().cpu().numpy()
+            grasp_cos_mask_pred = grasp_cos_mask_preds[idx].squeeze().cpu().numpy()
+            grasp_wid_mask_pred = grasp_wid_mask_preds[idx].squeeze().cpu().numpy()
+            
+            ins_mask_target = ins_mask_targets[idx].squeeze().cpu().numpy()
+            grasp_target = grasp_targets[idx]
+            grasp_qua_mask_target = grasp_qua_mask_targets[idx].squeeze().cpu().numpy()
+            grasp_sin_mask_target = grasp_sin_mask_targets[idx].squeeze().cpu().numpy()
+            grasp_cos_mask_target = grasp_cos_mask_targets[idx].squeeze().cpu().numpy()
+            grasp_wid_mask_target = grasp_wid_mask_targets[idx].squeeze().cpu().numpy()
+            
+            # Inverse to original size
+            ins_mask_pred = inverse(ins_mask_pred, inv_mat, w, h)
+            ins_mask_pred = (ins_mask_pred > 0.35)
+            grasp_qua_mask_pred = inverse(grasp_qua_mask_pred, inv_mat, w, h)
+            grasp_sin_mask_pred = inverse(grasp_sin_mask_pred, inv_mat, w, h)
+            grasp_cos_mask_pred = inverse(grasp_cos_mask_pred, inv_mat, w, h)
+            grasp_wid_mask_pred = inverse(grasp_wid_mask_pred, inv_mat, w, h)
+            
+            ins_mask_target = inverse(ins_mask_target, inv_mat, w, h)
+            grasp_qua_mask_target = inverse(grasp_qua_mask_target, inv_mat, w, h)
+            grasp_sin_mask_target = inverse(grasp_sin_mask_target, inv_mat, w, h)
+            grasp_cos_mask_target = inverse(grasp_cos_mask_target, inv_mat, w, h)
+            grasp_wid_mask_target = inverse(grasp_wid_mask_target, inv_mat, w, h)
+            
+            # Calculate IoU between predicted instance mask and gt
+            inter = np.logical_and(ins_mask_pred, ins_mask_target)
+            union = np.logical_or(ins_mask_pred, ins_mask_target)
+            
+            iou = np.sum(inter) / (np.sum(union) + 1e-6)
+            iou_list.append(iou)
+            
+            # Calculate grasp configurations
+            for i in range(len(num_grasps)):
+                num_g = num_grasps[i]
+                grasp_preds, grasp_ang_mask_pred = detect_grasps(grasp_qua_mask_pred, grasp_sin_mask_pred, grasp_cos_mask_pred, grasp_wid_mask_pred, num_g)
+
+                j_index = calculate_jacquard_index(grasp_preds, grasp_target)
+                
+                num_correct_grasps[i] += j_index
+                num_total_grasps[i] += 1
+                
+                # Visualization
+                if args.visualize:
+                    img_bgr = cv2.imread(img_path)
+                    img = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+                    visualization(img, ins_mask_pred, (grasp_qua_mask_pred, grasp_ang_mask_pred, grasp_wid_mask_pred), grasp_preds, sent, save_path=os.path.join("./results", args.exp_name, f"results_{cnt}_{num_g}_grasps.png"))
+                # save_grasp_pred_all_gt(grasp_qua_mask_pred, grasp_preds, grasp_target, save_path='./debug_grasp/validate_all_gt_grasp.png')
+    J_index = [0, 0]
+    for i in range(len(num_grasps)):
+        J_index[i] = num_correct_grasps[i]/num_total_grasps[i]
+            
+    iou_list = np.stack(iou_list)
+    iou_list = torch.from_numpy(iou_list).to(image.device)
+    # print(iou_list)
+    # iou_list = concat_all_gather(iou_list)
     prec_list = []
     for thres in torch.arange(0.5, 1.0, 0.1):
         tmp = (iou_list > thres).float().mean()
@@ -203,9 +553,9 @@ def inference(test_loader, model, args):
         key = 'Pr@{}'.format(thres*10)
         value = prec_list[i].item()
         prec[key] = value
-    logger.info('Mean IoU={:.2f}'.format(100.*iou.item()))
+    logger.info('IoU={:.2f}'.format(100.*iou.item()))
     for k, v in prec.items():
         logger.info('{}: {:.2f}.'.format(k, 100.*v))
+    logger.info("J@1: {:.2f}, J@5: {:.2f}".format(100. * J_index[0], 100. * J_index[1]))
 
-    logger.info('Overall IoU = %.2f\n' % (cum_I * 100. / cum_U))
-    return iou.item(), prec
+    return iou.item(), prec, J_index

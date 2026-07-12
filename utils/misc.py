@@ -291,3 +291,15 @@ def setup_logger(save_dir, distributed_rank=0, filename="log.txt", mode="a"):
 
     # redirect stdout/stderr to loguru
     redirect_sys_output("INFO")
+
+def get_seg_image(img: np.array, mask: np.array) -> np.array:
+    # My stupid way, don't use it...
+    # mask = (1 * np.logical_or.reduce(mask)).astype('uint8')
+    mask_inv = cv2.bitwise_not(mask)
+    res = cv2.bitwise_and(img, img, mask=mask)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
+    background = cv2.bitwise_and(gray, gray, mask=mask_inv)
+    background = np.stack((background,)*3, axis=-1)
+    img_ca = res
+    # img_ca = cv2.add(res, background)
+    return img_ca
