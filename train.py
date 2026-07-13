@@ -1,4 +1,4 @@
-"""Single configuration-driven trainer for ToolRGS models on Grasp-Tools."""
+"""Single configuration-driven trainer for ToolRGS models and datasets."""
 
 import argparse
 import datetime
@@ -20,12 +20,12 @@ from torch.utils.data.distributed import DistributedSampler
 import utils.config as config
 from engine.engine import train_with_grasp, validate_with_grasp
 from model import build_model
-from utils.dataset import GraspToolDataset
+from utils.data_builder import build_dataset
 from utils.misc import init_random_seed, set_random_seed, setup_logger, worker_init_fn
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train ToolRGS on Grasp-Tools")
+    parser = argparse.ArgumentParser(description="Train ToolRGS")
     parser.add_argument("--config", required=True, help="Experiment YAML file")
     parser.add_argument("--opts", nargs=argparse.REMAINDER)
     cli = parser.parse_args()
@@ -86,16 +86,8 @@ def main():
     scaler = torch.cuda.amp.GradScaler()
 
     needs_offset = args.architecture.lower() in {"crogoff", "drogoff"}
-    dataset_kwargs = dict(
-        root_dir=args.root_path,
-        input_size=args.input_size,
-        word_length=args.word_len,
-        with_offset=needs_offset,
-        offset_radius=args.offset_r,
-        offset_sigma=getattr(args, "offset_sigma", None),
-    )
-    train_data = GraspToolDataset(split=args.train_split, **dataset_kwargs)
-    val_data = GraspToolDataset(split=args.val_split, **dataset_kwargs)
+    train_data = build_dataset(args, args.train_split, with_offset=needs_offset)
+    val_data = build_dataset(args, args.val_split, with_offset=needs_offset)
 
     train_sampler = DistributedSampler(train_data, shuffle=True) if distributed else None
     val_sampler = DistributedSampler(val_data, shuffle=False) if distributed else None
@@ -114,7 +106,7 @@ def main():
         pin_memory=True,
         drop_last=True,
         worker_init_fn=init_fn if args.workers else None,
-        collate_fn=GraspToolDataset.collate_fn,
+        collate_fn=train_data.collate_fn,
     )
     val_loader = DataLoader(
         val_data,
@@ -124,7 +116,7 @@ def main():
         num_workers=args.workers_val,
         pin_memory=True,
         drop_last=False,
-        collate_fn=GraspToolDataset.collate_fn,
+        collate_fn=val_data.collate_fn,
     )
 
     best_iou = 0.0

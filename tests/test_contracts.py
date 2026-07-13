@@ -8,10 +8,34 @@ import yaml
 from model import MODEL_REGISTRY
 from model.layers import OffsetMultiTaskProjector
 from model.lgd import CosineDiffusion, LGDCore
-from utils.dataset import make_dense_offset_with_radius_np
+from utils.dataset import GraspTransforms, make_dense_offset_with_radius_np
+from utils.data_builder import DATASET_REGISTRY
+from utils.vcot_dataset import grasp_anything_to_quads, resolve_vcot_split
 
 
 class ToolRGSContractsTest(unittest.TestCase):
+    def test_dataset_registry_includes_grasp_tools_and_vcot(self):
+        self.assertIn("grasptool", DATASET_REGISTRY)
+        self.assertIn("vcot", DATASET_REGISTRY)
+        self.assertEqual(resolve_vcot_split("train"), "train.csv")
+        self.assertEqual(resolve_vcot_split("seen"), "test_seen.csv")
+        self.assertEqual(resolve_vcot_split("unseen"), "test_unseen.csv")
+
+    def test_vcot_grasp_six_column_conversion(self):
+        quads, scores = grasp_anything_to_quads(
+            [[0.8, 100.0, 50.0, 40.0, 20.0, 0.0]]
+        )
+        self.assertEqual(quads.shape, (1, 4, 2))
+        np.testing.assert_allclose(quads[0].mean(axis=0), [100.0, 50.0], atol=1e-5)
+        np.testing.assert_allclose(
+            quads[0], [[80.0, 40.0], [80.0, 60.0], [120.0, 60.0], [120.0, 40.0]]
+        )
+        edge_lengths = np.linalg.norm(np.roll(quads[0], -1, axis=0) - quads[0], axis=1)
+        np.testing.assert_allclose(np.sort(edge_lengths), [20.0, 20.0, 40.0, 40.0])
+        np.testing.assert_allclose(scores, [0.8])
+        target = GraspTransforms(width_factor=100)(quads, target=0)
+        np.testing.assert_allclose(target[0, :5], [100.0, 50.0, 40.0, 20.0, 0.0])
+
     def test_experiment_configs_reference_registered_models(self):
         expected = {
             "crog",
@@ -23,13 +47,15 @@ class ToolRGSContractsTest(unittest.TestCase):
             "lgd",
         }
         self.assertTrue(expected.issubset(MODEL_REGISTRY))
-        paths = glob.glob("config/grasp_tools/*.yaml")
-        self.assertGreaterEqual(len(paths), 7)
+        paths = glob.glob("config/**/*.yaml", recursive=True)
+        self.assertGreaterEqual(len(paths), 8)
         for path in paths:
             with open(path, encoding="utf-8") as stream:
                 cfg = yaml.safe_load(stream)
             architecture = cfg["MODEL"]["architecture"]
             self.assertIn(architecture, MODEL_REGISTRY, path)
+            dataset = cfg["DATA"]["dataset"].lower().replace("-", "_")
+            self.assertIn(dataset, DATASET_REGISTRY, path)
 
     def test_offset_projector_output_contract(self):
         projector = OffsetMultiTaskProjector(word_dim=512, in_dim=256)

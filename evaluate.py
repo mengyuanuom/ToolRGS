@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import utils.config as config
 from engine.engine import validate_with_grasp
 from model import build_model
-from utils.dataset import GraspToolDataset
+from utils.data_builder import build_dataset
 from utils.misc import setup_logger
 
 
@@ -57,22 +57,14 @@ def main():
     load_state(model, checkpoint.get("state_dict", checkpoint))
 
     needs_offset = args.architecture.lower() in {"crogoff", "drogoff"}
-    dataset = GraspToolDataset(
-        root_dir=args.root_path,
-        input_size=args.input_size,
-        word_length=args.word_len,
-        split=args.val_split,
-        with_offset=needs_offset,
-        offset_radius=args.offset_r,
-        offset_sigma=getattr(args, "offset_sigma", None),
-    )
+    dataset = build_dataset(args, args.val_split, with_offset=needs_offset)
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size_val,
         shuffle=False,
         num_workers=args.workers_val,
         pin_memory=True,
-        collate_fn=GraspToolDataset.collate_fn,
+        collate_fn=dataset.collate_fn,
     )
     iou, precision, j_index = validate_with_grasp(
         loader, model, getattr(args, "start_epoch", 0), args

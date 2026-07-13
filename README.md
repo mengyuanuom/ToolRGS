@@ -2,13 +2,14 @@
 
 Tool-oriented Referring Grasp Synthesis with a single configuration-driven
 codebase for CROG, CROG-OFF, DROG, DROG-OFF, LGD, GGCNN-CLIP,
-GR-ConvNet-CLIP, and DETRIS backbones.
+GR-ConvNet-CLIP, and DETRIS backbones. Both Grasp-Tools and VCoT/
+Grasp-Anything data use the same model-facing batch contract.
 
 ## Design
 
 All architectures live below `model/` and are selected by `MODEL.architecture`
-in YAML. Grasp-Tools is loaded through one `GraspToolDataset`, one collate
-contract, and one training/evaluation engine.
+in YAML. Datasets are selected by `DATA.dataset`; the registered adapters feed
+one model-facing batch contract and one training/evaluation engine.
 
 ```text
 ToolRGS/
@@ -51,9 +52,59 @@ Available experiments:
 - `config/grasp_tools/ggcnnclip.yaml`
 - `config/grasp_tools/grconvnetclip.yaml`
 - `config/grasp_tools/lgd.yaml`
+- `config/vcot/crog.yaml`
 
 Set `DATA.root_path`, `TRAIN.clip_pretrain`, and (for DROG variants)
 `TRAIN.dino_pretrain` to local paths before training.
+
+## VCoT / Grasp-Anything data
+
+The repository includes only the official VCoT CSV split metadata. Keep the
+large image, `.pt`, and `.npy` files outside Git in this layout:
+
+```text
+/path/to/grasp-anything/
+├── image/<scene_id>.jpg
+├── positive_grasp/<grasp_id>.pt
+└── mask/<grasp_id>.npy
+```
+
+Set the dataset in YAML:
+
+```yaml
+DATA:
+  dataset: vcot
+  root_path: /path/to/grasp-anything
+  split_root: ./split/vcot
+  train_split: train
+  val_split: unseen       # or seen
+  prompt_template: "Grasp the {object_name}"
+```
+
+The adapter reads `.pt` grasps as
+`[score, x, y, width, height, theta_degrees]`, discards the score for geometry,
+reorders the quadrilateral for ToolRGS's width/angle convention, and generates
+grasp maps after letterboxing. Original-coordinate grasp
+targets are retained for Jacquard evaluation. Files are loaded lazily per
+sample; the dataset does not preload the full annotation corpus.
+
+Inspect the same sample you verified previously:
+
+```bash
+python tools/inspect_vcot_sample.py \
+  --dataset-root /mnt/ssd0/mengyuan/data/grasp-anything \
+  --csv split/vcot/train.csv --row 2
+```
+
+All registered ToolRGS models can use VCoT without code changes. Either copy
+the data block above into a model config, or override the shared fields:
+
+```bash
+python train.py --config config/grasp_tools/drogoff.yaml --opts \
+  DATA.dataset vcot \
+  DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything \
+  DATA.train_split train DATA.val_split unseen
+```
 
 ## Training
 
