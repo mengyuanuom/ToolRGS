@@ -2,8 +2,8 @@
 
 Tool-oriented Referring Grasp Synthesis with a single configuration-driven
 codebase for CROG, CROG-OFF, DROG, DROG-OFF, LGD, GGCNN-CLIP,
-GR-ConvNet-CLIP, and DETRIS backbones. Both Grasp-Tools and VCoT/
-Grasp-Anything data use the same model-facing batch contract.
+GR-ConvNet-CLIP, and DETRIS backbones. Grasp-Tools, VCoT/Grasp-Anything,
+and OCID-VLG data use the same model-facing batch contract.
 
 ## Design
 
@@ -53,6 +53,7 @@ Available experiments:
 - `config/grasp_tools/grconvnetclip.yaml`
 - `config/grasp_tools/lgd.yaml`
 - `config/vcot/crog.yaml`
+- `config/ocid_vlg/crog.yaml`
 
 Set `DATA.root_path`, `TRAIN.clip_pretrain`, and (for DROG variants)
 `TRAIN.dino_pretrain` to local paths before training.
@@ -104,6 +105,49 @@ python train.py --config config/grasp_tools/drogoff.yaml --opts \
   DATA.dataset vcot \
   DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything \
   DATA.train_split train DATA.val_split unseen
+```
+
+## OCID-VLG data
+
+OCID-VLG referring expressions are read directly from the downloaded dataset;
+the large RGB, depth, and annotation files are not copied into this repository.
+The expected layout is:
+
+```text
+/path/to/OCID-VLG/
+├── refer/multiple/
+│   ├── train_expressions.json
+│   ├── val_expressions.json
+│   └── test_expressions.json
+└── <sequence>/
+    ├── rgb/<image_name>
+    ├── depth/<image_name>
+    └── seg_mask_instances_combi/<image_name>
+```
+
+Use the supplied experiment or select the dataset from another model config:
+
+```yaml
+DATA:
+  dataset: OCID-VLG
+  root_path: /path/to/OCID-VLG
+  version: multiple
+  with_depth: true
+  train_split: train
+  val_split: val
+```
+
+The adapter keeps original-coordinate grasp rectangles for Jacquard evaluation,
+then transforms the rectangle corners before generating input-resolution grasp
+maps. This avoids the fixed-416 map misalignment in the legacy loader. It also
+supports the center-offset supervision required by CROG-OFF and DROG-OFF.
+
+Inspect one expression before training:
+
+```bash
+python tools/inspect_ocid_vlg_sample.py \
+  --dataset-root /path/to/OCID-VLG \
+  --version multiple --split train --index 0
 ```
 
 ## Training

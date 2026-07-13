@@ -610,13 +610,11 @@ class GraspTransforms:
             box = cv2.boxPoints(r_rect)
             box = np.intp(box)
             rr, cc = polygon(box[:, 0], box[:,1])
-            mask_rr = rr < self.width
-            rr = rr[mask_rr]
-            cc = cc[mask_rr]
-
-            mask_cc = cc < self.height
-            cc = cc[mask_cc]
-            rr = rr[mask_cc]
+            valid = (
+                (rr >= 0) & (rr < self.width) &
+                (cc >= 0) & (cc < self.height)
+            )
+            rr, cc = rr[valid], cc[valid]
             pos_out[cc, rr] = 1.0
             if theta < 0:
                 ang_out[cc, rr] = int(theta + 180)

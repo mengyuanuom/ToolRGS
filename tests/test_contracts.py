@@ -10,16 +10,32 @@ from model.layers import OffsetMultiTaskProjector
 from model.lgd import CosineDiffusion, LGDCore
 from utils.dataset import GraspTransforms, make_dense_offset_with_radius_np
 from utils.data_builder import DATASET_REGISTRY
+from utils.ocid_vlg_dataset import parse_ocid_image_filename, resolve_ocid_vlg_split
 from utils.vcot_dataset import grasp_anything_to_quads, resolve_vcot_split
 
 
 class ToolRGSContractsTest(unittest.TestCase):
-    def test_dataset_registry_includes_grasp_tools_and_vcot(self):
+    def test_dataset_registry_includes_supported_datasets(self):
         self.assertIn("grasptool", DATASET_REGISTRY)
         self.assertIn("vcot", DATASET_REGISTRY)
+        self.assertIn("ocid_vlg", DATASET_REGISTRY)
         self.assertEqual(resolve_vcot_split("train"), "train.csv")
         self.assertEqual(resolve_vcot_split("seen"), "test_seen.csv")
         self.assertEqual(resolve_vcot_split("unseen"), "test_unseen.csv")
+        self.assertEqual(resolve_ocid_vlg_split("train"), "train_expressions.json")
+        self.assertEqual(resolve_ocid_vlg_split("val"), "val_expressions.json")
+        self.assertEqual(resolve_ocid_vlg_split("test"), "test_expressions.json")
+        self.assertEqual(
+            parse_ocid_image_filename("ARID20/floor/seq01,rgb_0001.png"),
+            ("ARID20/floor/seq01", "rgb_0001.png"),
+        )
+
+    def test_grasp_masks_do_not_wrap_negative_pixels(self):
+        transform = GraspTransforms(width_factor=100, width=32, height=32)
+        raw = transform.generate_masks(
+            np.array([[0.0, 0.0, 30.0, 20.0, 0.0, 0.0]], dtype=np.float32)
+        )
+        self.assertEqual(raw["pos"][-1, -1], 0)
 
     def test_vcot_grasp_six_column_conversion(self):
         quads, scores = grasp_anything_to_quads(
@@ -48,7 +64,7 @@ class ToolRGSContractsTest(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(MODEL_REGISTRY))
         paths = glob.glob("config/**/*.yaml", recursive=True)
-        self.assertGreaterEqual(len(paths), 8)
+        self.assertGreaterEqual(len(paths), 9)
         for path in paths:
             with open(path, encoding="utf-8") as stream:
                 cfg = yaml.safe_load(stream)

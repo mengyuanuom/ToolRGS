@@ -1,6 +1,7 @@
 """Configuration-driven dataset registry for ToolRGS."""
 
 from utils.dataset import GraspToolDataset
+from utils.ocid_vlg_dataset import OCIDVLGDataset
 from utils.vcot_dataset import VCoTDataset
 
 
@@ -8,6 +9,8 @@ DATASET_REGISTRY = {
     "grasptool": GraspToolDataset,
     "grasp_tool": GraspToolDataset,
     "grasp_tools": GraspToolDataset,
+    "ocid_vlg": OCIDVLGDataset,
+    "ocidvlg": OCIDVLGDataset,
     "vcot": VCoTDataset,
     "vcot_grasp": VCoTDataset,
 }
@@ -39,5 +42,10 @@ def build_dataset(cfg, split, with_offset=False):
         common.update(
             split_root=getattr(cfg, "split_root", None),
             prompt_template=getattr(cfg, "prompt_template", "Grasp the {object_name}"),
+        )
+    elif dataset_class is OCIDVLGDataset:
+        common.update(
+            version=getattr(cfg, "version", "multiple"),
+            with_depth=getattr(cfg, "with_depth", True),
         )
     return dataset_class(**common)
