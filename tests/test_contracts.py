@@ -7,6 +7,7 @@ import yaml
 
 from model import MODEL_REGISTRY
 from model.layers import OffsetMultiTaskProjector
+from model.lgd import CosineDiffusion, LGDCore
 from utils.dataset import make_dense_offset_with_radius_np
 
 
@@ -19,10 +20,11 @@ class ToolRGSContractsTest(unittest.TestCase):
             "drogoff",
             "ggcnnclip",
             "grconvnetclip",
+            "lgd",
         }
         self.assertTrue(expected.issubset(MODEL_REGISTRY))
         paths = glob.glob("config/grasp_tools/*.yaml")
-        self.assertGreaterEqual(len(paths), 6)
+        self.assertGreaterEqual(len(paths), 7)
         for path in paths:
             with open(path, encoding="utf-8") as stream:
                 cfg = yaml.safe_load(stream)
@@ -54,6 +56,25 @@ class ToolRGSContractsTest(unittest.TestCase):
         self.assertGreater(offset[0, 9, 6], 0.0)
         self.assertGreater(weight[0, 9, 8], weight[0, 9, 6])
         self.assertLessEqual(np.abs(offset).max(), 1.0)
+
+    def test_lgd_dense_diffusion_contract(self):
+        diffusion = CosineDiffusion(timesteps=20)
+        clean = torch.zeros(2, 1, 64, 64)
+        noisy = diffusion.q_sample(clean, torch.tensor([0, 19]))
+        self.assertEqual(tuple(noisy.shape), tuple(clean.shape))
+        self.assertTrue(torch.all(diffusion.betas >= 0))
+        self.assertTrue(torch.all(diffusion.betas < 1))
+
+        core = LGDCore(word_dim=32, base_channels=16, time_dim=32)
+        outputs = core(
+            torch.randn(2, 3, 64, 64),
+            noisy,
+            torch.tensor([0, 19]),
+            torch.randn(2, 32),
+        )
+        self.assertEqual(len(outputs), 5)
+        for output in outputs:
+            self.assertEqual(tuple(output.shape), (2, 1, 64, 64))
 
 
 if __name__ == "__main__":

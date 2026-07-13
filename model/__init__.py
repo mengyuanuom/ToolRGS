@@ -8,6 +8,7 @@ from .drog import DROG
 from .drogoff import DROGOFF
 from .ggcnnclip import GGCNN_CLIP
 from .grconvnetclip import GenerativeResnet_CLIP
+from .lgd import LGD
 from .segmenter import DETRIS
 
 
@@ -19,6 +20,7 @@ MODEL_REGISTRY = {
     "drogoff": DROGOFF,
     "ggcnnclip": GGCNN_CLIP,
     "grconvnetclip": GenerativeResnet_CLIP,
+    "lgd": LGD,
 }
 
 
