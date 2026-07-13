@@ -6,6 +6,8 @@ from .crog import CROG
 from .crogoff import CROGOFF
 from .drog import DROG
 from .drogoff import DROGOFF
+from .ggcnnclip import GGCNN_CLIP
+from .grconvnetclip import GenerativeResnet_CLIP
 from .segmenter import DETRIS
 
 
@@ -15,6 +17,8 @@ MODEL_REGISTRY = {
     "detris": DETRIS,
     "drog": DROG,
     "drogoff": DROGOFF,
+    "ggcnnclip": GGCNN_CLIP,
+    "grconvnetclip": GenerativeResnet_CLIP,
 }
 
 

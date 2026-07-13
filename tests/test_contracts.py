@@ -12,8 +12,17 @@ from utils.dataset import make_dense_offset_with_radius_np
 
 class ToolRGSContractsTest(unittest.TestCase):
     def test_experiment_configs_reference_registered_models(self):
+        expected = {
+            "crog",
+            "crogoff",
+            "drog",
+            "drogoff",
+            "ggcnnclip",
+            "grconvnetclip",
+        }
+        self.assertTrue(expected.issubset(MODEL_REGISTRY))
         paths = glob.glob("config/grasp_tools/*.yaml")
-        self.assertGreaterEqual(len(paths), 4)
+        self.assertGreaterEqual(len(paths), 6)
         for path in paths:
             with open(path, encoding="utf-8") as stream:
                 cfg = yaml.safe_load(stream)

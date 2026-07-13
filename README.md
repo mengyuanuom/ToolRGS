@@ -1,7 +1,8 @@
 # ToolRGS
 
 Tool-oriented Referring Grasp Synthesis with a single configuration-driven
-codebase for CROG, CROG-OFF, DROG, DROG-OFF, and DETRIS backbones.
+codebase for CROG, CROG-OFF, DROG, DROG-OFF, GGCNN-CLIP,
+GR-ConvNet-CLIP, and DETRIS backbones.
 
 ## Design
 
@@ -16,6 +17,8 @@ ToolRGS/
 │   ├── crogoff.py
 │   ├── drog.py
 │   ├── drogoff.py
+│   ├── ggcnnclip.py
+│   ├── grconvnetclip.py
 │   ├── segmenter.py
 │   └── dinov2/
 ├── config/grasp_tools/
@@ -44,6 +47,8 @@ Available experiments:
 - `config/grasp_tools/crogoff.yaml`
 - `config/grasp_tools/drog.yaml`
 - `config/grasp_tools/drogoff.yaml`
+- `config/grasp_tools/ggcnnclip.yaml`
+- `config/grasp_tools/grconvnetclip.yaml`
 
 Set `DATA.root_path`, `TRAIN.clip_pretrain`, and (for DROG variants)
 `TRAIN.dino_pretrain` to local paths before training.
@@ -75,6 +80,8 @@ python evaluate.py \
 
 Grasp-aware models return segmentation, quality, sine, cosine, and width maps.
 Offset variants append a `(dx, dy)` map normalized by `DATA.offset_r`.
+GGCNN-CLIP and GR-ConvNet-CLIP are grasp-only baselines, so their quality map
+also occupies the segmentation slot required by the shared engine.
 
 ## Environment
 
