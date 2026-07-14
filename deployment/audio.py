@@ -2,6 +2,8 @@
 
 from typing import Any, Dict
 
+from toolrgs.registry import AUDIO_INPUTS
+
 
 class WhisperRecorder:
     def __init__(self, cfg: Dict[str, Any]):
@@ -39,3 +41,23 @@ class WhisperRecorder:
         if not text:
             raise RuntimeError("Whisper returned an empty instruction")
         return text
+
+
+AUDIO_INPUTS.register_module(
+    WhisperRecorder,
+    name="whisper",
+    aliases=("openai_whisper",),
+)
+AUDIO_INPUT_REGISTRY = AUDIO_INPUTS.module_dict
+
+
+def build_audio_input(cfg: Dict[str, Any]):
+    component_type = cfg.get("type", "whisper")
+    try:
+        audio_class = AUDIO_INPUTS.require(component_type)
+    except KeyError as exc:
+        available = ", ".join(sorted(AUDIO_INPUTS.keys()))
+        raise ValueError(
+            f"Unknown audio input {component_type!r}; available: {available}"
+        ) from exc
+    return audio_class(cfg)

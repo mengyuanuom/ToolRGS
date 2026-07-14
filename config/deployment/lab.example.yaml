@@ -16,7 +16,7 @@ model:
 
 camera:
   # image | opencv | video | realsense | gstreamer
-  backend: opencv
+  type: opencv
   device: 0
   width: 1280
   height: 720
@@ -30,6 +30,7 @@ camera:
     appsink name=toolrgs_sink drop=true sync=false max-buffers=1
 
 robot:
+  type: legacy_tcp
   # Safe default. Change to true only after a dry-run and receiver/calibration check.
   enabled: false
   host: 192.168.38.10
@@ -50,6 +51,7 @@ robot:
     depth: [-1, 1]
 
 detector:
+  type: mmdetection
   enabled: false
   config: config/deployment/faster-rcnn-13.py
   checkpoint: weights/epoch_48_13.pth
@@ -71,6 +73,7 @@ detector:
     - wrench
 
 audio:
+  type: whisper
   enabled: false
   model: small
   device: cuda

@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional, Tuple
 import cv2
 import numpy as np
 
+from toolrgs.registry import CAMERAS
+
 
 class FrameSource:
     def read(self) -> Tuple[bool, Optional[np.ndarray]]:
@@ -140,43 +142,73 @@ class GStreamerSource(FrameSource):
         self.pipeline.set_state(self.Gst.State.NULL)
 
 
-def build_source(camera_cfg: Dict[str, Any], repo_root: str) -> FrameSource:
-    backend = str(camera_cfg.get("backend", "opencv")).lower()
+@CAMERAS.register_module(name="image")
+def _build_image_source(camera_cfg: Dict[str, Any], repo_root: str) -> FrameSource:
+    value = camera_cfg.get("image_path")
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = Path(repo_root) / path
+    return ImageSource(str(path))
+
+
+@CAMERAS.register_module(name="realsense", aliases=("intel_realsense",))
+def _build_realsense_source(camera_cfg: Dict[str, Any], repo_root: str) -> FrameSource:
+    del repo_root
+    return RealSenseSource(
+        int(camera_cfg.get("width", 1280)),
+        int(camera_cfg.get("height", 720)),
+        int(camera_cfg.get("fps", 30)),
+    )
+
+
+@CAMERAS.register_module(name="gstreamer", aliases=("gst",))
+def _build_gstreamer_source(camera_cfg: Dict[str, Any], repo_root: str) -> FrameSource:
+    del repo_root
+    pipeline = str(camera_cfg.get("gstreamer_pipeline", "")).strip()
+    if not pipeline:
+        raise ValueError("camera.gstreamer_pipeline is required for gstreamer")
+    try:
+        return GStreamerSource(pipeline)
+    except RuntimeError as gi_error:
+        try:
+            return OpenCVSource(pipeline, api_preference=cv2.CAP_GSTREAMER)
+        except RuntimeError as cv_error:
+            raise RuntimeError(
+                f"GStreamer failed through PyGObject ({gi_error}) and OpenCV ({cv_error})"
+            ) from cv_error
+
+
+@CAMERAS.register_module(name="video")
+def _build_video_source(camera_cfg: Dict[str, Any], repo_root: str) -> FrameSource:
+    value = Path(str(camera_cfg.get("video_path", ""))).expanduser()
+    if not value.is_absolute():
+        value = Path(repo_root) / value
+    return OpenCVSource(str(value))
+
+
+@CAMERAS.register_module(name="opencv", aliases=("camera", "usb"))
+def _build_opencv_source(camera_cfg: Dict[str, Any], repo_root: str) -> FrameSource:
+    del repo_root
+    value = camera_cfg.get("device", 0)
+    if isinstance(value, str) and value.isdigit():
+        value = int(value)
     width = int(camera_cfg.get("width", 0))
     height = int(camera_cfg.get("height", 0))
     fps = int(camera_cfg.get("fps", 0))
+    return OpenCVSource(value, width, height, fps)
 
-    if backend == "image":
-        value = camera_cfg.get("image_path")
-        path = Path(value).expanduser()
-        if not path.is_absolute():
-            path = Path(repo_root) / path
-        return ImageSource(str(path))
-    if backend == "realsense":
-        return RealSenseSource(width, height, fps)
-    if backend == "gstreamer":
-        pipeline = str(camera_cfg.get("gstreamer_pipeline", "")).strip()
-        if not pipeline:
-            raise ValueError("camera.gstreamer_pipeline is required for gstreamer")
-        try:
-            return GStreamerSource(pipeline)
-        except RuntimeError as gi_error:
-            try:
-                return OpenCVSource(pipeline, api_preference=cv2.CAP_GSTREAMER)
-            except RuntimeError as cv_error:
-                raise RuntimeError(
-                    f"GStreamer failed through PyGObject ({gi_error}) and OpenCV ({cv_error})"
-                ) from cv_error
-    if backend == "video":
-        value = Path(str(camera_cfg.get("video_path", ""))).expanduser()
-        if not value.is_absolute():
-            value = Path(repo_root) / value
-        return OpenCVSource(str(value))
-    if backend == "opencv":
-        value = camera_cfg.get("device", 0)
-        if isinstance(value, str) and value.isdigit():
-            value = int(value)
-        return OpenCVSource(value, width, height, fps)
-    raise ValueError(
-        f"Unknown camera backend {backend!r}; use image/opencv/video/realsense/gstreamer"
-    )
+
+CAMERA_REGISTRY = CAMERAS.module_dict
+
+
+def build_source(camera_cfg: Dict[str, Any], repo_root: str) -> FrameSource:
+    """Build a registered camera from either ``type`` or legacy ``backend``."""
+    component_type = camera_cfg.get("type", camera_cfg.get("backend", "opencv"))
+    try:
+        factory = CAMERAS.require(component_type)
+    except KeyError as exc:
+        available = ", ".join(sorted(CAMERAS.keys()))
+        raise ValueError(
+            f"Unknown camera component {component_type!r}; available: {available}"
+        ) from exc
+    return factory(camera_cfg, repo_root)

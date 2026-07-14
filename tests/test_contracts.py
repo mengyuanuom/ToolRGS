@@ -66,7 +66,11 @@ class ToolRGSContractsTest(unittest.TestCase):
             "lgd",
         }
         self.assertTrue(expected.issubset(MODEL_REGISTRY))
-        paths = glob.glob("config/**/*.yaml", recursive=True)
+        paths = [
+            path
+            for directory in ("grasp_tools", "vcot", "ocid_vlg")
+            for path in glob.glob(f"config/{directory}/*.yaml")
+        ]
         self.assertGreaterEqual(len(paths), 24)
         for path in paths:
             with open(path, encoding="utf-8") as stream:

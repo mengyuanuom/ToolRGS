@@ -10,9 +10,9 @@ import cv2
 import numpy as np
 
 from .inference import GraspPrediction, ToolRGSInference
-from .detector import MMDetectionAdapter
-from .audio import WhisperRecorder
-from .robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
+from .detector import build_detector
+from .audio import build_audio_input
+from .robot import GraspCommand, LegacyTCPGraspClient, build_robot_client, semantic_depth
 from .sources import FrameSource, build_source
 
 
@@ -41,14 +41,14 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
 
     inference = ToolRGSInference(config)
     detector = (
-        MMDetectionAdapter(config["detector"], config["_repo_root"])
+        build_detector(config["detector"], config["_repo_root"])
         if config.get("detector", {}).get("enabled")
         else None
     )
     source = build_source(config["camera"], config["_repo_root"])
     robot_cfg = config["robot"]
     gui_cfg = config["gui"]
-    audio = WhisperRecorder(config["audio"]) if config.get("audio", {}).get("enabled") else None
+    audio = build_audio_input(config["audio"]) if config.get("audio", {}).get("enabled") else None
 
     class MainWindow(QMainWindow):
         def __init__(self, frame_source: FrameSource):
@@ -256,9 +256,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             if not (bool(robot_cfg.get("enabled")) and allow_robot):
                 return
             try:
-                self.robot = LegacyTCPGraspClient(
-                    robot_cfg["host"], robot_cfg["port"], robot_cfg["timeout_s"]
-                )
+                self.robot = build_robot_client(robot_cfg)
                 self.robot.connect()
                 self.connect_button.setEnabled(False)
                 self.arm.setEnabled(True)

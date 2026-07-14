@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 
 from .config import resolve_repo_path
+from toolrgs.registry import DETECTORS
 
 
 class MMDetectionAdapter:
@@ -54,3 +55,23 @@ class MMDetectionAdapter:
                 cv2.LINE_AA,
             )
         return output
+
+
+DETECTORS.register_module(
+    MMDetectionAdapter,
+    name="mmdetection",
+    aliases=("mmdet", "faster_rcnn"),
+)
+DETECTOR_REGISTRY = DETECTORS.module_dict
+
+
+def build_detector(cfg: Dict[str, Any], repo_root: str):
+    component_type = cfg.get("type", "mmdetection")
+    try:
+        detector_class = DETECTORS.require(component_type)
+    except KeyError as exc:
+        available = ", ".join(sorted(DETECTORS.keys()))
+        raise ValueError(
+            f"Unknown detector {component_type!r}; available: {available}"
+        ) from exc
+    return detector_class(cfg, repo_root)

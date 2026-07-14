@@ -6,7 +6,7 @@ model:
   prompt: the screwdriver
 
 camera:
-  backend: gstreamer
+  type: gstreamer
   width: 1280
   height: 720
   fps: 30
@@ -17,6 +17,7 @@ camera:
     appsink name=toolrgs_sink drop=true sync=false max-buffers=1
 
 robot:
+  type: legacy_tcp
   enabled: false
   host: 192.168.38.10
   port: 3000

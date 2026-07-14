@@ -31,6 +31,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "gstreamer_pipeline": "",
     },
     "robot": {
+        "type": "legacy_tcp",
         "enabled": False,
         "host": "192.168.38.10",
         "port": 3000,
@@ -48,6 +49,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         },
     },
     "detector": {
+        "type": "mmdetection",
         "enabled": False,
         "config": "config/deployment/faster-rcnn-13.py",
         "checkpoint": "weights/epoch_48_13.pth",
@@ -56,6 +58,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "classes": [],
     },
     "audio": {
+        "type": "whisper",
         "enabled": False,
         "model": "small",
         "device": "cuda",

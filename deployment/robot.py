@@ -5,6 +5,8 @@ import math
 import socket
 from typing import Dict, Iterable, Mapping, Optional, Sequence
 
+from toolrgs.registry import ROBOT_CLIENTS
+
 
 TIER_DEPTH: Dict[str, int] = {"L1": -1, "L2": 0, "L3": 1}
 TOOL_TIERS: Dict[str, str] = {
@@ -120,3 +122,28 @@ class LegacyTCPGraspClient:
 
     def __exit__(self, exc_type, exc, traceback):
         self.close()
+
+
+ROBOT_CLIENTS.register_module(
+    LegacyTCPGraspClient,
+    name="legacy_tcp",
+    aliases=("kinova_tcp", "tcp"),
+)
+ROBOT_CLIENT_REGISTRY = ROBOT_CLIENTS.module_dict
+
+
+def build_robot_client(cfg: Mapping[str, object]):
+    """Build a robot transport without connecting or sending anything."""
+    component_type = cfg.get("type", "legacy_tcp")
+    try:
+        client_class = ROBOT_CLIENTS.require(component_type)
+    except KeyError as exc:
+        available = ", ".join(sorted(ROBOT_CLIENTS.keys()))
+        raise ValueError(
+            f"Unknown robot client {component_type!r}; available: {available}"
+        ) from exc
+    return client_class(
+        host=cfg["host"],
+        port=cfg.get("port", 3000),
+        timeout_s=cfg.get("timeout_s", 2.0),
+    )

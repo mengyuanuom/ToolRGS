@@ -90,7 +90,9 @@ def main() -> int:
             else:
                 report.fail(f"{key} not found: {path}")
 
-    backend = str(cfg["camera"]["backend"]).lower()
+    backend = str(
+        cfg["camera"].get("type", cfg["camera"].get("backend", "opencv"))
+    ).lower()
     if backend == "realsense":
         require_module(report, "pyrealsense2")
     if backend == "gstreamer":

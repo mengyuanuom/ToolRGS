@@ -13,6 +13,7 @@ from skimage.feature import peak_local_max
 from model import build_model
 from utils.config import load_cfg_from_cfg_file
 from utils.dataset import CLIP_MEAN, CLIP_STD, tokenize
+from toolrgs.structures import GraspModelResult
 
 from .config import resolve_repo_path
 
@@ -146,20 +147,6 @@ class ToolRGSInference:
         ).to(self.device)
         return tensor, words, matrix, inverse, scale
 
-    @staticmethod
-    def _prediction_tuple(raw: Any) -> Sequence[torch.Tensor]:
-        if (
-            isinstance(raw, (tuple, list))
-            and len(raw) == 2
-            and isinstance(raw[0], (tuple, list))
-        ):
-            raw = raw[0]
-        if not isinstance(raw, (tuple, list)) or len(raw) < 5:
-            raise RuntimeError("Model did not return the ToolRGS dense-map contract")
-        if not all(torch.is_tensor(item) for item in raw[:5]):
-            raise RuntimeError("ToolRGS prediction tuple contains a non-tensor map")
-        return raw
-
     def _maps_to_original(
         self,
         predictions: Sequence[torch.Tensor],
@@ -208,7 +195,7 @@ class ToolRGSInference:
         image, words, matrix, inverse, scale = self._preprocess(frame_bgr, prompt)
         with torch.inference_mode():
             raw = self.model(image, words)
-        predictions = self._prediction_tuple(raw)
+        predictions = GraspModelResult.from_legacy(raw).predictions.as_tuple()
         maps = self._maps_to_original(predictions, inverse, frame_bgr.shape[:2])
         segmentation, quality, sine, cosine, width = maps[:5]
         mask = segmentation >= float(self.model_cfg.get("mask_threshold", 0.35))

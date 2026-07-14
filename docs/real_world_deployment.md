@@ -61,7 +61,8 @@ python tools/check_deployment.py --config config/deployment/lab.yaml \
 
 The preflight never connects to the robot and never sends a command.
 
-Camera backends:
+Camera components are selected with `camera.type` (`camera.backend` remains a
+legacy alias):
 
 - `opencv`: integer USB camera index, RTSP URL, or other OpenCV source.
 - `video`: repository-relative or absolute video path.

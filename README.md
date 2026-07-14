@@ -282,6 +282,23 @@ enabling robot output. The repository contains the sender but not the external
 Kinova receiver/controller or its calibration, so a clone alone cannot safely
 move the physical robot.
 
+## Component architecture
+
+ToolRGS now has MMDetection-style registries for models, datasets, transforms,
+metrics, postprocessors, cameras, robot clients, detectors, and audio inputs.
+Existing training configs and builders remain compatible while new components
+can be selected by `type` without extending central `if/elif` factories.
+
+```bash
+python tools/list_components.py
+```
+
+Dense model tuples can be normalized into named `GraspOutput`, `GraspTargets`,
+and `GraspModelResult` structures. Deployment already uses the named contract;
+the legacy engine will be migrated loop by loop. See
+[docs/component_architecture.md](docs/component_architecture.md) for extension
+examples and the compatibility plan.
+
 ## Acknowledgements
 
 ToolRGS integrates ideas and code from CROG, DETRIS, DINOv2, and CRIS. Preserve
