@@ -526,7 +526,7 @@ def train_with_grasp(train_loader, model, optimizer, scheduler, scaler, epoch, a
 
 
 @torch.no_grad()
-def validate_with_grasp(val_loader, model, epoch, args):
+def _legacy_validate_with_grasp(val_loader, model, epoch, args):
 
 
 
@@ -945,6 +945,19 @@ def validate_with_grasp(val_loader, model, epoch, args):
     )
     logger.info(head + temp)
     return iou.item(), prec, J_index
+
+
+@torch.no_grad()
+def validate_with_grasp(val_loader, model, epoch, args):
+    """Compatibility entry point backed by the registered validation loop."""
+    from toolrgs.engine import GraspValLoop
+
+    return GraspValLoop(
+        dataloader=val_loader,
+        model=model,
+        cfg=args,
+        hooks=getattr(args, "val_hooks", None),
+    ).run_epoch(epoch)
 
 
 @torch.no_grad()

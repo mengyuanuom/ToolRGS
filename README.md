@@ -295,10 +295,9 @@ python tools/list_components.py
 ```
 
 Dense model tuples can be normalized into named `GraspOutput`, `GraspTargets`,
-and `GraspModelResult` structures. Deployment already uses the named contract;
-the main training path now uses `GraspTrainLoop`, and deployment uses the shared
-`DenseGraspPostProcessor`. Validation will be migrated after metric-parity
-tests. See
+and `GraspModelResult` structures. The main paths now use registered
+`GraspTrainLoop` and `GraspValLoop` components; validation and deployment share
+the `DenseGraspPostProcessor` decoding contract. See
 [docs/component_architecture.md](docs/component_architecture.md) for extension
 examples and the compatibility plan.
 

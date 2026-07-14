@@ -43,7 +43,7 @@ class BinarySegmentationMetric:
         if prediction.ndim == 2:
             prediction = prediction[None]
             target = target[None]
-        prediction = prediction.reshape(prediction.shape[0], -1) >= self.mask_threshold
+        prediction = prediction.reshape(prediction.shape[0], -1) > self.mask_threshold
         target = target.reshape(target.shape[0], -1).astype(bool)
         intersection = np.logical_and(prediction, target).sum(axis=1)
         union = np.logical_or(prediction, target).sum(axis=1)

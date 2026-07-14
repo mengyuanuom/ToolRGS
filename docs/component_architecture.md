@@ -74,12 +74,15 @@ its historical tuples.
 
 ## Loops, hooks, metrics, and postprocessing
 
-The main trainer now runs one epoch through the registered `GraspTrainLoop`.
+The main trainer now runs training and validation epochs through the registered
+`GraspTrainLoop` and `GraspValLoop`.
 The loop owns device transfer, AMP, backward/optimizer steps, distributed meter
 reduction, and progress logging. The CLI still owns experiment construction,
-checkpointing, validation scheduling, and scheduler stepping.
-The optional flat config key `RUNTIME.train_loop` selects another registered
-loop; it defaults to `grasp_train` for all existing YAML files.
+checkpointing, validation scheduling, and scheduler stepping. The optional flat
+config keys `RUNTIME.train_loop` and `RUNTIME.val_loop` select other registered
+loops; they default to `grasp_train` and `grasp_val` for all existing YAML
+files. Validation hooks can be configured independently with
+`RUNTIME.val_hooks`.
 
 Hooks receive a mutable `LoopState` at `before_epoch`, `before_iter`,
 `after_iter`, and `after_epoch`. They are ordered by numeric priority:
@@ -96,8 +99,10 @@ Registered evaluation components currently include:
 - `GraspSuccessMetric`: top-k Jacquard success aggregation;
 - `DenseGraspPostProcessor`: quality-peak decoding into named rotated grasps.
 
-The real-world deployment path already uses `DenseGraspPostProcessor`, ensuring
-one grasp-map decoding contract can be shared with the future validation loop.
+Validation and real-world deployment both use `DenseGraspPostProcessor`.
+`GraspValLoop` also owns inverse affine warping, optional offset refinement,
+per-sample segmentation metrics, top-1/top-5 Jacquard evaluation, and
+distributed reduction of sufficient statistics.
 
 ## Compatibility layer
 
@@ -106,6 +111,9 @@ one grasp-map decoding contract can be shared with the future validation loop.
   `DATASETS`.
 - `build_model(cfg)` still returns `(model, optimizer_parameter_groups)`.
 - `build_dataset(cfg, split, with_offset)` keeps its existing signature.
+- `engine.engine.validate_with_grasp(...)` remains as a compatibility wrapper
+  around `GraspValLoop`; the previous implementation is retained privately as
+  `_legacy_validate_with_grasp` for short-term parity diagnosis.
 - Dataset-specific optional arguments are signature-filtered; custom registered
   datasets can receive additional values through `DATA.dataset_args`.
 - Deployment YAML accepts the new `type` field and still understands the old
@@ -115,13 +123,11 @@ one grasp-map decoding contract can be shared with the future validation loop.
 
 The safe next stages are:
 
-1. move validation into `GraspValLoop` using the registered postprocessor and
-   metrics, with parity tests against `validate_with_grasp`;
-2. extract optimizer behavior into an `OptimWrapper` and checkpoint/logging into
+1. extract optimizer behavior into an `OptimWrapper` and checkpoint/logging into
    concrete hooks;
-3. register transforms and losses;
-4. convert each model to `BaseGraspModel` and remove tuple adapters;
-5. introduce composable `_base_` experiment configs after all legacy configs
+2. register transforms and losses;
+3. convert each model to `BaseGraspModel` and remove tuple adapters;
+4. introduce composable `_base_` experiment configs after all legacy configs
    have parity tests.
 
 At every stage the old CLI remains a compatibility entry until equivalent

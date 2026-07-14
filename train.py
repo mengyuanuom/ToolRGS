@@ -18,9 +18,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import utils.config as config
-from engine.engine import validate_with_grasp
 from model import build_model
-from toolrgs.engine import GraspTrainLoop  # imports and registers the default loop
+from toolrgs.engine import GraspTrainLoop, GraspValLoop  # register default loops
 from toolrgs.registry import LOOPS
 from utils.data_builder import build_dataset
 from utils.misc import init_random_seed, set_random_seed, setup_logger, worker_init_fn
@@ -142,6 +141,13 @@ def main():
         cfg=args,
         hooks=getattr(args, "hooks", None),
     )
+    val_loop_class = LOOPS.require(getattr(args, "val_loop", "grasp_val"))
+    val_loop = val_loop_class(
+        dataloader=val_loader,
+        model=model,
+        cfg=args,
+        hooks=getattr(args, "val_hooks", None),
+    )
 
     start = time.time()
     for epoch in range(args.start_epoch, args.epochs):
@@ -150,9 +156,7 @@ def main():
             train_sampler.set_epoch(epoch_number)
 
         train_loop.run_epoch(epoch_number)
-        iou, precision, j_index = validate_with_grasp(
-            val_loader, model, epoch_number, args
-        )
+        iou, precision, j_index = val_loop.run_epoch(epoch_number)
 
         if is_main:
             Path(args.output_dir).mkdir(parents=True, exist_ok=True)

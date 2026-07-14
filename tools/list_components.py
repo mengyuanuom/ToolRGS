@@ -45,7 +45,7 @@ POPULATORS = {
     "datasets": ("utils.data_builder",),
     "metrics": ("toolrgs.evaluation",),
     "postprocessors": ("toolrgs.evaluation",),
-    "loops": ("toolrgs.engine.loops",),
+    "loops": ("toolrgs.engine.loops", "toolrgs.engine.val_loop"),
     "hooks": ("toolrgs.engine.hooks",),
     "cameras": ("deployment.sources",),
     "robot_clients": ("deployment.robot",),

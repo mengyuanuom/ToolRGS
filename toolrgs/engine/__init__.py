@@ -5,6 +5,7 @@ from .hooks import Hook, HookList, LoopState, NoOpHook
 __all__ = [
     "BaseLoop",
     "GraspTrainLoop",
+    "GraspValLoop",
     "Hook",
     "HookList",
     "LoopState",
@@ -17,4 +18,8 @@ def __getattr__(name):
         from .loops import BaseLoop, GraspTrainLoop
 
         return {"BaseLoop": BaseLoop, "GraspTrainLoop": GraspTrainLoop}[name]
+    if name == "GraspValLoop":
+        from .val_loop import GraspValLoop
+
+        return GraspValLoop
     raise AttributeError(name)

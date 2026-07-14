@@ -9,8 +9,9 @@ import torch
 from torch.utils.data import DataLoader
 
 import utils.config as config
-from engine.engine import validate_with_grasp
 from model import build_model
+from toolrgs.engine import GraspValLoop  # imports and registers the default loop
+from toolrgs.registry import LOOPS
 from utils.data_builder import build_dataset
 from utils.misc import setup_logger
 
@@ -66,9 +67,14 @@ def main():
         pin_memory=True,
         collate_fn=dataset.collate_fn,
     )
-    iou, precision, j_index = validate_with_grasp(
-        loader, model, getattr(args, "start_epoch", 0), args
+    val_loop_class = LOOPS.require(getattr(args, "val_loop", "grasp_val"))
+    val_loop = val_loop_class(
+        dataloader=loader,
+        model=model,
+        cfg=args,
+        hooks=getattr(args, "val_hooks", None),
     )
+    iou, precision, j_index = val_loop.run_epoch(getattr(args, "start_epoch", 0))
     logger.info("Final IoU={}, precision={}, J={}", iou, precision, j_index)
 
 
