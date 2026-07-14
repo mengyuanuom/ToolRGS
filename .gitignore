@@ -63,3 +63,6 @@ exp/
 # results
 results/
 weights/
+
+# Local hardware deployment configuration
+config/deployment/lab.yaml

@@ -263,6 +263,25 @@ set `TRAIN.mamba_pretrain` to the local file. MambaVision code uses NVIDIA's
 non-commercial source license and its pretrained weights use CC-BY-NC-SA-4.0;
 check those terms before redistribution or commercial use.
 
+## Real-world demo and robot sender
+
+ToolRGS includes a configuration-driven PyQt demo ported from the local server
+CROG deployment. It supports all eight ToolRGS grasp architectures, OpenCV/video,
+RealSense, GStreamer shared memory, optional MMDetection and Whisper, and the
+legacy Kinova TCP command format. Start in dry-run mode:
+
+```bash
+cp config/deployment/lab.example.yaml config/deployment/lab.yaml
+python tools/check_deployment.py --config config/deployment/lab.yaml \
+  --probe-camera --build-model
+python deploy_gui.py --config config/deployment/lab.yaml
+```
+
+See [docs/real_world_deployment.md](docs/real_world_deployment.md) before
+enabling robot output. The repository contains the sender but not the external
+Kinova receiver/controller or its calibration, so a clone alone cannot safely
+move the physical robot.
+
 ## Acknowledgements
 
 ToolRGS integrates ideas and code from CROG, DETRIS, DINOv2, and CRIS. Preserve
