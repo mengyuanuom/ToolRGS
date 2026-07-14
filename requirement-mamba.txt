@@ -1,0 +1,2 @@
+# Optional GraspMamba dependency. Install the CUDA-matched PyTorch build first.
+mambavision==1.2.0

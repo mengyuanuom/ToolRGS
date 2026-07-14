@@ -1,7 +1,7 @@
 # ToolRGS
 
 Tool-oriented Referring Grasp Synthesis with a single configuration-driven
-codebase for CROG, CROG-OFF, DROG, DROG-OFF, LGD, GGCNN-CLIP,
+codebase for CROG, CROG-OFF, DROG, DROG-OFF, GraspMamba, LGD, GGCNN-CLIP,
 GR-ConvNet-CLIP, and DETRIS backbones. Grasp-Tools, VCoT/Grasp-Anything,
 and OCID-VLG data use the same model-facing batch contract.
 
@@ -20,6 +20,7 @@ ToolRGS/
 │   ├── drogoff.py
 │   ├── ggcnnclip.py
 │   ├── grconvnetclip.py
+│   ├── graspmamba.py
 │   ├── lgd.py
 │   ├── segmenter.py
 │   └── dinov2/
@@ -43,13 +44,13 @@ MODEL:
   architecture: drogoff
 ```
 
-Each supported dataset has a complete seven-model experiment matrix:
+Each supported dataset has a complete eight-model experiment matrix:
 
 | Dataset config directory | Models |
 | --- | --- |
-| `config/grasp_tools/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `lgd` |
-| `config/vcot/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `lgd` |
-| `config/ocid_vlg/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `lgd` |
+| `config/grasp_tools/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
+| `config/vcot/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
+| `config/ocid_vlg/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
 
 For example, `config/vcot/drogoff.yaml` and
 `config/ocid_vlg/lgd.yaml` are directly runnable after setting data and weight
@@ -98,7 +99,7 @@ python tools/inspect_vcot_sample.py \
   --csv split/vcot/train.csv --row 2
 ```
 
-All seven grasp-aware ToolRGS models can use VCoT without code changes. Use the
+All eight grasp-aware ToolRGS models can use VCoT without code changes. Use the
 matching file under `config/vcot/`, for example:
 
 ```bash
@@ -196,10 +197,45 @@ value for faster comparison. The upstream LGD MIT notice is in
 [CVPR 2024 paper](https://openaccess.thecvf.com/content/CVPR2024/html/Vuong_Language-driven_Grasp_Detection_CVPR_2024_paper.html)
 and [official implementation](https://github.com/Fsoft-AIC/LGD).
 
+`GraspMamba` is a ToolRGS paper reimplementation, not the unreleased official
+training code. It follows the paper's four-stage MambaVision backbone, frozen
+CLIP text encoder, per-stage visual-language fusion, and recursive top-down
+feature aggregation. The adapter adds an instance-segmentation head and emits
+the shared dense grasp maps required by the ToolRGS engine. VCoT/Grasp-Anything
+is the paper-aligned training dataset; the Grasp-Tools and OCID-VLG configs are
+cross-dataset compatibility experiments rather than paper-reported settings.
+See the [GraspMamba paper](https://arxiv.org/abs/2409.14403) and the
+[official MambaVision backbone](https://github.com/NVlabs/MambaVision).
+
+Run the paper-aligned experiment with:
+
+```bash
+python train.py --config config/vcot/graspmamba.yaml --opts \
+  DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything
+```
+
 ## Environment
 
 Use Python 3.9 and PyTorch 2.0.1. Install the dependencies from
 `requirement.txt`. Pretrained CLIP and DINOv2 weights are not stored in Git.
+
+GraspMamba has an optional CUDA extension and must be installed after the
+CUDA-matched PyTorch build:
+
+```bash
+pip install "mamba-ssm==2.2.4" --no-build-isolation
+pip install -r requirement-mamba.txt
+python tools/check_graspmamba_env.py --clip pretrain/RN50.pt
+```
+
+`--no-build-isolation` is important because the CUDA extension must compile
+against the PyTorch already installed in the active environment.
+
+The configured official MambaVision checkpoint is downloaded automatically if
+it is missing and the server has network access. Otherwise download it once and
+set `TRAIN.mamba_pretrain` to the local file. MambaVision code uses NVIDIA's
+non-commercial source license and its pretrained weights use CC-BY-NC-SA-4.0;
+check those terms before redistribution or commercial use.
 
 ## Acknowledgements
 

@@ -7,6 +7,7 @@ import torch
 import yaml
 
 from model import MODEL_REGISTRY
+from model.graspmamba import HierarchicalFeatureFusion
 from model.layers import OffsetMultiTaskProjector
 from model.lgd import CosineDiffusion, LGDCore
 from utils.dataset import GraspTransforms, make_dense_offset_with_radius_np
@@ -61,11 +62,12 @@ class ToolRGSContractsTest(unittest.TestCase):
             "drogoff",
             "ggcnnclip",
             "grconvnetclip",
+            "graspmamba",
             "lgd",
         }
         self.assertTrue(expected.issubset(MODEL_REGISTRY))
         paths = glob.glob("config/**/*.yaml", recursive=True)
-        self.assertGreaterEqual(len(paths), 21)
+        self.assertGreaterEqual(len(paths), 24)
         for path in paths:
             with open(path, encoding="utf-8") as stream:
                 cfg = yaml.safe_load(stream)
@@ -135,6 +137,21 @@ class ToolRGSContractsTest(unittest.TestCase):
         self.assertEqual(len(outputs), 5)
         for output in outputs:
             self.assertEqual(tuple(output.shape), (2, 1, 64, 64))
+
+    def test_graspmamba_hierarchical_fusion_contract(self):
+        fusion = HierarchicalFeatureFusion(
+            visual_channels=(8, 16, 32, 64),
+            text_dim=24,
+            fusion_dim=12,
+        )
+        features = (
+            torch.randn(2, 8, 32, 32),
+            torch.randn(2, 16, 16, 16),
+            torch.randn(2, 32, 8, 8),
+            torch.randn(2, 64, 4, 4),
+        )
+        output = fusion(features, torch.randn(2, 24))
+        self.assertEqual(tuple(output.shape), (2, 12, 32, 32))
 
 
 if __name__ == "__main__":
