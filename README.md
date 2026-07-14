@@ -285,7 +285,8 @@ move the physical robot.
 ## Component architecture
 
 ToolRGS now has MMDetection-style registries for models, datasets, transforms,
-metrics, postprocessors, cameras, robot clients, detectors, and audio inputs.
+losses, metrics, postprocessors, loops, hooks, cameras, robot clients,
+detectors, and audio inputs.
 Existing training configs and builders remain compatible while new components
 can be selected by `type` without extending central `if/elif` factories.
 
@@ -295,7 +296,9 @@ python tools/list_components.py
 
 Dense model tuples can be normalized into named `GraspOutput`, `GraspTargets`,
 and `GraspModelResult` structures. Deployment already uses the named contract;
-the legacy engine will be migrated loop by loop. See
+the main training path now uses `GraspTrainLoop`, and deployment uses the shared
+`DenseGraspPostProcessor`. Validation will be migrated after metric-parity
+tests. See
 [docs/component_architecture.md](docs/component_architecture.md) for extension
 examples and the compatibility plan.
 

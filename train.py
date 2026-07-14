@@ -18,8 +18,10 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import utils.config as config
-from engine.engine import train_with_grasp, validate_with_grasp
+from engine.engine import validate_with_grasp
 from model import build_model
+from toolrgs.engine import GraspTrainLoop  # imports and registers the default loop
+from toolrgs.registry import LOOPS
 from utils.data_builder import build_dataset
 from utils.misc import init_random_seed, set_random_seed, setup_logger, worker_init_fn
 
@@ -130,15 +132,24 @@ def main():
         best_iou = checkpoint.get("best_iou", 0.0)
         best_j = checkpoint.get("best_j_index", 0.0)
 
+    train_loop_class = LOOPS.require(getattr(args, "train_loop", "grasp_train"))
+    train_loop = train_loop_class(
+        dataloader=train_loader,
+        model=model,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        scaler=scaler,
+        cfg=args,
+        hooks=getattr(args, "hooks", None),
+    )
+
     start = time.time()
     for epoch in range(args.start_epoch, args.epochs):
         epoch_number = epoch + 1
         if train_sampler is not None:
             train_sampler.set_epoch(epoch_number)
 
-        train_with_grasp(
-            train_loader, model, optimizer, scheduler, scaler, epoch_number, args
-        )
+        train_loop.run_epoch(epoch_number)
         iou, precision, j_index = validate_with_grasp(
             val_loader, model, epoch_number, args
         )

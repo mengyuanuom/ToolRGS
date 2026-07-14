@@ -16,6 +16,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "mask_threshold": 0.35,
         "quality_threshold": 0.4,
         "num_grasps": 1,
+        "postprocessor": {
+            "type": "dense_grasp",
+            "min_distance": 2,
+            "width_factor": 100.0,
+            "grasp_height": 20.0,
+        },
         "gate_quality_by_mask": True,
         "scale_grasp_to_source": True,
         "overrides": {},

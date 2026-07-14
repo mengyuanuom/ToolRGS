@@ -10,7 +10,8 @@ The global registries live in `toolrgs/registry.py`:
 
 ```text
 MODELS          DATASETS        TRANSFORMS
-METRICS         POSTPROCESSORS  CAMERAS
+LOSSES          METRICS         POSTPROCESSORS
+LOOPS           HOOKS           CAMERAS
 ROBOT_CLIENTS   DETECTORS       AUDIO_INPUTS
 ```
 
@@ -71,6 +72,33 @@ structure. `LegacyOutputAdapter` lets new loops consume an existing model as a
 structured-output module, while the current training engine continues receiving
 its historical tuples.
 
+## Loops, hooks, metrics, and postprocessing
+
+The main trainer now runs one epoch through the registered `GraspTrainLoop`.
+The loop owns device transfer, AMP, backward/optimizer steps, distributed meter
+reduction, and progress logging. The CLI still owns experiment construction,
+checkpointing, validation scheduling, and scheduler stepping.
+The optional flat config key `RUNTIME.train_loop` selects another registered
+loop; it defaults to `grasp_train` for all existing YAML files.
+
+Hooks receive a mutable `LoopState` at `before_epoch`, `before_iter`,
+`after_iter`, and `after_epoch`. They are ordered by numeric priority:
+
+```yaml
+RUNTIME:
+  hooks:
+    - type: noop
+```
+
+Registered evaluation components currently include:
+
+- `BinarySegmentationMetric`: mean per-sample IoU and precision thresholds;
+- `GraspSuccessMetric`: top-k Jacquard success aggregation;
+- `DenseGraspPostProcessor`: quality-peak decoding into named rotated grasps.
+
+The real-world deployment path already uses `DenseGraspPostProcessor`, ensuring
+one grasp-map decoding contract can be shared with the future validation loop.
+
 ## Compatibility layer
 
 - `model.MODEL_REGISTRY` remains available as a read-only view of `MODELS`.
@@ -85,12 +113,13 @@ its historical tuples.
 
 ## Migration sequence
 
-This commit deliberately does not rewrite the training engine. The safe next
-stages are:
+The safe next stages are:
 
-1. register transforms, postprocessors, losses, and metrics;
-2. move validation into `ValLoop` plus grasp/segmentation metric components;
-3. move optimization into `TrainLoop` and hooks;
+1. move validation into `GraspValLoop` using the registered postprocessor and
+   metrics, with parity tests against `validate_with_grasp`;
+2. extract optimizer behavior into an `OptimWrapper` and checkpoint/logging into
+   concrete hooks;
+3. register transforms and losses;
 4. convert each model to `BaseGraspModel` and remove tuple adapters;
 5. introduce composable `_base_` experiment configs after all legacy configs
    have parity tests.

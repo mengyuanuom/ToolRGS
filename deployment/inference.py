@@ -8,12 +8,13 @@ import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from skimage.feature import peak_local_max
 
 from model import build_model
 from utils.config import load_cfg_from_cfg_file
 from utils.dataset import CLIP_MEAN, CLIP_STD, tokenize
 from toolrgs.structures import GraspModelResult
+from toolrgs.evaluation import DenseGraspPostProcessor  # registers evaluation components
+from toolrgs.registry import POSTPROCESSORS
 
 from .config import resolve_repo_path
 
@@ -112,6 +113,15 @@ class ToolRGSInference:
         _load_state(self.model, state)
         self.model.to(self.device).eval()
         self.input_hw = _input_size(self.cfg.input_size)
+        postprocessor_cfg = dict(self.model_cfg.get("postprocessor", {}))
+        postprocessor_cfg.setdefault("type", "dense_grasp")
+        postprocessor_cfg.setdefault(
+            "quality_threshold", float(self.model_cfg.get("quality_threshold", 0.4))
+        )
+        postprocessor_cfg.setdefault(
+            "num_grasps", int(self.model_cfg.get("num_grasps", 1))
+        )
+        self.postprocessor = POSTPROCESSORS.build(postprocessor_cfg)
 
     def _resolve_pretrained_paths(self) -> None:
         for key in ("clip_pretrain", "dino_pretrain", "mamba_pretrain"):
@@ -203,31 +213,33 @@ class ToolRGSInference:
             quality = quality * mask.astype(np.float32)
         angle = np.arctan2(sine, cosine) / 2.0
 
-        peaks = peak_local_max(
-            quality,
-            min_distance=2,
-            threshold_abs=float(self.model_cfg.get("quality_threshold", 0.4)),
-            num_peaks=int(self.model_cfg.get("num_grasps", 1)),
-        )
         source_scale = 1.0 / max(scale, 1e-8) if self.model_cfg.get(
             "scale_grasp_to_source", True
         ) else 1.0
+        detections = self.postprocessor(
+            quality,
+            sine,
+            cosine,
+            width,
+            spatial_scale=source_scale,
+        )
         grasps: List[List[float]] = []
         model_grasps: List[List[float]] = []
         scores: List[float] = []
         offset = maps[5] if len(maps) >= 6 else None
         radius = float(getattr(self.cfg, "offset_r", 0.0) or 0.0) * source_scale
         ori_h, ori_w = frame_bgr.shape[:2]
-        for row, col in peaks:
-            x, y = float(col), float(row)
+        for detection in detections:
+            row, col = detection.row, detection.column
+            x, y = detection.x, detection.y
             if offset is not None and offset.shape[0] >= 2 and radius > 0:
                 x += float(offset[0, row, col]) * radius
                 y += float(offset[1, row, col]) * radius
             x = float(np.clip(x, 0, ori_w - 1))
             y = float(np.clip(y, 0, ori_h - 1))
-            theta = float(angle[row, col] / np.pi * 180.0)
-            grasp_width = max(1.0, float(width[row, col]) * 100.0 * source_scale)
-            grasp_height = 20.0 * source_scale
+            theta = detection.angle_degrees
+            grasp_width = detection.width
+            grasp_height = detection.height
             grasps.append([x, y, grasp_width, grasp_height, theta])
             model_x, model_y = matrix @ np.array([x, y, 1.0], dtype=np.float32)
             model_grasps.append(
@@ -239,7 +251,7 @@ class ToolRGSInference:
                     theta,
                 ]
             )
-            scores.append(float(quality[row, col]))
+            scores.append(detection.score)
 
         annotated = frame_bgr.copy()
         overlay = annotated.copy()
