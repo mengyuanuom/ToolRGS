@@ -107,6 +107,32 @@ python train.py --config config/vcot/drogoff.yaml --opts \
   DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything
 ```
 
+### Recommended VCoT profile for two RTX 3090 GPUs
+
+VCoT YAML batch sizes and worker counts are per distributed process (per GPU).
+The checked-in profile targets two 24 GB RTX 3090 cards:
+
+| Model | Input | Train batch/GPU | Global batch | Epochs | LR milestones |
+| --- | ---: | ---: | ---: | ---: | --- |
+| CROG / CROG-OFF | 416 | 8 | 16 | 70 | 55, 65 |
+| DROG / DROG-OFF | 448 | 8 | 16 | 65 | 35, 55 |
+| GGCNN-CLIP | 416 | 32 | 64 | 50 | 35 |
+| GRConvNet-CLIP | 416 | 32 | 64 | 80 | 70 |
+| GraspMamba | 416 | 8 | 16 | 50 | 35, 45 |
+| LGD | 224 | 16 | 32 | 100 | 70, 90 |
+
+Each process uses eight training workers and four validation workers, producing
+16 training workers across two GPUs. Start a two-GPU run with `torchrun`:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train.py \
+  --config config/vcot/graspmamba.yaml --opts \
+  DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything
+```
+
+If a heavy model runs out of memory, reduce both per-GPU batches without
+editing YAML, for example `TRAIN.batch_size 4 TRAIN.batch_size_val 4`.
+
 ## OCID-VLG data
 
 OCID-VLG referring expressions are read directly from the downloaded dataset;

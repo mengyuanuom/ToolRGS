@@ -22,12 +22,12 @@ TRAIN:
   word_len: 17
   word_dim: 1024
   sync_bn: True
-  workers: 4
+  workers: 8  # per process; 16 workers total with two GPUs
   workers_val: 4
   epochs: 50
   milestones: [35, 45]
   start_epoch: 0
-  batch_size: 8
+  batch_size: 8  # per GPU; global batch size 16 with two GPUs
   batch_size_val: 8
   base_lr: 0.001
   lr_decay: 0.1

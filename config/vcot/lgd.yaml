@@ -25,12 +25,12 @@ TRAIN:
   lgd_contrastive_weight: 0.001
   lgd_contrastive_temperature: 0.1
   sync_bn: True
-  workers: 8
+  workers: 8  # per process; 16 workers total with two GPUs
   workers_val: 4
   epochs: 100
   milestones: [70, 90]
   start_epoch: 0
-  batch_size: 16
+  batch_size: 16  # per GPU; global batch size 32 with two GPUs
   batch_size_val: 8
   base_lr: 0.0001
   lr_decay: 0.1

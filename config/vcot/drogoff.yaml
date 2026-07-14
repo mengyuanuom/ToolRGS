@@ -42,13 +42,13 @@ TRAIN:
   intermediate: False 
 
   # Training Setting
-  workers: 32  # data loader workers
-  workers_val: 16
+  workers: 8  # per process; 16 workers total with two GPUs
+  workers_val: 4
   epochs: 65
   milestones: [35,55]
   start_epoch: 0
-  batch_size: 16  # batch size for training
-  batch_size_val: 16  # batch size for validation during training, memory and speed tradeoff
+  batch_size: 8  # per GPU; global batch size 16 with two GPUs
+  batch_size_val: 8
   base_lr: 0.0001
   lr_decay: 0.1
   lr_multi: 1
