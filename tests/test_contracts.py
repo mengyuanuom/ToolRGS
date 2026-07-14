@@ -1,4 +1,5 @@
 import glob
+import os
 import unittest
 
 import numpy as np
@@ -64,7 +65,7 @@ class ToolRGSContractsTest(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(MODEL_REGISTRY))
         paths = glob.glob("config/**/*.yaml", recursive=True)
-        self.assertGreaterEqual(len(paths), 9)
+        self.assertGreaterEqual(len(paths), 21)
         for path in paths:
             with open(path, encoding="utf-8") as stream:
                 cfg = yaml.safe_load(stream)
@@ -72,6 +73,23 @@ class ToolRGSContractsTest(unittest.TestCase):
             self.assertIn(architecture, MODEL_REGISTRY, path)
             dataset = cfg["DATA"]["dataset"].lower().replace("-", "_")
             self.assertIn(dataset, DATASET_REGISTRY, path)
+
+        for directory, dataset_name in (
+            ("grasp_tools", "grasptool"),
+            ("vcot", "vcot"),
+            ("ocid_vlg", "ocid_vlg"),
+        ):
+            configs = glob.glob(f"config/{directory}/*.yaml")
+            self.assertEqual(
+                {os.path.splitext(os.path.basename(path))[0] for path in configs},
+                expected,
+                directory,
+            )
+            for path in configs:
+                with open(path, encoding="utf-8") as stream:
+                    cfg = yaml.safe_load(stream)
+                actual = cfg["DATA"]["dataset"].lower().replace("-", "_")
+                self.assertEqual(actual, dataset_name, path)
 
     def test_offset_projector_output_contract(self):
         projector = OffsetMultiTaskProjector(word_dim=512, in_dim=256)

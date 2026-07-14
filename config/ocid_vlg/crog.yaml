@@ -1,7 +1,6 @@
 DATA:
   dataset: OCID-VLG
   root_path: ./datasets/OCID-VLG
-  version: multiple
   with_depth: True
   train_split: train
   val_split: val
@@ -42,7 +41,7 @@ TRAIN:
   manual_seed: 0
   print_freq: 1
   # Resume & Save
-  exp_name: crog_ocid_vlg_multiple
+  exp_name: crog_ocid_vlg
   output_folder: exp/ocid_vlg
   save_freq: 20
   weight:

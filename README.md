@@ -43,17 +43,18 @@ MODEL:
   architecture: drogoff
 ```
 
-Available experiments:
+Each supported dataset has a complete seven-model experiment matrix:
 
-- `config/grasp_tools/crog.yaml`
-- `config/grasp_tools/crogoff.yaml`
-- `config/grasp_tools/drog.yaml`
-- `config/grasp_tools/drogoff.yaml`
-- `config/grasp_tools/ggcnnclip.yaml`
-- `config/grasp_tools/grconvnetclip.yaml`
-- `config/grasp_tools/lgd.yaml`
-- `config/vcot/crog.yaml`
-- `config/ocid_vlg/crog.yaml`
+| Dataset config directory | Models |
+| --- | --- |
+| `config/grasp_tools/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `lgd` |
+| `config/vcot/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `lgd` |
+| `config/ocid_vlg/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `lgd` |
+
+For example, `config/vcot/drogoff.yaml` and
+`config/ocid_vlg/lgd.yaml` are directly runnable after setting data and weight
+paths. DETRIS remains a referring-segmentation baseline and does not implement
+the shared grasp-map output/loss contract, so it is not included in this matrix.
 
 Set `DATA.root_path`, `TRAIN.clip_pretrain`, and (for DROG variants)
 `TRAIN.dino_pretrain` to local paths before training.
@@ -97,14 +98,12 @@ python tools/inspect_vcot_sample.py \
   --csv split/vcot/train.csv --row 2
 ```
 
-All registered ToolRGS models can use VCoT without code changes. Either copy
-the data block above into a model config, or override the shared fields:
+All seven grasp-aware ToolRGS models can use VCoT without code changes. Use the
+matching file under `config/vcot/`, for example:
 
 ```bash
-python train.py --config config/grasp_tools/drogoff.yaml --opts \
-  DATA.dataset vcot \
-  DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything \
-  DATA.train_split train DATA.val_split unseen
+python train.py --config config/vcot/drogoff.yaml --opts \
+  DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything
 ```
 
 ## OCID-VLG data
@@ -148,6 +147,13 @@ Inspect one expression before training:
 python tools/inspect_ocid_vlg_sample.py \
   --dataset-root /path/to/OCID-VLG \
   --version multiple --split train --index 0
+```
+
+Train any supported grasp model with its OCID-VLG config, for example:
+
+```bash
+python train.py --config config/ocid_vlg/drog.yaml --opts \
+  DATA.root_path /path/to/OCID-VLG
 ```
 
 ## Training

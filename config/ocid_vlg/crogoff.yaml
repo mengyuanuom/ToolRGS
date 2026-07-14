@@ -1,14 +1,13 @@
 DATA:
-  dataset: vcot
-  root_path: ./datasets/grasp-anything
-  split_root: ./split/vcot
-  prompt_template: "Grasp the {object_name}"
+  dataset: OCID-VLG
+  root_path: ./datasets/OCID-VLG
+  with_depth: True
   train_split: train
-  val_split: unseen
+  val_split: val
   offset_r: 20
   offset_sigma:
 MODEL:
-  architecture: crog
+  architecture: crogoff
 TRAIN:
   # Base Arch
   clip_pretrain: pretrain/RN50.pt
@@ -42,8 +41,9 @@ TRAIN:
   manual_seed: 0
   print_freq: 1
   # Resume & Save
-  exp_name: crog_vcot
-  output_folder: exp/vcot
+  exp_name: crogoff_ocid_vlg
+  offset_loss_weight: 1.0
+  output_folder: exp/ocid_vlg
   save_freq: 20
   weight:
   resume:
@@ -59,5 +59,5 @@ Distributed:
   world_size: 1
   rank: 0
 TEST:
-  test_split: unseen
+  test_split: test
   visualize: True

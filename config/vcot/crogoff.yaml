@@ -8,7 +8,7 @@ DATA:
   offset_r: 20
   offset_sigma:
 MODEL:
-  architecture: crog
+  architecture: crogoff
 TRAIN:
   # Base Arch
   clip_pretrain: pretrain/RN50.pt
@@ -42,7 +42,8 @@ TRAIN:
   manual_seed: 0
   print_freq: 1
   # Resume & Save
-  exp_name: crog_vcot
+  exp_name: crogoff_vcot
+  offset_loss_weight: 1.0
   output_folder: exp/vcot
   save_freq: 20
   weight:
