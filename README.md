@@ -1,8 +1,8 @@
 # ToolRGS
 
 Tool-oriented Referring Grasp Synthesis with a single configuration-driven
-codebase for CROG, CROG-OFF, DROG, DROG-OFF, GraspMamba, LGD, GGCNN-CLIP,
-GR-ConvNet-CLIP, and DETRIS backbones. Grasp-Tools, VCoT/Grasp-Anything,
+codebase for CROG, CROG-OFF, DROG, DROG-OFF, MapleGrasp, GraspMamba, LGD,
+GGCNN-CLIP, GR-ConvNet-CLIP, and DETRIS backbones. Grasp-Tools, VCoT/Grasp-Anything,
 and OCID-VLG data use the same model-facing batch contract.
 
 ## Design
@@ -44,13 +44,13 @@ MODEL:
   architecture: drogoff
 ```
 
-Each supported dataset has a complete eight-model experiment matrix:
+Each supported dataset has a complete nine-model experiment matrix:
 
 | Dataset config directory | Models |
 | --- | --- |
-| `config/grasp_tools/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
-| `config/vcot/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
-| `config/ocid_vlg/` | `crog`, `crogoff`, `drog`, `drogoff`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
+| `config/grasp_tools/` | `crog`, `crogoff`, `drog`, `drogoff`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
+| `config/vcot/` | `crog`, `crogoff`, `drog`, `drogoff`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
+| `config/ocid_vlg/` | `crog`, `crogoff`, `drog`, `drogoff`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
 
 For example, `config/vcot/drogoff.yaml` and
 `config/ocid_vlg/lgd.yaml` are directly runnable after setting data and weight
@@ -99,7 +99,7 @@ python tools/inspect_vcot_sample.py \
   --csv split/vcot/train.csv --row 2
 ```
 
-All eight grasp-aware ToolRGS models can use VCoT without code changes. Use the
+All nine grasp-aware ToolRGS models can use VCoT without code changes. Use the
 matching file under `config/vcot/`, for example:
 
 ```bash
@@ -115,6 +115,7 @@ The checked-in profile targets two 24 GB RTX 3090 cards:
 | Model | Input | Train batch/GPU | Global batch | Epochs | LR milestones |
 | --- | ---: | ---: | ---: | ---: | --- |
 | CROG / CROG-OFF | 416 | 8 | 16 | 70 | 55, 65 |
+| MapleGrasp | 416 | 8 | 16 | 70 | 55, 65 |
 | DROG / DROG-OFF | 448 | 8 | 16 | 65 | 35, 55 |
 | GGCNN-CLIP | 416 | 32 | 64 | 50 | 35 |
 | GRConvNet-CLIP | 416 | 32 | 64 | 80 | 70 |
@@ -182,6 +183,51 @@ Train any supported grasp model with its OCID-VLG config, for example:
 python train.py --config config/ocid_vlg/drog.yaml --opts \
   DATA.root_path /path/to/OCID-VLG
 ```
+
+## MapleGrasp
+
+`model/maplegrasp.py` ports the official CROG-based MapleGrasp mask-guided
+projector into ToolRGS. A detached predicted segmentation mask gates the four
+grasp feature branches before the dynamic language-conditioned convolution.
+Unlike the released reference implementation, the ToolRGS port avoids a fixed
+104x104 feature size and never consumes a ground-truth object mask at
+evaluation time.
+
+The directly runnable configuration uses joint segmentation/grasp training:
+
+```bash
+torchrun --nproc_per_node=2 train.py \
+  --config config/ocid_vlg/maplegrasp.yaml --opts \
+  DATA.root_path /path/to/OCID-VLG
+```
+
+For the paper-style two-stage schedule, first train only segmentation and then
+initialize the grasp stage from the best-IoU checkpoint:
+
+```bash
+torchrun --nproc_per_node=2 train.py \
+  --config config/ocid_vlg/maplegrasp.yaml --opts \
+  DATA.root_path /path/to/OCID-VLG \
+  TRAIN.maple_stage segmentation \
+  TRAIN.exp_name maplegrasp_ocid_vlg_stage1
+
+torchrun --nproc_per_node=2 train.py \
+  --config config/ocid_vlg/maplegrasp.yaml --opts \
+  DATA.root_path /path/to/OCID-VLG \
+  TRAIN.maple_stage grasp \
+  TRAIN.weight exp/ocid_vlg/maplegrasp_ocid_vlg_stage1/best_iou_model.pth \
+  TRAIN.exp_name maplegrasp_ocid_vlg_stage2
+```
+
+`TRAIN.weight` initializes model parameters only; `TRAIN.resume` additionally
+restores epoch, optimizer, and scheduler state. Configured local files are
+checked before model construction, so missing CLIP or checkpoint paths now fail
+with the resolved path and a direct remediation message.
+
+This port follows the [MapleGrasp paper](https://arxiv.org/abs/2506.06535) and
+[official implementation](https://github.com/vineet2104/MapleGrasp). Report
+ToolRGS results separately from the paper until the same split and two-stage
+schedule have been reproduced.
 
 ## Training
 
@@ -266,7 +312,7 @@ check those terms before redistribution or commercial use.
 ## Real-world demo and robot sender
 
 ToolRGS includes a configuration-driven PyQt demo ported from the local server
-CROG deployment. It supports all eight ToolRGS grasp architectures, OpenCV/video,
+CROG deployment. It supports all nine ToolRGS grasp architectures, OpenCV/video,
 RealSense, GStreamer shared memory, optional MMDetection and Whisper, and the
 legacy Kinova TCP command format. Start in dry-run mode:
 
@@ -303,5 +349,5 @@ examples and the compatibility plan.
 
 ## Acknowledgements
 
-ToolRGS integrates ideas and code from CROG, DETRIS, DINOv2, and CRIS. Preserve
+ToolRGS integrates ideas and code from CROG, MapleGrasp, DETRIS, DINOv2, and CRIS. Preserve
 their citations and licenses when publishing derived results.

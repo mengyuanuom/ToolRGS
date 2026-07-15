@@ -12,6 +12,7 @@ from .ggcnnclip import GGCNN_CLIP
 from .grconvnetclip import GenerativeResnet_CLIP
 from .graspmamba import GraspMamba
 from .lgd import LGD
+from .maplegrasp import MapleGrasp
 from .segmenter import DETRIS
 
 
@@ -28,6 +29,7 @@ MODELS.register_module(
 )
 MODELS.register_module(GraspMamba, name="graspmamba", aliases=("grasp_mamba",))
 MODELS.register_module(LGD, name="lgd")
+MODELS.register_module(MapleGrasp, name="maplegrasp", aliases=("maple_grasp",))
 
 # Historical public name; it is now a live read-only view of the shared registry.
 MODEL_REGISTRY = MODELS.module_dict
@@ -88,4 +90,9 @@ def build_drog(cfg):
 
 def build_drogoff(cfg):
     cfg.architecture = "drogoff"
+    return build_model(cfg)
+
+
+def build_maplegrasp(cfg):
+    cfg.architecture = "maplegrasp"
     return build_model(cfg)

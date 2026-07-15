@@ -10,6 +10,7 @@ from model import MODEL_REGISTRY
 from model.graspmamba import HierarchicalFeatureFusion
 from model.layers import OffsetMultiTaskProjector
 from model.lgd import CosineDiffusion, LGDCore
+from model.maplegrasp import MapleGraspProjector
 from utils.dataset import GraspTransforms, make_dense_offset_with_radius_np
 from utils.data_builder import DATASET_REGISTRY
 from utils.ocid_vlg_dataset import parse_ocid_image_filename, resolve_ocid_vlg_split
@@ -64,6 +65,7 @@ class ToolRGSContractsTest(unittest.TestCase):
             "grconvnetclip",
             "graspmamba",
             "lgd",
+            "maplegrasp",
         }
         self.assertTrue(expected.issubset(MODEL_REGISTRY))
         paths = [
@@ -71,7 +73,7 @@ class ToolRGSContractsTest(unittest.TestCase):
             for directory in ("grasp_tools", "vcot", "ocid_vlg")
             for path in glob.glob(f"config/{directory}/*.yaml")
         ]
-        self.assertGreaterEqual(len(paths), 24)
+        self.assertGreaterEqual(len(paths), 27)
         for path in paths:
             with open(path, encoding="utf-8") as stream:
                 cfg = yaml.safe_load(stream)
@@ -107,6 +109,21 @@ class ToolRGSContractsTest(unittest.TestCase):
             self.assertEqual(tuple(output.shape), (2, 1, 32, 32))
         self.assertEqual(tuple(outputs[5].shape), (2, 2, 32, 32))
         self.assertLessEqual(outputs[5].abs().max().item(), 1.0)
+
+    def test_maplegrasp_projector_output_contract(self):
+        projector = MapleGraspProjector(
+            word_dim=32,
+            in_dim=8,
+            mask_threshold=0.35,
+        )
+        outputs = projector(
+            torch.randn(2, 16, 8, 8),
+            torch.randn(2, 32),
+            torch.ones(2, 1, 32, 32),
+        )
+        self.assertEqual(len(outputs), 5)
+        for output in outputs:
+            self.assertEqual(tuple(output.shape), (2, 1, 32, 32))
 
     def test_dense_offset_points_toward_grasp_center(self):
         center = np.array([[8.0, 9.0]], dtype=np.float32)

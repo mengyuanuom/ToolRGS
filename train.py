@@ -53,8 +53,72 @@ def setup_distributed(args):
     return distributed
 
 
+def _checked_file(value, label):
+    """Resolve one configured local file and fail with an actionable message."""
+    if not value:
+        return None
+    text = str(value)
+    if text.startswith(("http://", "https://")):
+        raise ValueError(
+            f"Configured {label} must be a local file, not a URL: {text}\n"
+            "Download it first and update the YAML path."
+        )
+    path = Path(text).expanduser()
+    if not path.is_file():
+        raise FileNotFoundError(
+            f"Configured {label} does not exist: {path.resolve()}\n"
+            f"Update the corresponding YAML value or download the required file."
+        )
+    return str(path)
+
+
+def validate_configured_files(args):
+    """Check model/checkpoint files before expensive model construction."""
+    # MambaVision deliberately owns its optional automatic download path, so
+    # only the weights that are synchronously opened by ToolRGS are checked.
+    for key in ("clip_pretrain", "dino_pretrain"):
+        value = getattr(args, key, None)
+        if value:
+            setattr(args, key, _checked_file(value, key))
+    for key in ("weight", "resume"):
+        value = getattr(args, key, None)
+        if value:
+            setattr(args, key, _checked_file(value, key))
+
+
+def load_initial_weight(model, filename):
+    """Load model initialization without restoring optimizer/epoch state."""
+    checkpoint = torch.load(filename, map_location="cpu")
+    state = (
+        checkpoint.get("state_dict", checkpoint)
+        if isinstance(checkpoint, dict)
+        else checkpoint
+    )
+    if not isinstance(state, dict):
+        raise ValueError(f"Unsupported initial weight payload: {filename}")
+    cleaned = {
+        (key[7:] if key.startswith("module.") else key): value
+        for key, value in state.items()
+    }
+    incompatible = model.load_state_dict(cleaned, strict=False)
+    logger.info("Loaded initial model weight: {}", filename)
+    if incompatible.missing_keys:
+        logger.warning(
+            "Initial weight did not contain {} model keys (expected for staged heads): {}",
+            len(incompatible.missing_keys),
+            incompatible.missing_keys[:10],
+        )
+    if incompatible.unexpected_keys:
+        logger.warning(
+            "Initial weight contained {} unused keys: {}",
+            len(incompatible.unexpected_keys),
+            incompatible.unexpected_keys[:10],
+        )
+
+
 def main():
     args = parse_args()
+    validate_configured_files(args)
     if not torch.cuda.is_available():
         raise RuntimeError("ToolRGS training currently requires a CUDA GPU")
 
@@ -70,6 +134,8 @@ def main():
     logger.info(args)
 
     model, parameter_groups = build_model(args)
+    if getattr(args, "weight", None):
+        load_initial_weight(model, args.weight)
     if args.sync_bn and distributed:
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model = model.cuda(args.gpu)
