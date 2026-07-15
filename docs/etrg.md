@@ -62,7 +62,7 @@ All supplied OCID-VLG configs default to `./datasets/OCID-VLG`. For a different
 location, keep the files outside Git and override the path without editing YAML:
 
 ```bash
-python train.py --config config/ocid_vlg/etrg.yaml --opts \
+python tools/train.py --config configs/etrg/etrg_r50_ocid_vlg.yaml --opts \
   DATA.root_path /absolute/path/to/OCID-VLG
 ```
 
@@ -71,8 +71,8 @@ python train.py --config config/ocid_vlg/etrg.yaml --opts \
 The paper-aligned path is OCID-VLG with aligned RGB and depth images:
 
 ```bash
-torchrun --nproc_per_node=2 train.py \
-  --config config/ocid_vlg/etrg.yaml --opts \
+torchrun --nproc_per_node=2 tools/train.py \
+  --config configs/etrg/etrg_r50_ocid_vlg.yaml --opts \
   DATA.root_path /path/to/OCID-VLG \
   TRAIN.clip_pretrain pretrain/RN50.pt
 ```

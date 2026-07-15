@@ -44,6 +44,7 @@ class GraspTrainLoop(BaseLoop):
         scaler,
         cfg,
         hooks: Optional[Iterable[Any]] = None,
+        optim_wrapper=None,
     ):
         super().__init__(hooks=hooks)
         self.dataloader = dataloader
@@ -51,6 +52,7 @@ class GraspTrainLoop(BaseLoop):
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.scaler = scaler
+        self.optim_wrapper = optim_wrapper
         self.cfg = cfg
 
     def _meters(self, epoch):
@@ -114,7 +116,7 @@ class GraspTrainLoop(BaseLoop):
             inputs = self._to_cuda(data)
             image = inputs[0]
 
-            with amp.autocast():
+            with amp.autocast(enabled=bool(getattr(self.cfg, "amp", True))):
                 result = GraspModelResult.from_legacy(self.model(*inputs))
             if result.loss is None:
                 raise RuntimeError("GraspTrainLoop requires a model result with a training loss")
@@ -122,12 +124,18 @@ class GraspTrainLoop(BaseLoop):
                 raise RuntimeError("GraspTrainLoop requires dense supervision targets")
             loss = result.loss
 
-            self.optimizer.zero_grad()
-            self.scaler.scale(loss).backward()
-            if self.cfg.max_norm:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.cfg.max_norm)
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
+            if self.optim_wrapper is not None:
+                self.optim_wrapper.update_params(loss, self.model)
+            else:
+                self.optimizer.zero_grad()
+                self.scaler.scale(loss).backward()
+                if self.cfg.max_norm:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), self.cfg.max_norm
+                    )
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
 
             iou, precision = trainMetricGPU(
                 result.predictions.segmentation,

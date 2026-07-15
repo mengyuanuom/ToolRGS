@@ -44,6 +44,33 @@ MODEL:
   architecture: drogoff
 ```
 
+New experiments can use composable MMEngine-style `_base_` configs. Model,
+dataset, schedule, and CUDA runtime settings live independently under
+`configs/_base_/`:
+
+```yaml
+_base_:
+  - ../_base_/datasets/ocid_vlg.yaml
+  - ../_base_/models/etrg_r50.yaml
+  - ../_base_/schedules/etrg_40e.yaml
+  - ../_base_/runtime/cuda.yaml
+
+TRAIN:
+  exp_name: etrg_r50_ocid_vlg
+  output_folder: exp/ocid_vlg
+```
+
+Preferred training entrypoint:
+
+```bash
+python tools/train.py --config configs/etrg/etrg_r50_ocid_vlg.yaml
+```
+
+`CUDAGraspRunner`, `CUDAAmpOptimWrapper`, registered schedulers, and runner
+hooks own construction, CUDA AMP/backward, epoch scheduling, logging, and
+checkpoints. The old `python train.py --config config/...` command remains
+compatible.
+
 The nine RGB model families are available for every dataset. ETRG-A is added
 for OCID-VLG because it requires real aligned depth:
 
