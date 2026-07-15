@@ -20,6 +20,7 @@ from torch.utils.data.distributed import DistributedSampler
 import utils.config as config
 from model import build_model
 from toolrgs.engine import GraspTrainLoop, GraspValLoop  # register default loops
+from toolrgs.models.base import model_requires_depth
 from toolrgs.registry import LOOPS
 from utils.data_builder import build_dataset
 from utils.misc import init_random_seed, set_random_seed, setup_logger, worker_init_fn
@@ -76,7 +77,7 @@ def validate_configured_files(args):
     """Check model/checkpoint files before expensive model construction."""
     # MambaVision deliberately owns its optional automatic download path, so
     # only the weights that are synchronously opened by ToolRGS are checked.
-    for key in ("clip_pretrain", "dino_pretrain"):
+    for key in ("clip_pretrain", "dino_pretrain", "depth_pretrain"):
         value = getattr(args, key, None)
         if value:
             setattr(args, key, _checked_file(value, key))
@@ -134,6 +135,12 @@ def main():
     logger.info(args)
 
     model, parameter_groups = build_model(args)
+    if model_requires_depth(model) and not bool(getattr(args, "with_depth", False)):
+        raise ValueError(
+            f"Model {args.architecture!r} requires aligned depth input, but "
+            "DATA.with_depth is false or missing. ETRG-A is currently supported "
+            "with the OCID-VLG RGB-D dataset."
+        )
     if getattr(args, "weight", None):
         load_initial_weight(model, args.weight)
     if args.sync_bn and distributed:

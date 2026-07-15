@@ -9,6 +9,7 @@ import torch.cuda.amp as amp
 import torch.distributed as dist
 
 from toolrgs.engine.hooks import HookList, LoopState
+from toolrgs.models.base import model_requires_depth
 from toolrgs.registry import LOOPS
 from toolrgs.structures import GraspModelResult
 from utils.misc import AverageMeter, ProgressMeter, trainMetricGPU
@@ -73,12 +74,11 @@ class GraspTrainLoop(BaseLoop):
         )
         return meters, progress
 
-    @staticmethod
-    def _to_cuda(data):
+    def _to_cuda(self, data):
         masks = data["grasp_masks"]
         offset = masks.get("off")
         offset_weight = masks.get("off_w")
-        return (
+        common = (
             data["img"].cuda(non_blocking=True),
             data["word_vec"].cuda(non_blocking=True),
             data["mask"].cuda(non_blocking=True).unsqueeze(1),
@@ -89,6 +89,15 @@ class GraspTrainLoop(BaseLoop):
             offset.cuda(non_blocking=True) if offset is not None else None,
             offset_weight.cuda(non_blocking=True) if offset_weight is not None else None,
         )
+        if not model_requires_depth(self.model):
+            return common
+        depth = data.get("depth")
+        if depth is None:
+            raise KeyError(
+                "The selected model requires batch['depth'], but the dataset did "
+                "not provide it. Use OCID-VLG with DATA.with_depth=True."
+            )
+        return (common[0], depth.cuda(non_blocking=True), *common[1:])
 
     def run_epoch(self, epoch: int):
         self.state = LoopState(epoch=epoch)

@@ -1,7 +1,7 @@
 # ToolRGS
 
 Tool-oriented Referring Grasp Synthesis with a single configuration-driven
-codebase for CROG, CROG-OFF, DROG, DROG-OFF, MapleGrasp, GraspMamba, LGD,
+codebase for CROG, CROG-OFF, DROG, DROG-OFF, ETRG-A, MapleGrasp, GraspMamba, LGD,
 GGCNN-CLIP, GR-ConvNet-CLIP, and DETRIS backbones. Grasp-Tools, VCoT/Grasp-Anything,
 and OCID-VLG data use the same model-facing batch contract.
 
@@ -44,13 +44,14 @@ MODEL:
   architecture: drogoff
 ```
 
-Each supported dataset has a complete nine-model experiment matrix:
+The nine RGB model families are available for every dataset. ETRG-A is added
+for OCID-VLG because it requires real aligned depth:
 
 | Dataset config directory | Models |
 | --- | --- |
 | `config/grasp_tools/` | `crog`, `crogoff`, `drog`, `drogoff`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
 | `config/vcot/` | `crog`, `crogoff`, `drog`, `drogoff`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
-| `config/ocid_vlg/` | `crog`, `crogoff`, `drog`, `drogoff`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
+| `config/ocid_vlg/` | `crog`, `crogoff`, `drog`, `drogoff`, `etrg`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
 
 For example, `config/vcot/drogoff.yaml` and
 `config/ocid_vlg/lgd.yaml` are directly runnable after setting data and weight
@@ -138,6 +139,28 @@ editing YAML, for example `TRAIN.batch_size 4 TRAIN.batch_size_val 4`.
 
 OCID-VLG referring expressions are read directly from the downloaded dataset;
 the large RGB, depth, and annotation files are not copied into this repository.
+Download the complete `OCID-VLG.zip` from the
+[official OCID-VLG repository](https://github.com/gtziafas/OCID-VLG) or its
+[official Google Drive file](https://drive.google.com/file/d/1VwcjgyzpKTaczovjPNAHjh-1YvWz9Vmt/view?usp=share_link).
+
+For the standard server checkout at `/mnt/ssd0/mengyuan/ToolRGS`, put the data
+next to the repository at `/mnt/ssd0/mengyuan/data/OCID-VLG`. The checked-in
+`datasets` symlink points to `../data`, so every OCID-VLG YAML can keep
+`DATA.root_path: ./datasets/OCID-VLG`:
+
+```bash
+python -m pip install gdown
+mkdir -p /mnt/ssd0/mengyuan/data
+cd /mnt/ssd0/mengyuan/data
+gdown --fuzzy \
+  'https://drive.google.com/file/d/1VwcjgyzpKTaczovjPNAHjh-1YvWz9Vmt/view?usp=share_link' \
+  -O OCID-VLG.zip
+unzip OCID-VLG.zip
+```
+
+After extraction, use the directory that directly contains `refer/` as the
+dataset root. If the archive creates an extra nested directory, either move it
+or override `DATA.root_path` with that directory's absolute path.
 The expected layout is:
 
 ```text
@@ -177,12 +200,43 @@ python tools/inspect_ocid_vlg_sample.py \
   --version multiple --split train --index 0
 ```
 
+On the standard server layout the exact check is:
+
+```bash
+cd /mnt/ssd0/mengyuan/ToolRGS
+readlink -f datasets
+test -f datasets/OCID-VLG/refer/multiple/train_expressions.json
+python tools/inspect_ocid_vlg_sample.py \
+  --dataset-root datasets/OCID-VLG --version multiple --split train --index 0
+```
+
 Train any supported grasp model with its OCID-VLG config, for example:
 
 ```bash
 python train.py --config config/ocid_vlg/drog.yaml --opts \
   DATA.root_path /path/to/OCID-VLG
 ```
+
+## ETRG-A
+
+The `etrg` registry entry integrates the official parameter-efficient ETRG-A
+RGB-D architecture. Unlike the RGB-only models, it routes the aligned
+OCID-VLG depth map through a ResNet-18 encoder and fuses depth, visual, and
+language tokens inside the frozen CLIP backbone adapters.
+
+Run the R50 profile on two GPUs with:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train.py \
+  --config config/ocid_vlg/etrg.yaml --opts \
+  DATA.root_path /path/to/OCID-VLG \
+  TRAIN.clip_pretrain pretrain/RN50.pt
+```
+
+The R101 alternative is `config/ocid_vlg/etrg_r101.yaml`. ETRG requires real
+aligned depth, so VCoT and Grasp-Tools configs are intentionally not provided.
+See [docs/etrg.md](docs/etrg.md) for weights, offline setup, and compatibility
+details.
 
 ## MapleGrasp
 
