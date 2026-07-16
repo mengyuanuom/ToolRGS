@@ -150,8 +150,10 @@ The checked-in profile targets two 24 GB RTX 3090 cards:
 | GraspMamba | 416 | 8 | 16 | 50 | 35, 45 |
 | LGD | 224 | 16 | 32 | 100 | 70, 90 |
 
-Each process uses eight training workers and four validation workers, producing
-16 training workers across two GPUs. Start a two-GPU run with `torchrun`:
+Most VCoT profiles use eight training workers and four validation workers per
+process. The heavier DROG-OFF profile uses four and two respectively, avoiding
+CPU/RAM and shared-memory pressure when two GPU processes run together. Start
+a two-GPU run with `torchrun`:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train.py \

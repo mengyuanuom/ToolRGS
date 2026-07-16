@@ -41,20 +41,21 @@ TRAIN:
   intermediate: False 
 
   # Training Setting
-  workers: 32  # data loader workers
-  workers_val: 16
+  # Per-GPU loader profile for two RTX 3090s (8 workers total in training).
+  workers: 4
+  workers_val: 2
   epochs: 65
   milestones: [35,55]
   start_epoch: 0
-  batch_size: 16  # batch size for training
-  batch_size_val: 16  # batch size for validation during training, memory and speed tradeoff
+  batch_size: 8  # per-GPU training batch; global batch is 16 on two GPUs
+  batch_size_val: 4  # per-GPU validation batch
   base_lr: 0.0001
   lr_decay: 0.1
   lr_multi: 1
   weight_decay: 0.
   max_norm: 0.
   manual_seed: 0
-  print_freq: 100
+  print_freq: 20
   # Resume & Save
   exp_name: drogoff_ocid_vlg
   offset_loss_weight: 1.0
