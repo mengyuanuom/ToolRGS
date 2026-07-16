@@ -19,7 +19,7 @@ class DrogoffResourceProfileTest(unittest.TestCase):
             self.assertEqual(train["batch_size_val"], 4, path)
             self.assertEqual(train["workers"], 4, path)
             self.assertEqual(train["workers_val"], 2, path)
-            self.assertEqual(train["print_freq"], 20, path)
+            self.assertEqual(train["print_freq"], 100, path)
 
 
 if __name__ == "__main__":

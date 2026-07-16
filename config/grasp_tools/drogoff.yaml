@@ -54,7 +54,7 @@ TRAIN:
   weight_decay: 0.
   max_norm: 0.
   manual_seed: 0
-  print_freq: 20
+  print_freq: 100
   # Resume & Save
   exp_name: drogoff_grasp_tools
   offset_loss_weight: 1.0
