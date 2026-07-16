@@ -60,7 +60,7 @@ TRAIN:
   exp_name: drogoff_ocid_vlg
   offset_loss_weight: 1.0
   output_folder: exp/ocid_vlg
-  save_freq: 1
+  save_freq: 5
   weight:  # path to initial weight (default: none)
   resume: # path to latest checkpoint (default: none)
   evaluate: True 

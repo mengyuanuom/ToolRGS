@@ -61,7 +61,7 @@ TRAIN:
   exp_name: drogoff_vcot
   offset_loss_weight: 1.0
   output_folder: exp/vcot
-  save_freq: 1
+  save_freq: 5
   weight:  # path to initial weight (default: none)
   resume: # path to latest checkpoint (default: none)
   evaluate: True 
