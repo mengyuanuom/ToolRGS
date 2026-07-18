@@ -1,6 +1,6 @@
 DATA:
   dataset: GraspTool
-  root_path: ./datasets/grasp-tools/aug_graspall_v1128
+  root_path: ./datasets/grasp-tools/aug_graspall_v2
   train_split: train
   val_split: val
   offset_r: 20
@@ -72,5 +72,5 @@ Distributed:
   rank: 0
 
 TEST:
-  test_split: val-test
+  test_split: test
   visualize: False

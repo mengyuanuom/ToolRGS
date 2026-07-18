@@ -84,7 +84,7 @@ class ToolRGSContractsTest(unittest.TestCase):
             self.assertIn(dataset, DATASET_REGISTRY, path)
 
         for directory, dataset_name, expected_configs in (
-            ("grasp_tools", "grasptool", expected),
+            ("grasp_tools", "grasptool", expected | {"drogoff_v2"}),
             ("vcot", "vcot", expected),
             ("ocid_vlg", "ocid_vlg", expected | {"etrg", "etrg_r101"}),
         ):
