@@ -21,6 +21,7 @@ class DrogoffResourceProfileTest(unittest.TestCase):
             self.assertEqual(train["workers_val"], 2, path)
             self.assertEqual(train["print_freq"], 100, path)
             self.assertEqual(train["save_freq"], 5, path)
+            self.assertTrue(cfg["TEST"]["offset_resample_geometry"], path)
 
 
 if __name__ == "__main__":

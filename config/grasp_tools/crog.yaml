@@ -5,6 +5,9 @@ DATA:
   val_split: val
   offset_r: 20
   offset_sigma:
+  # Rotate marked category prompts once per training epoch; val/test stay fixed.
+  dynamic_train_prompts: True
+  dynamic_prompt_seed: 2025
 MODEL:
   architecture: crog
 TRAIN:
@@ -12,7 +15,7 @@ TRAIN:
   clip_pretrain: pretrain/RN50.pt
   version: multiple
   input_size: 416
-  word_len: 17
+  word_len: 32
   word_dim: 1024
   vis_dim: 512
   fpn_in: [512, 1024, 1024]

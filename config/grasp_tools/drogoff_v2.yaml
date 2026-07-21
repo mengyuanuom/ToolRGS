@@ -5,6 +5,9 @@ DATA:
   val_split: val
   offset_r: 20
   offset_sigma:
+  # Rotate marked category prompts once per training epoch; val/test stay fixed.
+  dynamic_train_prompts: True
+  dynamic_prompt_seed: 2025
 MODEL:
   architecture: drogoff
 TRAIN:
@@ -72,4 +75,7 @@ Distributed:
 
 TEST:
   test_split: test
+  # Re-read angle/width maps at the center refined by the offset head.
+  # Set False to reproduce the legacy center-only decoder for ablation.
+  offset_resample_geometry: True
   visualize: False

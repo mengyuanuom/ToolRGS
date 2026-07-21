@@ -57,6 +57,70 @@ The output defaults to `datasets/grasp-tools/aug_graspall_v2` and contains
 `train`, `val`, `test`, `_preview`, `metadata.json`, and one `index.jsonl` per
 split.
 
+## Starter dataset: category queries only
+
+For the simplest first-stage experiment, place two or three larger tools on
+varied backgrounds, keep every category unique within a scene, and create one
+category query for each target object. Train, validation, and test share one
+larger prompt pool while retaining independent rendered scenes and disjoint
+background-image splits:
+
+```bash
+python -u tools/dataset_converters/grasp_tools/augment.py \
+  --out-dir datasets/grasp-tools/aug_graspall_v2_starter \
+  --train-scenes 3000 \
+  --val-scenes 500 \
+  --test-scenes 1000 \
+  --objects-min 2 \
+  --objects-max 3 \
+  --queries-min 2 \
+  --queries-max 4 \
+  --max-query-difficulty 1 \
+  --language-templates shared \
+  --category-vocabulary expanded \
+  --scales 0.9,1.0,1.15,1.3 \
+  --angle-bins 8 \
+  --same-category-probability 0 \
+  --hard-negative-probability 0 \
+  --brightness-jitter 0.05 \
+  --contrast-jitter 0.05 \
+  --saturation-jitter 0.05 \
+  --grasp-height 20 \
+  --image-ext jpg \
+  --jpeg-quality 95
+```
+
+Difficulty levels are cumulative: `1` keeps category queries, `2` adds
+absolute-location queries, `3` adds same-category and single-reference spatial
+queries, and `4` also enables between-object relations. This makes it possible
+to train with an easy-to-hard curriculum without changing the annotation
+schema.
+
+The shared starter prompt pool contains 22 short grasp instructions, including
+`Pick up`, `Grasp`, `Select`, `Choose`, `Lift`, `Locate and grasp`, `Find and
+pick up`, and `Retrieve` variants. Since same-category placement is disabled,
+every object in a starter scene can receive an unambiguous category-only query.
+`--category-vocabulary expanded` samples four surface forms for each of the 22
+canonical classes (for example, `wrench`/`spanner` and
+`tape measure`/`measuring tape`). The query JSON records the sampled
+`category_term`, while `objects[target_idx].category` remains canonical.
+
+Expanded category queries are also marked with `prompt_cycle: category_v1`.
+During training, `GraspToolDataset` combines 22 instructions with four category
+terms into an 88-prompt cycle. Each target receives its own reproducibly
+shuffled order derived from `dynamic_prompt_seed + scene_id + target_idx`; the
+epoch selects one entry from that order. The first 70 epochs therefore use 70
+distinct but randomly ordered prompts without duplicating images or query
+records. A new permutation is generated after 88 epochs. Validation and test
+always retain their fixed JSON text. Set `DATA.dynamic_train_prompts` to `False`
+for a fixed-prompt ablation, or change `DATA.dynamic_prompt_seed` to compare
+language schedules.
+
+`--language-templates shared` makes train, validation, and test use the same
+command and referring-expression template pools. Their rendered scenes and
+background-image splits remain separate. The default, `heldout`, preserves the
+harder language-generalization protocol.
+
 Each scene image is stored once. Its JSON contains multiple language queries;
 every query records `text`, `target_idx`, `type`, `difficulty`, and a symbolic
 program. `objects[target_idx]` supplies the target mask and grasp rectangles.
