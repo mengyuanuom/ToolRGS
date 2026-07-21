@@ -43,7 +43,6 @@ from utils.grasp_tool_language import (
     COMMAND_TEMPLATES,
 )
 
-
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp"}
 
 CATEGORY_ALIASES = {
@@ -250,18 +249,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--src-dir", default="assets/grasp_tools/graspall")
     parser.add_argument("--background-dir", default="assets/grasp_tools/backgrounds")
     parser.add_argument("--out-dir", default="datasets/grasp-tools/aug_graspall_v2")
-    parser.add_argument("--train-scenes", type=int, default=3000)
+    parser.add_argument("--train-scenes", type=int, default=6000)
     parser.add_argument("--val-scenes", type=int, default=500)
     parser.add_argument("--test-scenes", type=int, default=1000)
-    parser.add_argument("--objects-min", type=int, default=3)
-    parser.add_argument("--objects-max", type=int, default=5)
-    parser.add_argument("--queries-min", type=int, default=4)
-    parser.add_argument("--queries-max", type=int, default=8)
+    parser.add_argument("--objects-min", type=int, default=2)
+    parser.add_argument("--objects-max", type=int, default=3)
+    parser.add_argument("--queries-min", type=int, default=2)
+    parser.add_argument("--queries-max", type=int, default=4)
     parser.add_argument(
         "--max-query-difficulty",
         type=int,
         choices=(1, 2, 3, 4),
-        default=4,
+        default=1,
         help=(
             "Keep queries up to this difficulty: 1=category, "
             "2=category and absolute location, 3=single-reference relations, "
@@ -271,7 +270,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--language-templates",
         choices=("heldout", "shared"),
-        default="heldout",
+        default="shared",
         help=(
             "Use held-out wording for validation/test, or share the training "
             "wording across all splits."
@@ -280,30 +279,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--category-vocabulary",
         choices=("canonical", "expanded"),
-        default="canonical",
+        default="expanded",
         help=(
             "Use only canonical category names, or sample aliases and common "
             "near-synonyms while preserving canonical labels."
         ),
     )
     parser.add_argument(
-        "--scales", type=parse_scales, default=parse_scales("0.6,0.8,1.0,1.25,1.5")
+        "--scales", type=parse_scales, default=parse_scales("0.9,1.0,1.15,1.3")
     )
-    parser.add_argument("--angle-bins", type=int, default=12)
-    parser.add_argument("--same-category-probability", type=float, default=0.40)
-    parser.add_argument("--hard-negative-probability", type=float, default=0.30)
+    parser.add_argument(
+        "--angle-bins",
+        type=int,
+        default=24,
+        help=(
+            "Number of balanced rotation strata across 360 degrees; "
+            "24 gives 15-degree bins with continuous +/-7.5-degree jitter."
+        ),
+    )
+    parser.add_argument("--same-category-probability", type=float, default=0.0)
+    parser.add_argument("--hard-negative-probability", type=float, default=0.0)
     parser.add_argument("--placement-attempts", type=int, default=200)
     parser.add_argument("--scene-attempts", type=int, default=30)
     parser.add_argument("--border-margin", type=int, default=4)
     parser.add_argument("--relation-margin", type=float, default=35.0)
     parser.add_argument("--nearest-ratio", type=float, default=1.20)
     parser.add_argument("--grasp-height", type=float, default=20.0)
-    parser.add_argument("--brightness-jitter", type=float, default=0.12)
-    parser.add_argument("--contrast-jitter", type=float, default=0.12)
-    parser.add_argument("--saturation-jitter", type=float, default=0.10)
+    parser.add_argument("--brightness-jitter", type=float, default=0.05)
+    parser.add_argument("--contrast-jitter", type=float, default=0.05)
+    parser.add_argument("--saturation-jitter", type=float, default=0.05)
     parser.add_argument("--feather-radius", type=float, default=0.8)
     parser.add_argument("--seed", type=int, default=2025)
-    parser.add_argument("--image-ext", choices=("png", "jpg"), default="png")
+    parser.add_argument("--image-ext", choices=("png", "jpg"), default="jpg")
     parser.add_argument("--jpeg-quality", type=int, default=95)
     parser.add_argument("--preview-count", type=int, default=20)
     parser.add_argument("--overwrite", action="store_true")

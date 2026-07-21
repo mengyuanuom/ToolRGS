@@ -96,14 +96,14 @@ annotated RGB images with JSON masks/grasps and 42 background images live under
 fresh clone with:
 
 ```bash
-python -u tools/dataset_converters/grasp_tools/augment.py \
-  --image-ext jpg
+python -u tools/dataset_converters/grasp_tools/augment.py
 ```
 
-The default output is `datasets/grasp-tools/aug_graspall_v2`. It contains
-disjoint train/val/test background splits, balanced scale/angle sampling,
-same-category and hard-negative scenes, and multiple referring expressions per
-rendered image. Train the supplied DROG-OFF experiment with:
+The default output is `datasets/grasp-tools/aug_graspall_v2`. It uses the
+difficulty-1 starter curriculum: 6000 train, 500 validation, and 1000 test
+scenes; two or three unique-category tools per scene; expanded category
+vocabulary; shared language templates; 24 balanced rotation bins; and mild
+appearance augmentation. Train the supplied DROG-OFF experiment with:
 
 ```bash
 python train.py --config config/grasp_tools/drogoff_v2.yaml
