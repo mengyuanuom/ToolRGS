@@ -19,7 +19,7 @@ ToolRGS results.
 
 | Model | Config | Split | Checkpoint | J@1 | J@5 | Eval commit | Notes |
 | --- | --- | --- | --- | ---: | ---: | --- | --- |
-| CROG | `config/ocid_vlg/crog.yaml` | test |  | - | 77.2 | 87.7 | - |
+| CROG | `config/ocid_vlg/crog.yaml` | test |  | 77.2 |87.7  |  | - |
 | DROG-OFF | `config/ocid_vlg/drogoff.yaml` | test | - | 85.95 | 91.51 | - | - | - |
 | ETRG-A R50 | `config/ocid_vlg/etrg.yaml` | test | - | - | - | - | - |
 | ETRG-A R101 | `config/ocid_vlg/etrg_r101.yaml` | test | - | - | - | - | - |
