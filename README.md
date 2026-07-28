@@ -88,6 +88,13 @@ the shared grasp-map output/loss contract, so it is not included in this matrix.
 Set `DATA.root_path`, `TRAIN.clip_pretrain`, and (for DROG variants)
 `TRAIN.dino_pretrain` to local paths before training.
 
+## Performance summary
+
+A blank, evaluator-aligned result table for OCID-VLG, VCoT seen/unseen, and
+Grasp-Tools is available in [docs/performance_summary.md](docs/performance_summary.md).
+Fill it only with reproduced ToolRGS evaluation logs and retain checkpoint and
+commit provenance for every row.
+
 ## Embedded Grasp-Tools v2 data and augmentation
 
 The complete Grasp-Tools source set is included in this repository: 107
