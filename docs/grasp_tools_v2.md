@@ -1,5 +1,7 @@
 # Grasp-Tools v2：组合式语言引导抓取数据集
 
+**语言：中文｜[English](grasp_tools_v2_en.md)**
+
 Grasp-Tools v2 是 ToolRGS 面向**语言引导目标定位与二维抓取检测**
 构建的组合式合成数据集。它以单工具实拍图及其抓取标注为基础，将多个工具经过
 抠图、缩放、旋转和颜色扰动后放入新的背景，再为同一场景生成多条具有明确指向
@@ -153,7 +155,80 @@ angle_bins = 24
 | 3 | 同类区分、单参考物关系 | `Select the leftmost wrench.`、`Grasp the object to the right of the screwdriver.`、`Pick up the object closest to the tape measure.` | 关系结果唯一，且参考类别唯一 |
 | 4 | 双参考物关系 | `Grasp the object between the pliers and the tape measure.` | 两个参考物唯一，且中间只有一个合格目标 |
 
-### 3.1 难度 1：类别查询
+### 3.1 本地生成的真实样例
+
+下面四张图不是手工示意图，而是直接使用仓库中的
+`tools/dataset_converters/grasp_tools/augment.py` 在本地生成的预览图。
+彩色轮廓表示实例掩码，`编号:类别` 是查询中的 `target_idx` 与标准类别，
+细长矩形表示随目标一起旋转、缩放后的候选抓取姿态。为了便于复现，四组样例分别
+使用随机种子 `1101、2202、3303、4404`。
+
+| 样例 | 场景 ID | 关键生成设置 |
+| --- | --- | --- |
+| D1 | `train_scene_000014` | 2～3 个目标，`max-query-difficulty=1`，无同类干扰 |
+| D2 | `train_scene_000022` | 2～3 个目标，`max-query-difficulty=2`，无同类干扰 |
+| D3 | `train_scene_000044` | 3～4 个目标，`max-query-difficulty=3`，同类概率 0.60 |
+| D4 | `train_scene_000056` | 3～5 个目标，`max-query-difficulty=4`，同类概率 0.35 |
+
+#### 难度 1：类别与同义词
+
+![难度 1：类别查询生成样例](images/grasp_tools_v2/difficulty_1_category.jpg)
+
+该场景包含三个不同类别，因此三条类别查询都具有唯一答案。例如：
+
+```text
+Please grab the fastening screw.                         -> 2:screw
+Please select the measuring tape tool.                   -> 1:tape measure
+I would like you to grasp the L-hex key.                 -> 0:L-hex key
+```
+
+`fastening screw`、`measuring tape tool` 和 `L-hex key` 展示了标准类别之外的
+同义或近义表面形式；训练标签仍分别保持为 `screw`、`tape measure` 和
+`L-hex key`。
+
+#### 难度 2：绝对位置
+
+![难度 2：绝对位置查询生成样例](images/grasp_tools_v2/difficulty_2_absolute_location.jpg)
+
+该场景中的卷轴位于左上，盒子位于右下，因此可以稳定生成：
+
+```text
+Choose the object farthest to the left.                  -> 1:spool
+Please select the highest object in the image.           -> 1:spool
+Please grab the object on the far right.                 -> 0:box
+Pick the lowest object in the image up.                  -> 0:box
+```
+
+#### 难度 3：同类区分与单参考物关系
+
+![难度 3：单参考物关系查询生成样例](images/grasp_tools_v2/difficulty_3_single_reference.jpg)
+
+场景中同时出现两个 `ruler`，所以裸类别查询 `Grasp the ruler` 会被过滤；
+生成器改用位置或参考物关系消除歧义：
+
+```text
+Take hold of the rightmost ruler.                        -> 1:ruler
+Find and grasp the ruler on the far left.                -> 2:ruler
+Find and pick up the object nearest to the stapler.      -> 2:ruler
+Grab the object farthest from the stapler, please.       -> 1:ruler
+```
+
+#### 难度 4：双参考物 `between` 关系
+
+![难度 4：双参考物关系查询生成样例](images/grasp_tools_v2/difficulty_4_between_relation.jpg)
+
+难度 4 样例包含压线钳、两个剪刀实例和记号笔。中间的大剪刀是压线钳与记号笔
+之间唯一满足几何约束的目标：
+
+```text
+I would like you to grasp the object between
+the crimp tool and the marker.                           -> 1:scissors
+```
+
+这条查询不能只通过目标类别求解：模型需要先定位两个参考物，再根据二者构成的
+线段选择中间目标。图中另一个剪刀实例同时充当同类别干扰项。
+
+### 3.2 难度 1：类别查询
 
 难度 1 只要求根据类别或同义表达找到目标：
 
@@ -171,7 +246,7 @@ Could you pick up the open-end wrench?
 默认入门数据关闭同类别与困难负样本，并在每张图中放置 2～3 个不同类别的较大
 工具，因此几乎每个对象都可以得到清晰的类别查询。
 
-### 3.2 难度 2：绝对位置
+### 3.3 难度 2：绝对位置
 
 难度 2 在类别查询基础上加入与整幅图像坐标有关的表达：
 
@@ -186,7 +261,7 @@ Retrieve the lowest object in the image.
 对应起来。生成器要求第一名与第二名之间至少具有足够间隔，防止位置接近导致
 歧义。
 
-### 3.3 难度 3：同类区分与单参考物关系
+### 3.4 难度 3：同类区分与单参考物关系
 
 难度 3 包含三组能力。
 
@@ -214,7 +289,7 @@ Retrieve the lowest object in the image.
 方向关系会检查主方向距离和垂直方向偏差；最近/最远关系会检查第一候选与第二候选
 的距离比。只有关系足够明显、结果唯一时才保留查询。
 
-### 3.4 难度 4：双参考物关系
+### 3.5 难度 4：双参考物关系
 
 难度 4 增加 `between` 关系：
 
@@ -280,19 +355,19 @@ datasets/grasp-tools/aug_graspall_v2/
 ├── README.txt
 ├── metadata.json
 ├── _preview/
-│   ├── train_train_000000.jpg
-│   └── train_train_000000.txt
+│   ├── train_train_scene_000000.jpg
+│   └── train_train_scene_000000.txt
 ├── train/
-│   ├── train_000000.jpg
-│   ├── train_000000.json
+│   ├── train_scene_000000.jpg
+│   ├── train_scene_000000.json
 │   └── index.jsonl
 ├── val/
-│   ├── val_000000.jpg
-│   ├── val_000000.json
+│   ├── val_scene_000000.jpg
+│   ├── val_scene_000000.json
 │   └── index.jsonl
 └── test/
-    ├── test_000000.jpg
-    ├── test_000000.json
+    ├── test_scene_000000.jpg
+    ├── test_scene_000000.json
     └── index.jsonl
 ```
 
@@ -302,8 +377,8 @@ datasets/grasp-tools/aug_graspall_v2/
 {
   "schema_version": "2.0",
   "split": "train",
-  "scene_id": "train_000000",
-  "image_filename": "train_000000.jpg",
+  "scene_id": "train_scene_000000",
+  "image_filename": "train_scene_000000.jpg",
   "background_source": "bg12.jpg",
   "image_size": [1280, 720],
   "objects": [

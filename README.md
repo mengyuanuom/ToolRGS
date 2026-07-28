@@ -116,8 +116,11 @@ appearance augmentation. Train the supplied DROG-OFF experiment with:
 python train.py --config config/grasp_tools/drogoff_v2.yaml
 ```
 
-See `docs/grasp_tools_v2.md` for the smoke test, output schema, and
-full generation options.
+See the complete Grasp-Tools v2 guide in
+[Chinese](docs/grasp_tools_v2.md) or
+[English](docs/grasp_tools_v2_en.md). Both versions include locally generated
+Difficulty 1–4 examples, the smoke test, output schema, and full generation
+options.
 
 ## VCoT / Grasp-Anything data
 
