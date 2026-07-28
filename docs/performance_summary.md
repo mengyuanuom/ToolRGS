@@ -19,9 +19,8 @@ ToolRGS results.
 
 | Model | Config | Split | Checkpoint | J@1 | J@5 | Eval commit | Notes |
 | --- | --- | --- | --- | ---: | ---: | --- | --- |
-| CROG | `config/ocid_vlg/crog.yaml` | test | - | - | - | - | - |
-| DROG | `config/ocid_vlg/drog.yaml` | test | - | - | - | - | - |
-| DROG-OFF | `config/ocid_vlg/drogoff.yaml` | test | - | - | - | - | - |
+| CROG | `config/ocid_vlg/crog.yaml` | test |  | - | - | - | - |
+| DROG-OFF | `config/ocid_vlg/drogoff.yaml` | test | - | 85.95 | 91.51 | - | - | - |
 | ETRG-A R50 | `config/ocid_vlg/etrg.yaml` | test | - | - | - | - | - |
 | ETRG-A R101 | `config/ocid_vlg/etrg_r101.yaml` | test | - | - | - | - | - |
 | MapleGrasp | `config/ocid_vlg/maplegrasp.yaml` | test | - | - | - | - | - |
@@ -34,15 +33,28 @@ ToolRGS results.
 
 | Model | Config | Split | Checkpoint | J@1 | J@5 | Eval commit | Notes |
 | --- | --- | --- | --- | ---: | ---: | --- | --- |
-| CROG | `config/grasp_tools/crog.yaml` | test | - | - | - | - | - |
-| DROG | `config/grasp_tools/drog.yaml` | test | - | - | - | - | - |
-| DROG-OFF | `config/grasp_tools/drogoff.yaml` | test | - | - | - | - | - |
+| CROG | `config/grasp_tools/crog.yaml` | test | - | 58.63 | 59.35 | - | - |
+| DROG-OFF | `config/grasp_tools/drogoff.yaml` | test |  | 62.10 | 62.34 | - | - |
 | DROG-OFF v2 | `config/grasp_tools/drogoff_v2.yaml` | test | - | - | - | - | - |
 | MapleGrasp | `config/grasp_tools/maplegrasp.yaml` | test | - | - | - | - | - |
 | GGCNN-CLIP | `config/grasp_tools/ggcnnclip.yaml` | test | - | - | - | - | - |
 | GRConvNet-CLIP | `config/grasp_tools/grconvnetclip.yaml` | test | - | - | - | - | - |
 | GraspMamba | `config/grasp_tools/graspmamba.yaml` | test | - | - | - | - | - |
 | LGD | `config/grasp_tools/lgd.yaml` | test | - | - | - | - | - |
+
+## Grasp-Tools-hard
+
+| Model | Config | Split | Checkpoint | J@1 | J@5 | Eval commit | Notes |
+| --- | --- | --- | --- | ---: | ---: | --- | --- |
+| CROG | `config/grasp_tools/crog.yaml` | test | - | 25.23 |25.76 | - | - |
+| DROG-OFF | `config/grasp_tools/drogoff.yaml` | test |  | 27.35 | 27.73 | - | - |
+| DROG-OFF v2 | `config/grasp_tools/drogoff_v2.yaml` | test | - | - | - | - | - |
+| MapleGrasp | `config/grasp_tools/maplegrasp.yaml` | test | - | - | - | - | - |
+| GGCNN-CLIP | `config/grasp_tools/ggcnnclip.yaml` | test | - | - | - | - | - |
+| GRConvNet-CLIP | `config/grasp_tools/grconvnetclip.yaml` | test | - | - | - | - | - |
+| GraspMamba | `config/grasp_tools/graspmamba.yaml` | test | - | - | - | - | - |
+| LGD | `config/grasp_tools/lgd.yaml` | test | - | - | - | - | - |
+
 
 ## Evaluation command template
 
