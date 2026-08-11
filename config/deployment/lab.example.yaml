@@ -1,23 +1,46 @@
 # Copy this file to lab.yaml and change only local paths/IPs.
-model:
-  # Any ToolRGS experiment config can be used here.
-  config: config/grasp_tools/drogoff.yaml
-  checkpoint: exp/grasp_tools/drogoff_grasp_tools/best_jindex_model.pth
-  device: cuda:0
-  prompt: the screwdriver
-  mask_threshold: 0.35
-  quality_threshold: 0.40
-  num_grasps: 1
-  postprocessor:
-    type: dense_grasp
-    min_distance: 2
-    width_factor: 100.0
-    grasp_height: 20.0
-  gate_quality_by_mask: true
-  # Convert the predicted width/height back to source-camera pixels.
-  scale_grasp_to_source: true
-  # Override flat values from the selected training config when necessary.
-  overrides: {}
+# The GUI can switch profiles without restarting the camera/robot layer.
+active_model: drogoff-grasptools-v2
+model_profiles:
+  drogoff-grasptools-v2:
+    config: config/grasp_tools/drogoff_v2.yaml
+    checkpoint: weights/drogoff_grasp_tools_v2_iou50_best.pth
+    # Filled with the verified GitHub Release asset after the 3090 upload.
+    checkpoint_url: ""
+    checkpoint_sha256: ""
+    device: cuda:0
+    prompt: the screwdriver
+    grasp_size_activation: auto
+    mask_threshold: 0.35
+    quality_threshold: 0.40
+    num_grasps: 1
+    postprocessor:
+      type: dense_grasp
+      min_distance: 2
+      width_factor: 100.0
+      grasp_height: 20.0
+    gate_quality_by_mask: true
+    scale_grasp_to_source: true
+    overrides: {}
+  crog-grasptools-v2:
+    config: config/grasp_tools/crog.yaml
+    checkpoint: weights/crog_grasp_tools_v2_best_j1.pth
+    checkpoint_url: ""
+    checkpoint_sha256: ""
+    device: cuda:0
+    prompt: the screwdriver
+    grasp_size_activation: auto
+    mask_threshold: 0.35
+    quality_threshold: 0.40
+    num_grasps: 1
+    postprocessor:
+      type: dense_grasp
+      min_distance: 2
+      width_factor: 100.0
+      grasp_height: 20.0
+    gate_quality_by_mask: true
+    scale_grasp_to_source: true
+    overrides: {}
 
 camera:
   # image | opencv | video | realsense | gstreamer

@@ -44,7 +44,7 @@ class CoordConv(nn.Module):
         return x
 
 
-class MultiTaskProjector(nn.Module):
+class _LegacyMultiTaskProjector(nn.Module):
     def __init__(self, word_dim=1024, in_dim=256, kernel_size=3):
         super().__init__()
         self.in_dim = in_dim
@@ -130,6 +130,55 @@ class MultiTaskProjector(nn.Module):
         # b, 1, 104, 104
 
         return mask_out, grasp_qua_out, grasp_sin_out, grasp_cos_out, grasp_wid_out
+
+
+class MultiTaskProjector(nn.Module):
+    """Text-conditioned five-map projector with an optional short-side head."""
+
+    def __init__(
+        self,
+        word_dim=1024,
+        in_dim=256,
+        kernel_size=3,
+        predict_short_side=False,
+    ):
+        super().__init__()
+        self.in_dim = int(in_dim)
+        self.kernel_size = int(kernel_size)
+        self.predict_short_side = bool(predict_short_side)
+        self.num_outputs = 6 if self.predict_short_side else 5
+        self.vis = nn.Sequential(
+            nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+            conv_layer(in_dim * 2, in_dim * 2, 3, padding=1),
+            nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+            conv_layer(in_dim * 2, in_dim, 3, padding=1),
+            nn.Conv2d(in_dim, in_dim * self.num_outputs, 1),
+        )
+        self.txt = nn.Linear(
+            word_dim, in_dim * kernel_size * kernel_size + 1
+        )
+
+    def forward(self, x, word):
+        feature_maps = torch.tensor_split(
+            self.vis(x), self.num_outputs, dim=1
+        )
+        batch_size, channels, height, width = feature_maps[0].shape
+        parameters = self.txt(word)
+        weight = parameters[:, :-1].reshape(
+            batch_size, channels, self.kernel_size, self.kernel_size
+        )
+        bias = parameters[:, -1]
+        outputs = []
+        for feature_map in feature_maps:
+            output = F.conv2d(
+                feature_map.reshape(1, batch_size * channels, height, width),
+                weight,
+                bias=bias,
+                padding=self.kernel_size // 2,
+                groups=batch_size,
+            )
+            outputs.append(output.transpose(0, 1).contiguous())
+        return tuple(outputs)
 
 
 class Projector(nn.Module):

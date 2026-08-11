@@ -84,6 +84,19 @@ class EvaluationComponentTest(unittest.TestCase):
         self.assertAlmostEqual(detection.width, 100.0)
         self.assertAlmostEqual(detection.height, 40.0)
 
+    def test_dense_grasp_postprocessor_decodes_predicted_short_side(self):
+        quality = np.zeros((8, 8), dtype=np.float32)
+        quality[3, 4] = 0.9
+        sine = np.zeros_like(quality)
+        cosine = np.ones_like(quality)
+        width = np.full_like(quality, 0.6)
+        short_side = np.full_like(quality, 0.2)
+        detection = DenseGraspPostProcessor(num_grasps=1)(
+            quality, sine, cosine, width, short_side=short_side
+        )[0]
+        self.assertAlmostEqual(detection.width, 60.0, places=4)
+        self.assertAlmostEqual(detection.height, 20.0, places=4)
+
     def test_binary_segmentation_metric_uses_per_sample_iou(self):
         prediction = np.array(
             [[[1, 1], [0, 0]], [[1, 0], [0, 0]]], dtype=np.float32

@@ -11,12 +11,15 @@ import torch.nn.functional as F
 
 from model import build_model
 from utils.config import load_cfg_from_cfg_file
+from utils.config import resolve_grasp_size_activation
+from utils.pretrained import ensure_pretrained
 from utils.dataset import CLIP_MEAN, CLIP_STD, tokenize
 from toolrgs.structures import GraspModelResult
 from toolrgs.evaluation import DenseGraspPostProcessor  # registers evaluation components
 from toolrgs.registry import POSTPROCESSORS
 
 from .config import resolve_repo_path
+from .weights import ensure_deployment_checkpoint
 
 
 @dataclass
@@ -27,6 +30,7 @@ class GraspPrediction:
     quality: np.ndarray
     angle: np.ndarray
     width: np.ndarray
+    short_side: Optional[np.ndarray]
     grasps: List[List[float]]
     model_grasps: List[List[float]]
     scores: List[float]
@@ -84,8 +88,13 @@ class ToolRGSInference:
         checkpoint_path = resolve_repo_path(self.model_cfg["checkpoint"], self.repo_root)
         if experiment_path is None or not experiment_path.is_file():
             raise FileNotFoundError(f"Experiment config does not exist: {experiment_path}")
-        if checkpoint_path is None or not checkpoint_path.is_file():
-            raise FileNotFoundError(f"Checkpoint does not exist: {checkpoint_path}")
+        if checkpoint_path is None:
+            raise ValueError("model.checkpoint cannot be empty")
+        checkpoint_path = ensure_deployment_checkpoint(
+            checkpoint_path,
+            self.model_cfg.get("checkpoint_url", ""),
+            self.model_cfg.get("checkpoint_sha256", ""),
+        )
 
         self.cfg = load_cfg_from_cfg_file(str(experiment_path))
         for key, value in dict(self.model_cfg.get("overrides", {})).items():
@@ -104,6 +113,14 @@ class ToolRGSInference:
         self.cfg.rank = 0
         self.model, _ = build_model(self.cfg)
         checkpoint = torch.load(str(checkpoint_path), map_location=self.device)
+        self.grasp_size_activation = resolve_grasp_size_activation(
+            self.model_cfg.get(
+                "grasp_size_activation",
+                getattr(self.cfg, "grasp_size_activation", "auto"),
+            ),
+            checkpoint=checkpoint,
+            model=self.model,
+        )
         if isinstance(checkpoint, dict):
             state = checkpoint.get("state_dict", checkpoint.get("model", checkpoint))
         else:
@@ -124,12 +141,14 @@ class ToolRGSInference:
         self.postprocessor = POSTPROCESSORS.build(postprocessor_cfg)
 
     def _resolve_pretrained_paths(self) -> None:
-        for key in ("clip_pretrain", "dino_pretrain", "mamba_pretrain"):
+        for key in (
+            "clip_pretrain", "dino_pretrain", "mamba_pretrain", "depth_pretrain"
+        ):
             value = getattr(self.cfg, key, None)
             if not value or str(value).startswith(("http://", "https://")):
                 continue
             path = resolve_repo_path(value, self.repo_root)
-            setattr(self.cfg, key, str(path))
+            setattr(self.cfg, key, str(ensure_pretrained(path)))
 
     def _preprocess(
         self, frame_bgr: np.ndarray, prompt: str
@@ -157,46 +176,43 @@ class ToolRGSInference:
         ).to(self.device)
         return tensor, words, matrix, inverse, scale
 
-    def _maps_to_original(
+    def _map_to_original(
         self,
-        predictions: Sequence[torch.Tensor],
+        prediction: torch.Tensor,
         inverse: np.ndarray,
         output_hw: Tuple[int, int],
-    ) -> List[np.ndarray]:
+        activation: str = "none",
+    ) -> np.ndarray:
         inp_h, inp_w = self.input_hw
         ori_h, ori_w = output_hw
-        result: List[np.ndarray] = []
-        for index, prediction in enumerate(predictions):
-            mode = "bilinear" if index == 5 else "bicubic"
-            resized = F.interpolate(
-                prediction,
-                size=(inp_h, inp_w),
-                mode=mode,
-                align_corners=False,
+        resized = F.interpolate(
+            prediction,
+            size=(inp_h, inp_w),
+            mode="bilinear" if prediction.shape[1] > 1 else "bicubic",
+            align_corners=False,
+        )
+        if activation == "sigmoid":
+            resized = torch.sigmoid(resized)
+        elif activation == "size":
+            resized = (
+                torch.sigmoid(resized)
+                if self.grasp_size_activation == "sigmoid"
+                else resized.clamp(0.0, 1.0)
             )
-            if index in (0, 1, 4):
-                resized = torch.sigmoid(resized)
-            array = resized[0].detach().float().cpu().numpy()
-            if array.shape[0] == 1:
-                array = array[0]
-                result.append(
-                    cv2.warpAffine(
-                        array, inverse, (ori_w, ori_h), flags=cv2.INTER_LINEAR, borderValue=0.0
-                    )
-                )
-            else:
-                channels = [
-                    cv2.warpAffine(
-                        channel,
-                        inverse,
-                        (ori_w, ori_h),
-                        flags=cv2.INTER_LINEAR,
-                        borderValue=0.0,
-                    )
-                    for channel in array
-                ]
-                result.append(np.stack(channels, axis=0))
-        return result
+        array = resized[0].detach().float().cpu().numpy()
+        if array.shape[0] == 1:
+            return cv2.warpAffine(
+                array[0], inverse, (ori_w, ori_h),
+                flags=cv2.INTER_LINEAR, borderValue=0.0,
+            )
+        channels = [
+            cv2.warpAffine(
+                channel, inverse, (ori_w, ori_h),
+                flags=cv2.INTER_LINEAR, borderValue=0.0,
+            )
+            for channel in array
+        ]
+        return np.stack(channels, axis=0)
 
     def predict(self, frame_bgr: np.ndarray, prompt: str) -> GraspPrediction:
         prompt = str(prompt).strip()
@@ -205,9 +221,30 @@ class ToolRGSInference:
         image, words, matrix, inverse, scale = self._preprocess(frame_bgr, prompt)
         with torch.inference_mode():
             raw = self.model(image, words)
-        predictions = GraspModelResult.from_legacy(raw).predictions.as_tuple()
-        maps = self._maps_to_original(predictions, inverse, frame_bgr.shape[:2])
-        segmentation, quality, sine, cosine, width = maps[:5]
+        predictions = GraspModelResult.from_legacy(
+            raw, model=self.model
+        ).predictions
+        segmentation = self._map_to_original(
+            predictions.segmentation, inverse, frame_bgr.shape[:2], "sigmoid"
+        )
+        quality = self._map_to_original(
+            predictions.quality, inverse, frame_bgr.shape[:2], "sigmoid"
+        )
+        sine = self._map_to_original(
+            predictions.sine, inverse, frame_bgr.shape[:2]
+        )
+        cosine = self._map_to_original(
+            predictions.cosine, inverse, frame_bgr.shape[:2]
+        )
+        width = self._map_to_original(
+            predictions.width, inverse, frame_bgr.shape[:2], "size"
+        )
+        short_side = (
+            self._map_to_original(
+                predictions.short_side, inverse, frame_bgr.shape[:2], "size"
+            )
+            if predictions.short_side is not None else None
+        )
         mask = segmentation >= float(self.model_cfg.get("mask_threshold", 0.35))
         if bool(self.model_cfg.get("gate_quality_by_mask", True)):
             quality = quality * mask.astype(np.float32)
@@ -221,12 +258,18 @@ class ToolRGSInference:
             sine,
             cosine,
             width,
+            short_side=short_side,
             spatial_scale=source_scale,
         )
         grasps: List[List[float]] = []
         model_grasps: List[List[float]] = []
         scores: List[float] = []
-        offset = maps[5] if len(maps) >= 6 else None
+        offset = (
+            self._map_to_original(
+                predictions.offset, inverse, frame_bgr.shape[:2]
+            )
+            if predictions.offset is not None else None
+        )
         radius = float(getattr(self.cfg, "offset_r", 0.0) or 0.0) * source_scale
         ori_h, ori_w = frame_bgr.shape[:2]
         for detection in detections:
@@ -281,6 +324,7 @@ class ToolRGSInference:
             quality=quality,
             angle=angle,
             width=width,
+            short_side=short_side,
             grasps=grasps,
             model_grasps=model_grasps,
             scores=scores,
@@ -288,9 +332,12 @@ class ToolRGSInference:
 
     @staticmethod
     def visualization_maps(prediction: GraspPrediction) -> Dict[str, np.ndarray]:
-        return {
+        maps = {
             "segmentation": prediction.segmentation.astype(np.uint8) * 255,
             "quality": _heatmap(prediction.quality),
             "angle": _heatmap(prediction.angle, cv2.COLORMAP_HSV),
             "width": _heatmap(prediction.width),
         }
+        if prediction.short_side is not None:
+            maps["short_side"] = _heatmap(prediction.short_side)
+        return maps

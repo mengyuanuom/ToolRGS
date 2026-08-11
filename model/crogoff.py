@@ -5,11 +5,13 @@ import torch.nn.functional as F
 from .crog_clip import build_model
 
 from .crog_layers import FPN, ProjectorOff, TransformerDecoder, MultiTaskProjectorOff
+from utils.pretrained import ensure_pretrained
 
 
 
 class CROGOFF(nn.Module):
     supports_offset = True
+    grasp_size_loss_activation = "clamp"
 
     def __init__(self, cfg):
         super().__init__()
@@ -21,8 +23,10 @@ class CROGOFF(nn.Module):
         self.offset_loss_weight = float(getattr(cfg, "offset_loss_weight", 1.0))
         
         # Vision & Text Encoder
-        clip_model = torch.jit.load(cfg.clip_pretrain,
-                                    map_location="cpu").eval()
+        clip_pretrain = ensure_pretrained(cfg.clip_pretrain, "clip-rn50")
+        clip_model = torch.jit.load(
+            str(clip_pretrain), map_location="cpu"
+        ).eval()
         print(f"Load pretrained CLIP: {self.use_pretrained_clip}")
         self.backbone = build_model(clip_model.state_dict(), cfg.word_len, self.use_pretrained_clip).float()
         # Multi-Modal FPN

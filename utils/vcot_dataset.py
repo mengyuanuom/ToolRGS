@@ -14,6 +14,7 @@ import torch
 from torch.utils.data import Dataset
 
 from utils.dataset import GraspTransforms, make_dense_offset_with_radius_np, tokenize
+from utils.vcot_geometry import resolve_vcot_grasp_root
 
 
 _SPLIT_FILES = {
@@ -102,6 +103,7 @@ class VCoTDataset(Dataset):
         with_offset=False,
         offset_radius=20.0,
         offset_sigma=None,
+        grasp_size_factor=100.0,
     ):
         self.root_dir = Path(root_dir).expanduser()
         self.input_size = (int(input_size), int(input_size))
@@ -110,10 +112,13 @@ class VCoTDataset(Dataset):
         self.with_offset = bool(with_offset)
         self.offset_radius = float(offset_radius)
         self.offset_sigma = offset_sigma
+        self.grasp_size_factor = float(grasp_size_factor)
         self.mean = torch.tensor([0.48145466, 0.4578275, 0.40821073]).reshape(3, 1, 1)
         self.std = torch.tensor([0.26862954, 0.26130258, 0.27577711]).reshape(3, 1, 1)
         self.grasp_transform = GraspTransforms(
-            width_factor=100, width=self.input_size[1], height=self.input_size[0]
+            width_factor=self.grasp_size_factor,
+            width=self.input_size[1],
+            height=self.input_size[0],
         )
 
         if split_root is None:
@@ -127,6 +132,13 @@ class VCoTDataset(Dataset):
             )
         if not self.root_dir.is_dir():
             raise FileNotFoundError(f"Grasp-Anything root not found: {self.root_dir}")
+        self.grasp_root = resolve_vcot_grasp_root(self.root_dir)
+        if not self.grasp_root.is_dir():
+            raise FileNotFoundError(
+                "VCoT positive grasp directory not found; expected "
+                f"{self.root_dir / 'grasp_label_positive'} (official) or "
+                f"{self.root_dir / 'positive_grasp'} (legacy)."
+            )
 
         self.samples = []
         with self.csv_path.open("r", encoding="utf-8", newline="") as stream:
@@ -189,7 +201,7 @@ class VCoTDataset(Dataset):
             self.root_dir / "image" / f"{scene_id}.jpg", "image", grasp_id
         )
         grasp_path = self._require(
-            self.root_dir / "positive_grasp" / f"{grasp_id}.pt", "grasp", grasp_id
+            self.grasp_root / f"{grasp_id}.pt", "grasp", grasp_id
         )
         mask_path = self._require(
             self.root_dir / "mask" / f"{grasp_id}.npy", "mask", grasp_id
@@ -244,6 +256,9 @@ class VCoTDataset(Dataset):
             "sin": torch.from_numpy(np.sin(2.0 * angle)).float(),
             "cos": torch.from_numpy(np.cos(2.0 * angle)).float(),
             "wid": torch.from_numpy(raw_masks["wid"].astype(np.float32) / 255.0),
+            "short": torch.from_numpy(
+                raw_masks["short"].astype(np.float32) / 255.0
+            ),
         }
         if self.with_offset:
             offsets, offset_weights = make_dense_offset_with_radius_np(
@@ -296,7 +311,7 @@ class VCoTDataset(Dataset):
     def collate_fn(batch):
         grasp_masks = {
             key: torch.stack([sample["grasp_masks"][key] for sample in batch])
-            for key in ("qua", "sin", "cos", "wid")
+            for key in ("qua", "sin", "cos", "wid", "short")
         }
         for key in ("off", "off_w"):
             if all(key in sample["grasp_masks"] for sample in batch):

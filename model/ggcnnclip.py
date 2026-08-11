@@ -35,8 +35,11 @@ class TextVisualFusionFiLM(nn.Module):
         h = self.mlp(e_txt)        # (B, hidden_dim)
 
         # Map hidden representation to per-channel gamma and beta
-        gamma = self.gamma(h)      # (B, C)
-        beta = self.beta(h)        # (B, C)
+        # Raw CLIP states can have a much larger magnitude than the shallow
+        # GG-CNN feature stream. Bound both FiLM branches so one batch cannot
+        # explode the activations and poison the optimizer with NaN gradients.
+        gamma = torch.tanh(self.gamma(h))      # (B, C)
+        beta = torch.tanh(self.beta(h))        # (B, C)
 
         # Reshape to broadcast over H and W
         gamma = gamma.view(B, C, 1, 1)
@@ -226,6 +229,8 @@ class GGCNN_CLIP(nn.Module):
     This allows you to plug it directly into train_with_grasp / validate_with_grasp.
     """
 
+    grasp_size_loss_activation = "clamp"
+
     def __init__(self, cfg):
         """
         Args:
@@ -298,6 +303,7 @@ class GGCNN_CLIP(nn.Module):
         # backbone.encode_text(...) typically returns (word_feat, state).
         # We use 'state' as the sentence-level embedding.
         _, state = self.backbone.encode_text(word)   # state: (B, text_dim)
+        state = F.normalize(state.float(), dim=-1)
 
         # Run GG-CNN with text conditioning
         pos_pred, cos_pred, sin_pred, wid_pred = self.grasp_head(img, state)
@@ -374,4 +380,3 @@ class GGCNN_CLIP(nn.Module):
                 grasp_wid_mask,
             )
             return preds, targets
-

@@ -113,6 +113,7 @@ def _build_depth_backbone(cfg):
 
 
 class ETRG(BaseGraspModel):
+    grasp_size_loss_activation = "clamp"
     """Parameter-efficient CLIP adapter with RGB or RGB-D auxiliary fusion."""
 
     requires_depth = True

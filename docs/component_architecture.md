@@ -55,6 +55,7 @@ GraspOutput(
     sine=sine,
     cosine=cosine,
     width=width,
+    short_side=short_side,  # optional predicted grasp height
     offset=offset,  # optional
 )
 ```
@@ -66,6 +67,8 @@ ToolRGS return layouts:
 ```text
 (seg, quality, sine, cosine, width)
 (seg, quality, sine, cosine, width, offset)
+(seg, quality, sine, cosine, width, short_side)
+(seg, quality, sine, cosine, width, short_side, offset)
 (predictions, targets)
 (predictions, targets, total_loss, loss_dict)
 ```
@@ -112,7 +115,8 @@ Registered evaluation components currently include:
 - `DenseGraspPostProcessor`: quality-peak decoding into named rotated grasps.
 
 Validation and real-world deployment both use `DenseGraspPostProcessor`.
-`GraspValLoop` also owns inverse affine warping, optional offset refinement,
+`GraspValLoop` also owns inverse affine warping, optional short-side decoding
+and offset refinement,
 per-sample segmentation metrics, top-1/top-5 Jacquard evaluation, and
 distributed reduction of sufficient statistics.
 

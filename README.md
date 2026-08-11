@@ -90,10 +90,10 @@ Set `DATA.root_path`, `TRAIN.clip_pretrain`, and (for DROG variants)
 
 ## Performance summary
 
-A blank, evaluator-aligned result table for OCID-VLG and Grasp-Tools is
-available in [docs/performance_summary.md](docs/performance_summary.md).
-Fill it only with reproduced ToolRGS evaluation logs and retain checkpoint and
-commit provenance for every row.
+The consolidated OCID-VLG, VCoT and Grasp-Tools results, including imported
+CROG-GPU raw logs and protocol notes, are available in
+[docs/performance_summary.md](docs/performance_summary.md). Keep checkpoint,
+split, decoder and commit provenance when adding rows.
 
 ## Embedded Grasp-Tools v2 data and augmentation
 
@@ -149,7 +149,9 @@ DATA:
 The adapter reads `.pt` grasps as
 `[score, x, y, width, height, theta_degrees]`, discards the score for geometry,
 reorders the quadrilateral for ToolRGS's width/angle convention, and generates
-grasp maps after letterboxing. Original-coordinate grasp
+long-side and short-side grasp maps after letterboxing. Both the official
+`grasp_label_positive/` directory and legacy `positive_grasp/` alias are
+accepted. Original-coordinate grasp
 targets are retained for Jacquard evaluation. Files are loaded lazily per
 sample; the dataset does not preload the full annotation corpus.
 
@@ -176,9 +178,10 @@ The checked-in profile targets two 24 GB RTX 3090 cards:
 
 | Model | Input | Train batch/GPU | Global batch | Epochs | LR milestones |
 | --- | ---: | ---: | ---: | ---: | --- |
-| CROG / CROG-OFF | 416 | 8 | 16 | 70 | 55, 65 |
-| MapleGrasp | 416 | 8 | 16 | 70 | 55, 65 |
-| DROG / DROG-OFF | 448 | 8 | 16 | 65 | 35, 55 |
+| CROG | 416 | 8 | 16 | 36 | 30 |
+| MapleGrasp Stage 1 / 2 | 416 | 8 | 16 | 24 each | 20 |
+| DROG-OFF | 448 | 8 | 16 | 36 | 30 |
+| CROG-OFF / DROG | 416 / 448 | 8 | 16 | 70 / 65 | 55, 65 / 35, 55 |
 | GGCNN-CLIP | 416 | 32 | 64 | 50 | 35 |
 | GRConvNet-CLIP | 416 | 32 | 64 | 80 | 70 |
 | GraspMamba | 416 | 8 | 16 | 50 | 35, 45 |
@@ -434,7 +437,10 @@ check those terms before redistribution or commercial use.
 ## Real-world demo and robot sender
 
 ToolRGS includes a configuration-driven PyQt demo ported from the local server
-CROG deployment. It supports all nine ToolRGS grasp architectures, OpenCV/video,
+CROG deployment. The GUI can switch among configured model profiles without
+restarting the camera layer, understands fixed-height, predicted-short-side and
+offset heads, and can download a missing published checkpoint from
+`checkpoint_url`. It supports the RGB ToolRGS grasp architectures, OpenCV/video,
 RealSense, GStreamer shared memory, optional MMDetection and Whisper, and the
 legacy Kinova TCP command format. Start in dry-run mode:
 

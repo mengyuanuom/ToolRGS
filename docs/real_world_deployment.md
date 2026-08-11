@@ -6,8 +6,9 @@ supports every ToolRGS grasp architecture, OpenCV/video, Intel
 RealSense, shared-memory GStreamer, an optional MMDetection tab, and optional
 Whisper microphone input.
 
-Supported grasp models are CROG, CROGOFF, DROG, DROGOFF, GGCNN-CLIP,
-GR-ConvNet-CLIP, GraspMamba, and LGD. DETRIS is intentionally excluded here: in
+Supported RGB grasp models are CROG, CROGOFF, DROG, DROGOFF, MapleGrasp,
+GGCNN-CLIP, GR-ConvNet-CLIP, GraspMamba, and LGD. ETRG needs aligned depth and
+is therefore not selectable from the current RGB camera GUI. DETRIS is intentionally excluded here: in
 this repository it is a segmentation/backbone component, not a grasp-map model.
 
 ## 1. Install
@@ -35,8 +36,11 @@ it is intentionally not included in the base requirements.
 
 ## 2. Put weights in place
 
-Training, CLIP/DINO/Mamba, detector, and Whisper weights are not committed to
-Git. Copy the files referenced by the selected experiment and deployment YAML.
+Training, detector, and Whisper weights are not committed to Git. Official
+CLIP/DINO/Mamba backbones are downloaded automatically on first use when the
+machine has network access. A model profile may also specify
+`checkpoint_url` and `checkpoint_sha256`; when its local `checkpoint` is
+missing, ToolRGS downloads the release asset atomically and validates the hash.
 For example:
 
 ```text
@@ -46,6 +50,12 @@ exp/grasp_tools/drogoff_grasp_tools/best_jindex_model.pth
 weights/epoch_48_13.pth                 # only when detector.enabled=true
 ```
 
+The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
+The verified 3090 DROG-OFF release URL will be recorded in that profile and in
+the performance summary once the server checkpoint has been recovered and its
+SHA-256 has been checked. Do not attach a checkpoint merely because its
+filename looks plausible: it must be tied to the reported V2 strict-IoU run.
+
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
 command can be run from any working directory.
 
@@ -53,13 +63,15 @@ command can be run from any working directory.
 
 ```bash
 cp config/deployment/lab.example.yaml config/deployment/lab.yaml
-# Edit model/checkpoint, camera backend, camera path/device, and prompt.
+# Edit active_model/model_profiles, camera path/device, and prompt.
 python tools/check_deployment.py --config config/deployment/lab.yaml
 python tools/check_deployment.py --config config/deployment/lab.yaml \
   --probe-camera --build-model
 ```
 
-The preflight never connects to the robot and never sends a command.
+The preflight never connects to the robot and never sends a command. In the
+GUI, the **Model** selector reloads any entry under `model_profiles` without
+restarting the camera or robot-control layer.
 
 Camera components are selected with `camera.type` (`camera.backend` remains a
 legacy alias):

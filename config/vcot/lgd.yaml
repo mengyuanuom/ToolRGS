@@ -22,7 +22,8 @@ TRAIN:
   lgd_timesteps: 1000
   lgd_sampling_steps: 50
   lgd_diffusion_weight: 1.0
-  lgd_contrastive_weight: 0.001
+  lgd_contrastive_weight: 0.0
+  lgd_geometry_mask_threshold: 0.05
   lgd_contrastive_temperature: 0.1
   sync_bn: True
   workers: 8  # per process; 16 workers total with two GPUs

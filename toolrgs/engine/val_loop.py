@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from toolrgs.engine.hooks import LoopState
 from toolrgs.engine.loops import BaseLoop
-from toolrgs.models.base import model_requires_depth
+from toolrgs.models.base import dense_grasp_target_kwargs, model_requires_depth
 from toolrgs.evaluation import (
     BinarySegmentationMetric,
     DenseGraspPostProcessor,
@@ -23,6 +23,7 @@ from toolrgs.evaluation import (
 from toolrgs.registry import LOOPS, METRICS, POSTPROCESSORS
 from toolrgs.structures import GraspModelResult
 from utils.grasp_eval import calculate_jacquard_index
+from utils.config import resolve_grasp_size_activation
 
 
 def _resize_prediction(tensor, output_hw, mode="bicubic"):
@@ -71,8 +72,19 @@ class GraspValLoop(BaseLoop):
                     getattr(cfg, "grasp_quality_threshold", 0.4)
                 ),
                 "min_distance": int(getattr(cfg, "grasp_min_distance", 2)),
+                "width_factor": float(
+                    getattr(cfg, "grasp_size_factor", 100.0)
+                ),
             }
         )
+        self.grasp_size_activation = resolve_grasp_size_activation(
+            getattr(cfg, "grasp_size_activation", "auto"), model=model
+        )
+
+    def _decode_size(self, prediction):
+        if self.grasp_size_activation == "sigmoid":
+            return torch.sigmoid(prediction)
+        return prediction.clamp(0.0, 1.0)
 
     def _offset_radius(self, input_hw):
         configured = getattr(self.cfg, "offset_r", None)
@@ -129,16 +141,14 @@ class GraspValLoop(BaseLoop):
             target_sine = data["grasp_masks"]["sin"].cuda(non_blocking=True).unsqueeze(1)
             target_cosine = data["grasp_masks"]["cos"].cuda(non_blocking=True).unsqueeze(1)
             target_width = data["grasp_masks"]["wid"].cuda(non_blocking=True).unsqueeze(1)
+            target_short = data["grasp_masks"].get("short")
+            if target_short is not None:
+                target_short = target_short.cuda(non_blocking=True).unsqueeze(1)
+            target_offset = data["grasp_masks"].get("off")
+            if target_offset is not None:
+                target_offset = target_offset.cuda(non_blocking=True)
 
-            inputs = (
-                image,
-                text,
-                target_segmentation,
-                target_quality,
-                target_sine,
-                target_cosine,
-                target_width,
-            )
+            depth_tensor = None
             if model_requires_depth(self.model):
                 depth = data.get("depth")
                 if depth is None:
@@ -146,17 +156,61 @@ class GraspValLoop(BaseLoop):
                         "The selected model requires batch['depth'], but the "
                         "validation dataset did not provide it."
                     )
-                inputs = (image, depth.cuda(non_blocking=True), *inputs[1:])
-            result = GraspModelResult.from_legacy(self.model(*inputs))
+                depth_tensor = depth.cuda(non_blocking=True)
+            model_args = (image, text)
+            if depth_tensor is not None:
+                model_args = (image, depth_tensor, text)
+            model_kwargs = dense_grasp_target_kwargs(
+                self.model,
+                instance=target_segmentation,
+                grasp_qua_mask=target_quality,
+                grasp_sin_mask=target_sine,
+                grasp_cos_mask=target_cosine,
+                grasp_wid_mask=target_width,
+                grasp_off_mask=target_offset,
+                grasp_short_mask=target_short,
+            )
+            unwrapped = getattr(self.model, "module", self.model)
+            result = GraspModelResult.from_legacy(
+                self.model(*model_args, **model_kwargs), model=unwrapped
+            )
             predictions = result.predictions
             input_hw = image.shape[-2:]
             segmentation = _resize_prediction(
                 torch.sigmoid(predictions.segmentation), input_hw
             )
+            if predictions.quality is None:
+                dense_maps = torch.cat(
+                    [segmentation, target_segmentation], dim=1
+                ).detach().float().cpu().numpy()
+                for index in range(image.shape[0]):
+                    inverse_matrix = data["inverse"][index]
+                    if hasattr(inverse_matrix, "detach"):
+                        inverse_matrix = inverse_matrix.detach().cpu().numpy()
+                    original_hw = (
+                        int(data["ori_size"][index][0]),
+                        int(data["ori_size"][index][1]),
+                    )
+                    self.segmentation_metric.update(
+                        inverse_warp(
+                            dense_maps[index, 0], inverse_matrix, original_hw
+                        ),
+                        inverse_warp(
+                            dense_maps[index, 1], inverse_matrix, original_hw
+                        ) > 0.5,
+                    )
+                self.state.result = result
+                self.hooks.call("after_iter", self, self.state)
+                continue
             quality = _resize_prediction(torch.sigmoid(predictions.quality), input_hw)
             sine = _resize_prediction(predictions.sine, input_hw)
             cosine = _resize_prediction(predictions.cosine, input_hw)
-            width = _resize_prediction(torch.sigmoid(predictions.width), input_hw)
+            width = _resize_prediction(self._decode_size(predictions.width), input_hw)
+            short_side = None
+            if predictions.short_side is not None:
+                short_side = _resize_prediction(
+                    self._decode_size(predictions.short_side), input_hw
+                )
             offset = None
             if predictions.offset is not None:
                 offset = _resize_prediction(predictions.offset, input_hw, mode="bilinear")
@@ -171,6 +225,8 @@ class GraspValLoop(BaseLoop):
             ]
             if offset is not None:
                 dense_tensors.append(offset)
+            if short_side is not None:
+                dense_tensors.append(short_side)
             dense_maps = (
                 torch.cat(dense_tensors, dim=1)
                 .detach()
@@ -178,7 +234,14 @@ class GraspValLoop(BaseLoop):
                 .cpu()
                 .numpy()
             )
-            offset_maps = dense_maps[:, 6:8] if offset is not None else None
+            cursor = 6
+            offset_maps = None
+            if offset is not None:
+                offset_maps = dense_maps[:, cursor:cursor + 2]
+                cursor += 2
+            short_side_maps = (
+                dense_maps[:, cursor] if short_side is not None else None
+            )
 
             for index in range(image.shape[0]):
                 inverse_matrix = data["inverse"][index]
@@ -211,17 +274,36 @@ class GraspValLoop(BaseLoop):
                 width_original = inverse_warp(
                     dense_maps[index, 5], inverse_matrix, original_hw
                 )
+                short_side_original = (
+                    inverse_warp(
+                        short_side_maps[index], inverse_matrix, original_hw
+                    )
+                    if short_side_maps is not None else None
+                )
                 grasp_targets = data["grasps"][index]
                 if hasattr(grasp_targets, "detach"):
                     grasp_targets = grasp_targets.detach().cpu().numpy()
                 target_six = targets_to_six(grasp_targets)
+
+                size_scale = 1.0
+                if bool(getattr(self.cfg, "restore_grasp_size_scale", False)):
+                    linear = np.asarray(inverse_matrix, dtype=np.float32)[:, :2]
+                    size_scale = float(
+                        0.5
+                        * (
+                            np.linalg.norm(linear[:, 0])
+                            + np.linalg.norm(linear[:, 1])
+                        )
+                    )
 
                 detections = self.postprocessor(
                     quality_original,
                     sine_original,
                     cosine_original,
                     width_original,
+                    short_side=short_side_original,
                     num_grasps=self.max_topk,
+                    spatial_scale=size_scale,
                 )
                 rectangles = [detection.as_rectangle() for detection in detections]
                 if offset_maps is not None and rectangles:
@@ -239,7 +321,10 @@ class GraspValLoop(BaseLoop):
                             sine_original,
                             cosine_original,
                             width_original,
-                            width_factor=self.postprocessor.width_factor,
+                            short_side=short_side_original,
+                            width_factor=(
+                                self.postprocessor.width_factor * size_scale
+                            ),
                         )
                 else:
                     rectangles = rectangles_to_five(rectangles)

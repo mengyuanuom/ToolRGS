@@ -9,7 +9,7 @@ import torch.cuda.amp as amp
 import torch.distributed as dist
 
 from toolrgs.engine.hooks import HookList, LoopState
-from toolrgs.models.base import model_requires_depth
+from toolrgs.models.base import dense_grasp_target_kwargs, model_requires_depth
 from toolrgs.registry import LOOPS
 from toolrgs.structures import GraspModelResult
 from utils.misc import AverageMeter, ProgressMeter, trainMetricGPU
@@ -65,6 +65,7 @@ class GraspTrainLoop(BaseLoop):
             "sine": AverageMeter("Loss_sin", ":2.4f"),
             "cosine": AverageMeter("Loss_cos", ":2.4f"),
             "width": AverageMeter("Loss_wid", ":2.4f"),
+            "short": AverageMeter("Loss_short", ":2.4f"),
             "offset": AverageMeter("Loss_off", ":2.4f"),
             "iou": AverageMeter("IoU", ":2.2f"),
             "precision": AverageMeter("Prec@50", ":2.2f"),
@@ -80,6 +81,7 @@ class GraspTrainLoop(BaseLoop):
         masks = data["grasp_masks"]
         offset = masks.get("off")
         offset_weight = masks.get("off_w")
+        short_side = masks.get("short")
         common = (
             data["img"].cuda(non_blocking=True),
             data["word_vec"].cuda(non_blocking=True),
@@ -90,6 +92,8 @@ class GraspTrainLoop(BaseLoop):
             masks["wid"].cuda(non_blocking=True).unsqueeze(1),
             offset.cuda(non_blocking=True) if offset is not None else None,
             offset_weight.cuda(non_blocking=True) if offset_weight is not None else None,
+            short_side.cuda(non_blocking=True).unsqueeze(1)
+            if short_side is not None else None,
         )
         if not model_requires_depth(self.model):
             return common
@@ -117,7 +121,40 @@ class GraspTrainLoop(BaseLoop):
             image = inputs[0]
 
             with amp.autocast(enabled=bool(getattr(self.cfg, "amp", True))):
-                result = GraspModelResult.from_legacy(self.model(*inputs))
+                image, words = inputs[:2]
+                target_values = inputs[2:]
+                if model_requires_depth(self.model):
+                    image, depth, words = inputs[:3]
+                    target_values = inputs[3:]
+                    model_args = (image, depth, words)
+                else:
+                    model_args = (image, words)
+                (
+                    mask,
+                    quality,
+                    sine,
+                    cosine,
+                    width,
+                    offset,
+                    offset_weight,
+                    short_side,
+                ) = target_values
+                model_kwargs = dense_grasp_target_kwargs(
+                    self.model,
+                    instance=mask,
+                    grasp_qua_mask=quality,
+                    grasp_sin_mask=sine,
+                    grasp_cos_mask=cosine,
+                    grasp_wid_mask=width,
+                    grasp_off_mask=offset,
+                    grasp_off_weight=offset_weight,
+                    grasp_short_mask=short_side,
+                )
+                unwrapped = getattr(self.model, "module", self.model)
+                raw_result = self.model(*model_args, **model_kwargs)
+                result = GraspModelResult.from_legacy(
+                    raw_result, model=unwrapped
+                )
             if result.loss is None:
                 raise RuntimeError("GraspTrainLoop requires a model result with a training loss")
             if result.targets is None:
@@ -160,6 +197,7 @@ class GraspTrainLoop(BaseLoop):
             meters["sine"].update(_scalar(losses.get("m_sin", 0.0)), batch_size)
             meters["cosine"].update(_scalar(losses.get("m_cos", 0.0)), batch_size)
             meters["width"].update(_scalar(losses.get("m_wid", 0.0)), batch_size)
+            meters["short"].update(_scalar(losses.get("m_short", 0.0)), batch_size)
             meters["offset"].update(_scalar(losses.get("m_off", 0.0)), batch_size)
             meters["iou"].update(iou.item(), batch_size)
             meters["precision"].update(precision.item(), batch_size)

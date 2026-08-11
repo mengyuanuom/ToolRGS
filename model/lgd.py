@@ -112,6 +112,8 @@ class LGDCore(nn.Module):
     @staticmethod
     def _apply_film(feature, parameters):
         gamma, beta = parameters.chunk(2, dim=1)
+        gamma = torch.tanh(gamma)
+        beta = torch.tanh(beta)
         return feature * (1.0 + gamma[:, :, None, None]) + beta[:, :, None, None]
 
     def forward(self, image, noisy_quality, timesteps, text_state):
@@ -128,7 +130,13 @@ class LGDCore(nn.Module):
                 feature, size=output_size, mode="bilinear", align_corners=False
             )
         instance, quality, sine, cosine, width = self.head(feature).chunk(5, dim=1)
-        return instance, torch.tanh(quality), torch.tanh(sine), torch.tanh(cosine), width
+        return (
+            instance,
+            torch.tanh(quality),
+            torch.tanh(sine),
+            torch.tanh(cosine),
+            torch.sigmoid(width),
+        )
 
 
 class CosineDiffusion(nn.Module):
@@ -189,6 +197,8 @@ class CosineDiffusion(nn.Module):
 class LGD(nn.Module):
     """ToolRGS port of Language-driven Grasp Detection."""
 
+    grasp_size_loss_activation = "clamp"
+
     def __init__(self, cfg):
         super().__init__()
         clip_model = torch.jit.load(cfg.clip_pretrain, map_location="cpu").eval()
@@ -207,10 +217,15 @@ class LGD(nn.Module):
         self.diffusion = CosineDiffusion(getattr(cfg, "lgd_timesteps", 1000))
         self.sampling_steps = getattr(cfg, "lgd_sampling_steps", 50)
         self.diffusion_weight = getattr(cfg, "lgd_diffusion_weight", 1.0)
-        self.contrastive_weight = getattr(cfg, "lgd_contrastive_weight", 0.001)
+        self.contrastive_weight = getattr(cfg, "lgd_contrastive_weight", 0.0)
         self.contrastive_temperature = getattr(cfg, "lgd_contrastive_temperature", 0.1)
+        self.geometry_mask_threshold = float(
+            getattr(cfg, "lgd_geometry_mask_threshold", 0.05)
+        )
         if self.contrastive_temperature <= 0:
             raise ValueError("lgd_contrastive_temperature must be positive")
+        if not 0.0 <= self.geometry_mask_threshold <= 1.0:
+            raise ValueError("lgd_geometry_mask_threshold must be in [0, 1]")
 
     @staticmethod
     def _resize_targets(output_size, instance, quality, sine, cosine, width):
@@ -230,11 +245,20 @@ class LGD(nn.Module):
     def _contrastive_loss(self, predicted, target):
         predicted = F.adaptive_avg_pool2d(predicted, (8, 8)).flatten(1)
         target = F.adaptive_avg_pool2d(target, (8, 8)).flatten(1)
-        predicted = F.normalize(predicted, dim=1)
-        target = F.normalize(target, dim=1)
+        # Dense grasp maps are sparse. The default 1e-12 normalization epsilon
+        # can create enormous gradients for an almost-empty pooled prediction,
+        # especially on Ascend. Keep this optional ablation finite.
+        predicted = F.normalize(predicted, dim=1, eps=1e-4)
+        target = F.normalize(target, dim=1, eps=1e-4)
         logits = predicted @ target.t() / self.contrastive_temperature
         labels = torch.arange(logits.shape[0], device=logits.device)
         return F.cross_entropy(logits, labels)
+
+    def _masked_geometry_loss(self, predicted, target, quality):
+        """Regress grasp geometry only where a grasp is supervised."""
+        weight = (quality > self.geometry_mask_threshold).to(predicted.dtype)
+        error = F.smooth_l1_loss(predicted, target, reduction="none")
+        return (error * weight).sum() / weight.sum().clamp_min(1.0)
 
     def forward(
         self,
@@ -249,6 +273,7 @@ class LGD(nn.Module):
         grasp_off_weight=None,
     ):
         _, text_state = self.backbone.encode_text(word)
+        text_state = F.normalize(text_state.float(), dim=-1)
         targets = self._resize_targets(
             img.shape[-2:],
             ins_mask,
@@ -262,7 +287,7 @@ class LGD(nn.Module):
         if self.training:
             if grasp_qua_mask is None:
                 raise ValueError("LGD training requires grasp quality supervision")
-            clean_quality = grasp_qua_mask.mul(2.0).sub(1.0)
+            clean_quality = grasp_qua_mask.clamp(0.0, 1.0).mul(2.0).sub(1.0)
             timesteps = torch.randint(
                 0, self.diffusion.timesteps, (img.shape[0],), device=img.device
             )
@@ -272,13 +297,26 @@ class LGD(nn.Module):
             )
 
             instance_loss = F.binary_cross_entropy_with_logits(instance, ins_mask)
-            quality_loss = F.mse_loss(quality, clean_quality)
-            sine_loss = F.smooth_l1_loss(sine, grasp_sin_mask)
-            cosine_loss = F.smooth_l1_loss(cosine, grasp_cos_mask)
-            width_loss = F.smooth_l1_loss(width, grasp_wid_mask)
-            contrastive_loss = self._contrastive_loss(
-                (quality + 1.0) * 0.5, grasp_qua_mask
+            quality_loss = F.smooth_l1_loss(quality, clean_quality)
+            sine_loss = self._masked_geometry_loss(
+                sine, grasp_sin_mask, grasp_qua_mask
             )
+            cosine_loss = self._masked_geometry_loss(
+                cosine, grasp_cos_mask, grasp_qua_mask
+            )
+            width_loss = self._masked_geometry_loss(
+                width, grasp_wid_mask, grasp_qua_mask
+            )
+            # The public LGD training loop does not add a batch-wise
+            # contrastive loss to the dense grasp-map objective. Retain it as
+            # an explicit ablation only, and do not evaluate it at weight zero:
+            # 0 * NaN is still NaN.
+            if self.contrastive_weight > 0.0:
+                contrastive_loss = self._contrastive_loss(
+                    (quality + 1.0) * 0.5, grasp_qua_mask
+                )
+            else:
+                contrastive_loss = quality.new_zeros(())
             total_loss = (
                 instance_loss
                 + self.diffusion_weight * quality_loss

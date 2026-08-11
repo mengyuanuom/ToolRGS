@@ -4,8 +4,9 @@ import unittest
 
 import yaml
 
-from deployment.config import load_deployment_config
+from deployment.config import activate_model_profile, load_deployment_config
 from deployment.robot import GraspCommand, semantic_depth
+from deployment.weights import ensure_deployment_checkpoint
 
 
 class DeploymentContractTest(unittest.TestCase):
@@ -44,6 +45,34 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertFalse(cfg["robot"]["auto_send"])
         self.assertEqual(cfg["robot"]["coordinate_space"], "source")
         self.assertEqual(cfg["model"]["prompt"], "wrench")
+
+    def test_model_profiles_can_be_selected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "deploy.yaml"
+            path.write_text(
+                "active_model: drogoff\n"
+                "model_profiles:\n"
+                "  crog:\n"
+                "    config: config/vcot/crog.yaml\n"
+                "    checkpoint: weights/crog.pth\n"
+                "  drogoff:\n"
+                "    config: config/vcot/drogoff.yaml\n"
+                "    checkpoint: weights/drogoff.pth\n",
+                encoding="utf-8",
+            )
+            cfg = load_deployment_config(path)
+            self.assertEqual(cfg["_active_model"], "drogoff")
+            selected = activate_model_profile(cfg, "crog")
+            self.assertEqual(selected["_active_model"], "crog")
+            self.assertEqual(
+                selected["model"]["checkpoint"], "weights/crog.pth"
+            )
+
+    def test_existing_checkpoint_is_accepted_without_network(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.pth"
+            path.write_bytes(b"toolrgs-test")
+            self.assertEqual(ensure_deployment_checkpoint(path), path)
 
 
 if __name__ == "__main__":

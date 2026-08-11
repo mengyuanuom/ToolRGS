@@ -7,15 +7,19 @@ from .layers import Neck, Decoder, Projector
 from .fusion import Fusion
 from .dinov2.models.vision_transformer import vit_base,vit_large
 from .projector_builder import build_projector
+from utils.pretrained import ensure_pretrained
 
 class DROG(nn.Module):
+    grasp_size_loss_activation = "clamp"
     def __init__(self, cfg):
         super().__init__()
         # Text Encoder
         self.use_grasp_masks = cfg.use_grasp_masks
 
-        clip_model = torch.jit.load(cfg.clip_pretrain,
-                                    map_location="cpu").eval()
+        clip_pretrain = ensure_pretrained(cfg.clip_pretrain, "clip-vit-b16")
+        clip_model = torch.jit.load(
+            str(clip_pretrain), map_location="cpu"
+        ).eval()
         self.txt_backbone = build_model(clip_model.state_dict(), cfg.word_len, cfg.input_size, cfg.txtual_adapter_layer,cfg.txt_adapter_dim).float()
         self.fusion = Fusion(d_model=cfg.ladder_dim, nhead=cfg.nhead,dino_layers=cfg.dino_layers, output_dinov2=cfg.output_dinov2)
     
@@ -25,7 +29,15 @@ class DROG(nn.Module):
                 param.requires_grad = False       
    
 
-        state_dict = torch.load(cfg.dino_pretrain) 
+        dino_pretrain = ensure_pretrained(
+            cfg.dino_pretrain, "dinov2-vitb14-reg4"
+        )
+        try:
+            state_dict = torch.load(
+                str(dino_pretrain), map_location="cpu", weights_only=True
+            )
+        except TypeError:
+            state_dict = torch.load(str(dino_pretrain), map_location="cpu")
         if cfg.dino_name=='dino-base':
             self.dinov2 = vit_base(
                 patch_size=14,
@@ -87,8 +99,6 @@ class DROG(nn.Module):
         fq = fq.reshape(b, c, h, w)
 
         # b, 1, 104, 104
-        pred = self.proj(fq, state)
-
         if self.use_grasp_masks:
             
             # b, 1, 104, 104

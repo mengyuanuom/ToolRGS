@@ -1,0 +1,19 @@
+# Install a CUDA-enabled PyTorch and matching torchvision build first. The
+# exact wheel depends on the NVIDIA driver/CUDA runtime, so it is not pinned.
+ftfy==6.1.1
+fvcore==0.1.5.post20221221
+lmdb==1.4.1
+loguru==0.7.0
+matplotlib==3.7.1
+numpy==1.24.3
+opencv-python-headless==4.8.1.78
+Pillow==9.5.0
+pyarrow==10.0.0
+pycocotools==2.0.6
+PyYAML==6.0
+regex==2023.5.5
+scikit-image==0.20.0
+scipy==1.9.1
+shapely==2.0.1
+tqdm==4.65.0
+fvcore==0.1.5.post20221221

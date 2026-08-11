@@ -7,6 +7,7 @@ DATA:
   val_split: unseen
   offset_r: 20
   offset_sigma:
+  grasp_size_factor: 300
 MODEL:
   architecture: drogoff
 TRAIN:
@@ -45,8 +46,8 @@ TRAIN:
   # Per-GPU loader profile for two RTX 3090s (8 workers total in training).
   workers: 4
   workers_val: 2
-  epochs: 65
-  milestones: [35,55]
+  epochs: 36
+  milestones: [30]
   start_epoch: 0
   batch_size: 8  # per-GPU training batch; global batch is 16 on two GPUs
   batch_size_val: 4  # per-GPU validation batch
@@ -60,8 +61,13 @@ TRAIN:
   # Resume & Save
   exp_name: drogoff_vcot
   offset_loss_weight: 1.0
+  predict_grasp_short_side: True
+  short_side_loss_weight: 1.0
   output_folder: exp/vcot
   save_freq: 5
+  val_freq: 1
+  val_start_epoch: 11
+  save_epochs: [5, 10]
   weight:  # path to initial weight (default: none)
   resume: # path to latest checkpoint (default: none)
   evaluate: True 
@@ -75,6 +81,9 @@ Distributed:
 
 TEST:
   test_split: unseen
+  grasp_topk: [1, 5]
+  grasp_size_activation: auto
+  restore_grasp_size_scale: True
   # Re-read angle/width maps at the center refined by the offset head.
   # Set False to reproduce the legacy center-only decoder for ablation.
   offset_resample_geometry: True

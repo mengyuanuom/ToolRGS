@@ -7,6 +7,7 @@ DATA:
   val_split: unseen
   offset_r: 20
   offset_sigma:
+  grasp_size_factor: 300
 MODEL:
   architecture: crog
 TRAIN:
@@ -29,8 +30,8 @@ TRAIN:
   # Training Setting
   workers: 8  # per process; 16 workers total with two GPUs
   workers_val: 4
-  epochs: 70
-  milestones: [55, 65]
+  epochs: 36
+  milestones: [30]
   start_epoch: 0
   batch_size: 8  # per GPU; global batch size 16 with two GPUs
   batch_size_val: 8
@@ -45,6 +46,9 @@ TRAIN:
   exp_name: crog_vcot
   output_folder: exp/vcot
   save_freq: 5
+  val_freq: 1
+  val_start_epoch: 11
+  save_epochs: [5, 10]
   weight:
   resume:
   evaluate: True  # evaluate on validation set, extra gpu memory needed and small batch_size_val is recommend
@@ -52,6 +56,8 @@ TRAIN:
   use_contrastive: True
   use_pretrained_clip: True
   use_grasp_masks: True
+  predict_grasp_short_side: True
+  short_side_loss_weight: 1.0
 Distributed:
   dist_url: env://
   dist_backend: 'nccl'
@@ -60,4 +66,7 @@ Distributed:
   rank: 0
 TEST:
   test_split: unseen
-  visualize: True
+  grasp_topk: [1, 5]
+  grasp_size_activation: auto
+  restore_grasp_size_scale: True
+  visualize: False

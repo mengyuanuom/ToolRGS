@@ -24,6 +24,7 @@ from toolrgs.engine.val_loop import GraspValLoop  # noqa: F401 - registers loop
 from toolrgs.models.base import model_requires_depth
 from toolrgs.registry import LOOPS, RUNNERS
 from utils.misc import init_random_seed, set_random_seed, setup_logger, worker_init_fn
+from utils.pretrained import ensure_pretrained
 
 
 def _clean_state_dict(state):
@@ -52,10 +53,17 @@ def _checked_file(value, label):
 
 
 def _validate_configured_files(cfg):
-    for key in ("clip_pretrain", "dino_pretrain", "depth_pretrain"):
+    for key in (
+        "clip_pretrain", "dino_pretrain", "depth_pretrain", "mamba_pretrain"
+    ):
         value = getattr(cfg, key, None)
         if value:
-            setattr(cfg, key, _checked_file(value, key))
+            text = str(value)
+            if text.startswith(("http://", "https://")):
+                raise ValueError(
+                    f"Configured {key} must be a local destination path, not a URL: {text}"
+                )
+            setattr(cfg, key, str(ensure_pretrained(text)))
     for key in ("weight", "resume"):
         value = getattr(cfg, key, None)
         if value:
@@ -79,6 +87,7 @@ class CUDAGraspRunner:
         self.train_sampler = None
         self.best_iou = 0.0
         self.best_j = 0.0
+        self.best_j5 = 0.0
         self._is_setup = False
         hooks = getattr(cfg, "runner_hooks", None) or (
             {"type": "logger"},
@@ -255,6 +264,7 @@ class CUDAGraspRunner:
             cfg.start_epoch = int(checkpoint["epoch"])
             self.best_iou = float(checkpoint.get("best_iou", 0.0))
             self.best_j = float(checkpoint.get("best_j_index", 0.0))
+            self.best_j5 = float(checkpoint.get("best_j5_index", 0.0))
             logger.info("Resumed experiment from epoch {}", cfg.start_epoch)
 
         train_loop_class = LOOPS.require(getattr(cfg, "train_loop", "grasp_train"))
@@ -287,10 +297,20 @@ class CUDAGraspRunner:
         precision = validation.get("precision", {})
         j_index = list(validation.get("j_index", []))
         j_at_one = float(j_index[0]) if j_index else 0.0
+        j_at_five = float(j_index[1]) if len(j_index) > 1 else j_at_one
+        has_validation = bool(validation)
         improved_iou = iou >= self.best_iou
         improved_j = j_at_one >= self.best_j
-        self.best_iou = max(self.best_iou, iou)
-        self.best_j = max(self.best_j, j_at_one)
+        improved_j5 = j_at_five >= self.best_j5
+        if has_validation:
+            self.best_iou = max(self.best_iou, iou)
+            self.best_j = max(self.best_j, j_at_one)
+            self.best_j5 = max(self.best_j5, j_at_five)
+
+        unwrapped = getattr(self.model, "module", self.model)
+        size_activation = getattr(
+            unwrapped, "grasp_size_loss_activation", None
+        )
 
         Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
         last_path = Path(cfg.output_dir) / "last_model.pth"
@@ -299,6 +319,8 @@ class CUDAGraspRunner:
                 "epoch": int(epoch),
                 "best_iou": self.best_iou,
                 "best_j_index": self.best_j,
+                "best_j5_index": self.best_j5,
+                "grasp_size_activation": size_activation,
                 "state_dict": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "scheduler": self.scheduler.state_dict(),
@@ -307,16 +329,26 @@ class CUDAGraspRunner:
                 "meta": {
                     "architecture": str(cfg.architecture),
                     "config": getattr(cfg, "filename", None),
+                    "predicts_grasp_short_side": bool(
+                        getattr(unwrapped, "predicts_grasp_short_side", False)
+                    ),
+                    "supports_offset": bool(
+                        getattr(unwrapped, "supports_offset", False)
+                    ),
                 },
             },
             last_path,
         )
-        if improved_iou:
+        if has_validation and improved_iou:
             shutil.copyfile(last_path, Path(cfg.output_dir) / "best_iou_model.pth")
-        if improved_j:
+        if has_validation and improved_j:
             shutil.copyfile(last_path, Path(cfg.output_dir) / "best_jindex_model.pth")
+            shutil.copyfile(last_path, Path(cfg.output_dir) / "best_j1_model.pth")
+        if has_validation and improved_j5:
+            shutil.copyfile(last_path, Path(cfg.output_dir) / "best_j5_model.pth")
         save_freq = int(getattr(cfg, "save_freq", 0) or 0)
-        if save_freq and int(epoch) % save_freq == 0:
+        save_epochs = {int(value) for value in getattr(cfg, "save_epochs", ())}
+        if (save_freq and int(epoch) % save_freq == 0) or int(epoch) in save_epochs:
             shutil.copyfile(last_path, Path(cfg.output_dir) / f"epoch_{epoch}.pth")
 
     def train(self):
@@ -334,14 +366,25 @@ class CUDAGraspRunner:
                     self.train_loader.dataset.set_epoch(epoch)
                 self.hooks.call("before_epoch", self, self.state)
                 train_logs = self.train_loop.run_epoch(epoch)
-                iou, precision, j_index = self.val_loop.run_epoch(epoch)
-                self.state.logs = {
-                    "train": train_logs,
-                    "validation": {
+                val_start = int(getattr(cfg, "val_start_epoch", 1))
+                val_freq = max(1, int(getattr(cfg, "val_freq", 1)))
+                should_validate = (
+                    bool(getattr(cfg, "evaluate", True))
+                    and epoch >= val_start
+                    and (epoch - val_start) % val_freq == 0
+                )
+                if should_validate:
+                    iou, precision, j_index = self.val_loop.run_epoch(epoch)
+                    validation_logs = {
                         "iou": iou,
                         "precision": precision,
                         "j_index": j_index,
-                    },
+                    }
+                else:
+                    validation_logs = {}
+                self.state.logs = {
+                    "train": train_logs,
+                    "validation": validation_logs,
                 }
                 self.scheduler.step()
                 self.hooks.call("after_epoch", self, self.state)

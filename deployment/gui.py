@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 
 from .inference import GraspPrediction, ToolRGSInference
+from .config import activate_model_profile
 from .detector import build_detector
 from .audio import build_audio_input
 from .robot import GraspCommand, LegacyTCPGraspClient, build_robot_client, semantic_depth
@@ -23,6 +24,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         from PyQt5.QtWidgets import (
             QApplication,
             QCheckBox,
+            QComboBox,
             QGridLayout,
             QHBoxLayout,
             QLabel,
@@ -60,6 +62,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.last_detection_at = 0.0
             self.last_send_at = 0.0
             self.inference_busy = False
+            self.inference = inference
+            self.active_model = str(config.get("_active_model", "model"))
             self.audio_results = queue.Queue()
             self.robot: Optional[LegacyTCPGraspClient] = None
             self.setWindowTitle(str(gui_cfg["title"]))
@@ -74,6 +78,18 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             layout = QVBoxLayout(root)
 
             prompt_row = QHBoxLayout()
+            profiles = config.get("_model_profiles", {})
+            if profiles:
+                prompt_row.addWidget(QLabel("Model:"))
+                self.model_selector = QComboBox()
+                self.model_selector.addItems(list(profiles))
+                self.model_selector.setCurrentText(self.active_model)
+                self.model_selector.currentTextChanged.connect(
+                    self._change_model
+                )
+                prompt_row.addWidget(self.model_selector)
+            else:
+                self.model_selector = None
             prompt_row.addWidget(QLabel("Language instruction:"))
             self.prompt = QLineEdit(str(config["model"]["prompt"]))
             self.prompt.returnPressed.connect(self._predict_now)
@@ -103,7 +119,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             maps_page = QWidget()
             maps_layout = QGridLayout(maps_page)
             self.map_labels = {}
-            for index, name in enumerate(("segmentation", "quality", "angle", "width")):
+            for index, name in enumerate(
+                ("segmentation", "quality", "angle", "width", "short_side")
+            ):
                 label = self._image_label(name)
                 maps_layout.addWidget(label, index // 2, index % 2)
                 self.map_labels[name] = label
@@ -134,6 +152,29 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             robot_row.addWidget(self.status, 1)
             layout.addLayout(robot_row)
             self.setCentralWidget(root)
+
+        def _change_model(self, name: str) -> None:
+            name = str(name)
+            if not name or name == self.active_model or self.inference_busy:
+                return
+            self.inference_busy = True
+            self.status.setText(f"Loading model profile: {name} ...")
+            QApplication.processEvents()
+            try:
+                selected = activate_model_profile(config, name)
+                self.inference = ToolRGSInference(selected)
+                self.active_model = name
+                self.prompt.setText(str(selected["model"].get("prompt", "")))
+                self.prediction = None
+                self.status.setText(f"Loaded model profile: {name}")
+            except Exception as exc:
+                if self.model_selector is not None:
+                    self.model_selector.blockSignals(True)
+                    self.model_selector.setCurrentText(self.active_model)
+                    self.model_selector.blockSignals(False)
+                self._error("Model loading error", exc)
+            finally:
+                self.inference_busy = False
 
         @staticmethod
         def _image_label(text: str):
@@ -223,13 +264,20 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.predict_button.setEnabled(False)
             QApplication.processEvents()
             try:
-                self.prediction = inference.predict(self.current_frame.copy(), self.prompt.text())
+                self.prediction = self.inference.predict(
+                    self.current_frame.copy(), self.prompt.text()
+                )
                 self.last_inference_at = time.monotonic()
                 self.live_label.setPixmap(
                     self._pixmap(self.prediction.annotated_bgr, self.live_label)
                 )
-                for name, image in inference.visualization_maps(self.prediction).items():
-                    self.map_labels[name].setPixmap(self._pixmap(image, self.map_labels[name]))
+                for name, image in self.inference.visualization_maps(
+                    self.prediction
+                ).items():
+                    if name in self.map_labels:
+                        self.map_labels[name].setPixmap(
+                            self._pixmap(image, self.map_labels[name])
+                        )
                 if self.prediction.grasps:
                     grasp = self.prediction.grasps[0]
                     self.status.setText(

@@ -173,6 +173,7 @@ def resample_grasp_geometry(
     cosine,
     width,
     width_factor=100.0,
+    short_side=None,
 ):
     """Resample angle and width maps at already-refined grasp centers.
 
@@ -185,10 +186,16 @@ def resample_grasp_geometry(
     sine = np.asarray(sine, dtype=np.float32).squeeze()
     cosine = np.asarray(cosine, dtype=np.float32).squeeze()
     width = np.asarray(width, dtype=np.float32).squeeze()
+    short_side = (
+        None if short_side is None
+        else np.asarray(short_side, dtype=np.float32).squeeze()
+    )
     if not (sine.ndim == cosine.ndim == width.ndim == 2):
         raise ValueError("sine/cosine/width maps must be 2-D")
     if not (sine.shape == cosine.shape == width.shape):
         raise ValueError("sine/cosine/width maps must share one shape")
+    if short_side is not None and short_side.shape != width.shape:
+        raise ValueError("short-side map must share the geometry map shape")
 
     refined = []
     for rectangle in rectangles:
@@ -196,6 +203,14 @@ def resample_grasp_geometry(
         sampled_sine = _sample_bilinear(sine, center_x, center_y)
         sampled_cosine = _sample_bilinear(cosine, center_x, center_y)
         sampled_width = _sample_bilinear(width, center_x, center_y)
+        sampled_height = (
+            height if short_side is None
+            else max(
+                1.0,
+                _sample_bilinear(short_side, center_x, center_y)
+                * float(width_factor),
+            )
+        )
         angle_degrees = float(
             0.5 * np.arctan2(sampled_sine, sampled_cosine) / np.pi * 180.0
         )
@@ -205,7 +220,7 @@ def resample_grasp_geometry(
                     center_x,
                     center_y,
                     max(1.0, sampled_width * float(width_factor)),
-                    height,
+                    sampled_height,
                     angle_degrees,
                 ],
                 dtype=np.float32,

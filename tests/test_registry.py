@@ -65,6 +65,36 @@ class GraspStructureTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             GraspModelResult.from_legacy(("seg", "qua"))
 
+    def test_model_aware_short_side_and_offset_contracts(self):
+        class ShortSideModel:
+            predicts_grasp_short_side = True
+
+        class OffsetModel:
+            supports_offset = True
+
+        class DualModel:
+            predicts_grasp_short_side = True
+            supports_offset = True
+
+        base = ("seg", "qua", "sin", "cos", "wid")
+        short = GraspModelResult.from_legacy(
+            (*base, "short"), model=ShortSideModel()
+        ).predictions
+        self.assertEqual(short.short_side, "short")
+        self.assertIsNone(short.offset)
+
+        offset = GraspModelResult.from_legacy(
+            (*base, "offset"), model=OffsetModel()
+        ).predictions
+        self.assertIsNone(offset.short_side)
+        self.assertEqual(offset.offset, "offset")
+
+        dual = GraspModelResult.from_legacy(
+            (*base, "short", "offset"), model=DualModel()
+        ).predictions
+        self.assertEqual(dual.short_side, "short")
+        self.assertEqual(dual.offset, "offset")
+
 
 class DeploymentRegistryTest(unittest.TestCase):
     def test_hardware_components_are_registered_without_opening_hardware(self):

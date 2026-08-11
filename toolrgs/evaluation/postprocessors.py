@@ -48,13 +48,20 @@ class DenseGraspPostProcessor:
         width,
         num_grasps: Optional[int] = None,
         spatial_scale: float = 1.0,
+        short_side=None,
     ):
         quality = np.asarray(quality, dtype=np.float32)
         sine = np.asarray(sine, dtype=np.float32)
         cosine = np.asarray(cosine, dtype=np.float32)
         width = np.asarray(width, dtype=np.float32)
+        short_side = (
+            None if short_side is None
+            else np.asarray(short_side, dtype=np.float32)
+        )
         if not (quality.shape == sine.shape == cosine.shape == width.shape):
             raise ValueError("quality/sine/cosine/width maps must share one shape")
+        if short_side is not None and short_side.shape != quality.shape:
+            raise ValueError("short-side map must share the dense grasp map shape")
         if quality.ndim != 2:
             raise ValueError(f"Dense grasp maps must be 2-D, got {quality.shape}")
         count = self.num_grasps if num_grasps is None else int(num_grasps)
@@ -71,7 +78,16 @@ class DenseGraspPostProcessor:
                 x=float(column),
                 y=float(row),
                 width=max(1.0, float(width[row, column]) * self.width_factor * scale),
-                height=self.grasp_height * scale,
+                height=(
+                    self.grasp_height * scale
+                    if short_side is None
+                    else max(
+                        1.0,
+                        float(short_side[row, column])
+                        * self.width_factor
+                        * scale,
+                    )
+                ),
                 angle_degrees=float(angle[row, column] / np.pi * 180.0),
                 score=float(quality[row, column]),
                 row=int(row),

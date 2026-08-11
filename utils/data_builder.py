@@ -5,7 +5,7 @@ from collections.abc import Mapping
 
 from toolrgs.registry import DATASETS, normalise_component_name
 
-from utils.dataset import GraspToolDataset
+from utils.grasp_tool_dataset import GraspToolDataset
 from utils.ocid_vlg_dataset import OCIDVLGDataset
 from utils.vcot_dataset import VCoTDataset
 
@@ -55,12 +55,16 @@ def build_dataset(cfg, split, with_offset=False):
         split=split,
         word_length=cfg.word_len,
         with_offset=with_offset,
+        with_short_side=bool(
+            getattr(cfg, "predict_grasp_short_side", False)
+        ),
         offset_radius=getattr(cfg, "offset_r", 20.0),
         offset_sigma=getattr(cfg, "offset_sigma", None),
         dynamic_train_prompts=getattr(cfg, "dynamic_train_prompts", True),
         dynamic_prompt_seed=getattr(cfg, "dynamic_prompt_seed", 2025),
         split_root=getattr(cfg, "split_root", None),
         prompt_template=getattr(cfg, "prompt_template", "Grasp the {object_name}"),
+        grasp_size_factor=float(getattr(cfg, "grasp_size_factor", 100.0)),
         version=getattr(cfg, "version", "multiple"),
         with_depth=getattr(cfg, "with_depth", True),
     )

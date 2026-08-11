@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from deployment.config import load_deployment_config, resolve_repo_path
+from utils.pretrained import ARTIFACTS
 
 
 def parse_args():
@@ -65,11 +66,18 @@ def main() -> int:
     model_cfg = cfg["model"]
     experiment = resolve_repo_path(model_cfg["config"], cfg["_repo_root"])
     checkpoint = resolve_repo_path(model_cfg["checkpoint"], cfg["_repo_root"])
-    for label, path in (("Experiment config", experiment), ("Checkpoint", checkpoint)):
-        if path is not None and path.is_file():
-            report.ok(f"{label}: {path}")
-        else:
-            report.fail(f"{label} not found: {path}")
+    if experiment is not None and experiment.is_file():
+        report.ok(f"Experiment config: {experiment}")
+    else:
+        report.fail(f"Experiment config not found: {experiment}")
+    if checkpoint is not None and checkpoint.is_file():
+        report.ok(f"Checkpoint: {checkpoint}")
+    elif model_cfg.get("checkpoint_url"):
+        report.warn(
+            f"Checkpoint is missing and will be downloaded on model build: {checkpoint}"
+        )
+    else:
+        report.fail(f"Checkpoint not found: {checkpoint}")
 
     if experiment is not None and experiment.is_file():
         with experiment.open("r", encoding="utf-8") as stream:
@@ -87,6 +95,10 @@ def main() -> int:
             path = resolve_repo_path(value, cfg["_repo_root"])
             if path is not None and path.is_file():
                 report.ok(f"{key}: {path}")
+            elif path is not None and path.name in {
+                artifact.filename for artifact in ARTIFACTS.values()
+            }:
+                report.warn(f"{key} will be downloaded on first model build: {path}")
             else:
                 report.fail(f"{key} not found: {path}")
 

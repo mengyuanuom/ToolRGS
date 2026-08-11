@@ -11,6 +11,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "model": {
         "config": "config/grasp_tools/drogoff.yaml",
         "checkpoint": "exp/grasp_tools/drogoff_grasp_tools/best_jindex_model.pth",
+        "checkpoint_url": "",
+        "checkpoint_sha256": "",
         "device": "cuda:0",
         "prompt": "the tool",
         "mask_threshold": 0.35,
@@ -121,8 +123,38 @@ def load_deployment_config(
     if not isinstance(raw, Mapping):
         raise ValueError(f"Deployment config must contain a YAML mapping: {path}")
     cfg = _deep_merge(DEFAULT_CONFIG, raw)
+    profiles = raw.get("model_profiles", {})
+    if profiles:
+        if not isinstance(profiles, Mapping):
+            raise TypeError("model_profiles must be a YAML mapping")
+        resolved_profiles = {
+            str(name): _deep_merge(DEFAULT_CONFIG["model"], profile)
+            for name, profile in profiles.items()
+        }
+        active = str(raw.get("active_model") or next(iter(resolved_profiles)))
+        if active not in resolved_profiles:
+            raise KeyError(
+                f"active_model {active!r} is not present in model_profiles"
+            )
+        cfg["model"] = deepcopy(resolved_profiles[active])
+        cfg["_model_profiles"] = resolved_profiles
+        cfg["_active_model"] = active
+    else:
+        cfg["_model_profiles"] = {}
+        cfg["_active_model"] = "model"
     cfg["_config_path"] = str(path)
     cfg["_repo_root"] = str(
         Path(repo_root).resolve() if repo_root else repository_root()
     )
     return cfg
+
+
+def activate_model_profile(config: Mapping[str, Any], name: str) -> Dict[str, Any]:
+    """Return a deployment config selecting one already validated model profile."""
+    profiles = config.get("_model_profiles", {})
+    if name not in profiles:
+        raise KeyError(f"Unknown deployment model profile: {name}")
+    selected = deepcopy(dict(config))
+    selected["model"] = deepcopy(profiles[name])
+    selected["_active_model"] = str(name)
+    return selected
