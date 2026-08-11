@@ -48,19 +48,67 @@ expanding the ToolRGS summary table with a second metric schema.
 
 ## VCoT-GraspSet
 
-Source: CROG-NPU evaluation commit `3d9afef`. Protocol: top-1 rotated IoU at
-least `0.25` and 180-degree-periodic angle error at most `30` degrees. Full
-details are in [`experiments/vcot_20260810`](experiments/vcot_20260810/README.md).
+### Evaluation protocol and provenance
 
-| Model | Config | Split | Checkpoint | Seg. IoU | GraspSR | Eval commit | Notes |
-| --- | --- | --- | --- | ---: | ---: | --- | --- |
-| DROG-OFF | `config/vcot/drogoff.yaml` | seen | epoch-20 best | 88.98 | 80.97 | `3d9afef` | Matched baseline decoding. |
-| DROG-OFF | `config/vcot/drogoff.yaml` | unseen | epoch-20 best | 60.96 | 57.30 | `3d9afef` | Matched baseline decoding. |
-| DROG-OFF | `config/vcot/drogoff.yaml` | seen | epoch-20 best | 88.98 | 80.77 | `3d9afef` | Calibrated decoding. |
-| DROG-OFF | `config/vcot/drogoff.yaml` | unseen | epoch-20 best | 60.96 | **58.71** | `3d9afef` | Calibrated decoding; selected unseen result. |
+All values in this section are top-1 grasp success rates (`GraspSR`, percent).
+A prediction succeeds when its rotated rectangle has IoU greater than `0.25`
+with at least one ground-truth grasp and its 180-degree-periodic orientation
+error is at most `30` degrees. ToolRGS uses `IoU >= 0.25`; exact-boundary hits
+are not expected to change the rounded scores. `Avg.` is the harmonic mean of
+Seen and Unseen rather than their arithmetic mean:
 
-The matched Seen/Unseen harmonic mean is `67.11`; calibrated decoding gives
-`68.00`.
+```text
+Avg. = 2 * Seen * Unseen / (Seen + Unseen)
+```
+
+The published rows below come from Tables III and IV of the
+[VCoT-Grasp paper](https://arxiv.org/html/2510.05827v1#S4.SS1). The DROG-OFF
+rows are reproduced by ToolRGS/CROG-NPU at evaluation commit `3d9afef` on the
+same public Seen (3,000 samples) and Unseen (1,487 samples) splits. Detailed
+logs, decoder ablations and the paper's real-robot results are retained in
+[`experiments/vcot_20260810`](experiments/vcot_20260810/README.md).
+
+### Unified published and reproduced comparison
+
+The table is ordered by Seen/Unseen harmonic mean. Paper averages are retained
+as published; the two DROG-OFF averages are computed from the displayed rounded
+split scores using the same formula.
+
+| Rank | Origin | Method | Variant / profile | Seen | Unseen | Avg. (harmonic mean) |
+| ---: | --- | --- | --- | ---: | ---: | ---: |
+| 1 | VCoT-Grasp paper | VCoT-Grasp | LM head, pretrained position tokens | **83.60** | **58.98** | **69.16** |
+| 2 | VCoT-Grasp paper | VCoT-Grasp | LM head, new position tokens | 82.89 | 58.80 | 68.80 |
+| 3 | ToolRGS reproduced | **DROG-OFF** | Calibrated decoding | 80.77 | 58.71 | 68.00 |
+| 4 | ToolRGS reproduced | **DROG-OFF** | Matched baseline decoding | 80.97 | 57.30 | 67.11 |
+| 5 | VCoT-Grasp paper | VCoT-Grasp | MLP head | 73.37 | 52.25 | 61.03 |
+| 6 | VCoT-Grasp paper | VCoT without visual CoT | MLP head | 67.60 | 49.36 | 57.06 |
+| 7 | VCoT-Grasp paper | RT-Grasp | PaliGemma baseline | 58.93 | 44.79 | 50.80 |
+| 8 | VCoT-Grasp paper | VCoT-Grasp | Diffusion head | 57.50 | 41.29 | 48.07 |
+| 9 | VCoT-Grasp paper | GR-ConvNet + CLIP | Language-conditioned baseline | 70.80 | 33.29 | 45.29 |
+| 10 | VCoT-Grasp paper | GG-CNN + CLIP | Language-conditioned baseline | 56.33 | 17.89 | 27.16 |
+| 11 | VCoT-Grasp paper | CLIP-Fusion | Det-Seg proposal backbone | 52.40 | 13.51 | 21.48 |
+| 12 | VCoT-Grasp paper | LGD | Published baseline | 38.67 | 13.42 | 19.93 |
+
+The calibrated DROG-OFF profile is `6.97` points above the paper's VCoT MLP
+head in harmonic mean and exceeds all published non-LM-head baselines. It is
+`1.16` points below the best published LM-head result (`68.00` versus `69.16`).
+This is a score-level comparison under the same public split and success
+criterion, not an equal-training-budget claim: the paper trains its models for
+three epochs at 224-pixel resolution, whereas this DROG-OFF checkpoint was
+selected at epoch 20 and uses 448-pixel inputs.
+
+### DROG-OFF reproduction details
+
+| Profile | Config | Checkpoint | Seen Seg. IoU | Seen GraspSR | Unseen Seg. IoU | Unseen GraspSR | Avg. | Eval commit |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Matched baseline | `config/vcot/drogoff.yaml` | epoch-20 best | 88.98 | 80.97 | 60.96 | 57.30 | 67.11 | `3d9afef` |
+| Calibrated decoding | `config/vcot/drogoff.yaml` | epoch-20 best | 88.98 | 80.77 | 60.96 | **58.71** | **68.00** | `3d9afef` |
+
+Both profiles use sigmoid grasp-size decoding with factor `300`, offsets
+enabled and segmentation-centre filtering disabled. The calibrated profile
+only disables offset-geometry resampling and inverse image-scale restoration;
+it is recorded separately because this is checkpoint-specific inference
+calibration, not a retrained model.
 
 ## Grasp-Tools
 
