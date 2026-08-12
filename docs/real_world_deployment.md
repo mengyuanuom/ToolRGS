@@ -56,10 +56,11 @@ weights/gelsight_best.pt                # only when gelsight.enabled=true
 ```
 
 The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
-The verified 3090 DROG-OFF release URL will be recorded in that profile and in
-the performance summary once the server checkpoint has been recovered and its
-SHA-256 has been checked. Do not attach a checkpoint merely because its
-filename looks plausible: it must be tied to the reported V2 strict-IoU run.
+The DROG-OFF profile downloads the formally evaluated Grasp-Tools V2 checkpoint
+from the [ToolRGS weight release](https://github.com/mengyuanuom/ToolRGS/releases/tag/grasp-tools-v2-weights).
+Its size is `952769586` bytes and its SHA-256 is
+`7fcef57dd968a381d61bab7ef35e5e3906149bcec9f4fdbb6658da23659e73d5`.
+ToolRGS validates that digest before loading the checkpoint.
 
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
 command can be run from any working directory.

@@ -132,6 +132,10 @@ The unusual numbers embedded in the DROG-OFF checkpoint filename are historical
 training-time metrics; the values above come from a separate completed strict
 Test run using that exact file. DROG-OFF has not yet been re-evaluated with the
 additional `15`-degree counter, so those two cells remain intentionally blank.
+The exact evaluated checkpoint is published in the
+[Grasp-Tools V2 weight release](https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/best_epoch_011_J1_29.45_J5_34.67.pth)
+with SHA-256
+`7fcef57dd968a381d61bab7ef35e5e3906149bcec9f4fdbb6658da23659e73d5`.
 
 | Model | Pr@50 | Pr@60 | Pr@70 | Pr@80 | Pr@90 |
 | --- | ---: | ---: | ---: | ---: | ---: |

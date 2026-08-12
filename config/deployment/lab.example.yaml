@@ -5,9 +5,8 @@ model_profiles:
   drogoff-grasptools-v2:
     config: config/grasp_tools/drogoff_v2.yaml
     checkpoint: weights/drogoff_grasp_tools_v2_iou50_best.pth
-    # Filled with the verified GitHub Release asset after the 3090 upload.
-    checkpoint_url: ""
-    checkpoint_sha256: ""
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/best_epoch_011_J1_29.45_J5_34.67.pth
+    checkpoint_sha256: 7fcef57dd968a381d61bab7ef35e5e3906149bcec9f4fdbb6658da23659e73d5
     device: cuda:0
     prompt: the screwdriver
     grasp_size_activation: auto
