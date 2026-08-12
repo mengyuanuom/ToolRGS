@@ -65,7 +65,8 @@ class ConfigInheritanceTest(unittest.TestCase):
         cfg = load_cfg_from_cfg_file(
             ROOT / "config" / "deployment" / "lab.example.yaml"
         )
-        self.assertEqual(cfg.camera["type"], "opencv")
+        self.assertEqual(cfg.camera["type"], "realsense")
+        self.assertEqual((cfg.camera["width"], cfg.camera["height"]), (1280, 720))
         self.assertEqual(cfg.robot["type"], "legacy_tcp")
         self.assertNotIn("type", cfg)
 

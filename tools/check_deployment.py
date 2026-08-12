@@ -24,6 +24,10 @@ def parse_args():
     parser.add_argument(
         "--build-model", action="store_true", help="Load all model weights on the configured device"
     )
+    parser.add_argument(
+        "--probe-gelsight", action="store_true",
+        help="Load the GelSight classifier and classify one tactile frame",
+    )
     return parser.parse_args()
 
 
@@ -121,6 +125,16 @@ def main() -> int:
     if cfg.get("audio", {}).get("enabled"):
         require_module(report, "sounddevice")
         require_module(report, "whisper", "openai-whisper")
+    gelsight_cfg = cfg.get("gelsight", {})
+    if gelsight_cfg.get("enabled"):
+        require_module(report, "torchvision")
+        gelsight_checkpoint = resolve_repo_path(
+            gelsight_cfg.get("checkpoint"), cfg["_repo_root"]
+        )
+        if gelsight_checkpoint is not None and gelsight_checkpoint.is_file():
+            report.ok(f"GelSight checkpoint: {gelsight_checkpoint}")
+        else:
+            report.fail(f"GelSight checkpoint not found: {gelsight_checkpoint}")
 
     robot_cfg = cfg["robot"]
     if robot_cfg.get("enabled"):
@@ -135,6 +149,28 @@ def main() -> int:
         bounds = robot_cfg.get("limits", {}).get(field)
         if not isinstance(bounds, list) or len(bounds) != 2 or bounds[0] >= bounds[1]:
             report.fail(f"robot.limits.{field} must be an increasing [minimum, maximum] pair")
+    if str(robot_cfg.get("width_policy", {}).get("type", "model")) not in {
+        "model", "mask_span"
+    }:
+        report.fail("robot.width_policy.type must be model or mask_span")
+    theta_normalization = str(
+        robot_cfg.get("theta_policy", {}).get("normalization", "signed_90")
+    )
+    if theta_normalization not in {"signed_90", "zero_180", "zero_360", "none"}:
+        report.fail(
+            "robot.theta_policy.normalization must be signed_90, zero_180, "
+            "zero_360, or none"
+        )
+    depth_cfg = robot_cfg.get("depth_policy", {})
+    if str(depth_cfg.get("multiple_matches", "max")) not in {"max", "min", "first"}:
+        report.fail("robot.depth_policy.multiple_matches must be max, min, or first")
+    invalid_tiers = {
+        str(name): tier
+        for name, tier in dict(depth_cfg.get("class_tiers", {})).items()
+        if str(tier).upper() not in {"L1", "L2", "L3"}
+    }
+    if invalid_tiers:
+        report.fail(f"Invalid robot depth tiers: {invalid_tiers}")
 
     if args.probe_camera and report.failures == 0:
         from deployment.sources import build_source
@@ -146,6 +182,15 @@ def main() -> int:
             if not ok or frame is None:
                 raise RuntimeError("camera returned no frame")
             report.ok(f"Camera frame: shape={frame.shape}, dtype={frame.dtype}")
+            expected = (
+                int(cfg["camera"].get("height", 0)),
+                int(cfg["camera"].get("width", 0)),
+            )
+            if all(expected) and tuple(frame.shape[:2]) != expected:
+                report.fail(
+                    f"Camera returned {frame.shape[1]}x{frame.shape[0]}, expected "
+                    f"{expected[1]}x{expected[0]}"
+                )
         except Exception as exc:
             report.fail(f"Camera probe failed: {exc}")
         finally:
@@ -160,6 +205,26 @@ def main() -> int:
             report.ok("Model and checkpoint loaded successfully")
         except Exception as exc:
             report.fail(f"Model build failed: {exc}")
+
+    if args.probe_gelsight and report.failures == 0:
+        if not gelsight_cfg.get("enabled"):
+            report.fail("--probe-gelsight requires gelsight.enabled: true")
+        else:
+            tactile = None
+            try:
+                from deployment.gelsight import build_gelsight
+
+                tactile = build_gelsight(gelsight_cfg, cfg["_repo_root"])
+                prediction = tactile.predict(int(gelsight_cfg.get("topk", 3)))
+                report.ok(
+                    f"GelSight frame/classification: {prediction.label} "
+                    f"({prediction.confidence:.3f})"
+                )
+            except Exception as exc:
+                report.fail(f"GelSight probe failed: {exc}")
+            finally:
+                if tactile is not None:
+                    tactile.close()
 
     print(f"\nPreflight completed with {report.failures} failure(s).")
     return 1 if report.failures else 0

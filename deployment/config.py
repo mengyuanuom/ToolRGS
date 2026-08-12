@@ -48,6 +48,22 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "auto_send_interval_s": 2.0,
         "default_depth": 0,
         "coordinate_space": "source",
+        "width_policy": {
+            "type": "model",
+            "step": 0.5,
+            "safety_margin": 30.0,
+            "maximum": None,
+            "exclude": ["tape", "cable"],
+        },
+        "theta_policy": {
+            "sign": 1.0,
+            "offset_degrees": 0.0,
+            "normalization": "signed_90",
+        },
+        "depth_policy": {
+            "multiple_matches": "max",
+            "class_tiers": {},
+        },
         "limits": {
             "x": [0, 1280],
             "y": [0, 720],
@@ -73,6 +89,25 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "sample_rate": 16000,
         "duration_s": 4.0,
         "language": "en",
+    },
+    "gelsight": {
+        "type": "classifier",
+        "enabled": False,
+        "checkpoint": "weights/gelsight_best.pt",
+        "device": "cuda:0",
+        "image_size": 320,
+        "confidence_threshold": 0.90,
+        "nothing_label": "Nothing",
+        "topk": 3,
+        "mean": [0.428, 0.524, 0.580],
+        "std": [0.134, 0.057, 0.118],
+        "camera": {
+            "type": "opencv",
+            "device": 1,
+            "width": 480,
+            "height": 480,
+            "fps": 30,
+        },
     },
     "gui": {
         "title": "ToolRGS Real-world Grasp Demo",

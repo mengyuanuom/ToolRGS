@@ -15,7 +15,7 @@ LOSSES          METRICS         POSTPROCESSORS
 RUNNERS         LOOPS           HOOKS
 OPTIM_WRAPPERS  PARAM_SCHEDULERS
 CAMERAS         ROBOT_CLIENTS   DETECTORS
-AUDIO_INPUTS
+AUDIO_INPUTS    TACTILE_INPUTS
 ```
 
 Names are case-insensitive and normalize spaces/hyphens to underscores. Both

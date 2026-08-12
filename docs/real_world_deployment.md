@@ -4,7 +4,9 @@ This deployment layer replaces the server CROG demo's hard-coded model, paths,
 camera pipeline, IP address, and automatic TCP sends with one YAML file. It
 supports every ToolRGS grasp architecture, OpenCV/video, Intel
 RealSense, shared-memory GStreamer, an optional MMDetection tab, and optional
-Whisper microphone input.
+Whisper microphone input. The deployed 22-class workflow is also available as
+optional components: GelSight classification, segmentation-mask span width,
+semantic depth tiers, and receiver-specific angle conversion.
 
 Supported RGB grasp models are CROG, CROGOFF, DROG, DROGOFF, MapleGrasp,
 GGCNN-CLIP, GR-ConvNet-CLIP, GraspMamba, and LGD. ETRG needs aligned depth and
@@ -33,6 +35,8 @@ sudo apt install python3-gi gir1.2-gstreamer-1.0 \
 Whisper also needs `ffmpeg`. Object detection is optional and needs an
 MMCV/MMDetection build compatible with the installed CUDA and PyTorch versions;
 it is intentionally not included in the base requirements.
+GelSight classification uses `torchvision`; install the torchvision build that
+matches the PyTorch/CUDA environment already used by ToolRGS.
 
 ## 2. Put weights in place
 
@@ -48,6 +52,7 @@ pretrain/ViT-B-16.pt
 pretrain/dinov2_vitb14_reg4_pretrain.pth
 exp/grasp_tools/drogoff_grasp_tools/best_jindex_model.pth
 weights/epoch_48_13.pth                 # only when detector.enabled=true
+weights/gelsight_best.pt                # only when gelsight.enabled=true
 ```
 
 The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
@@ -67,6 +72,9 @@ cp config/deployment/lab.example.yaml config/deployment/lab.yaml
 python tools/check_deployment.py --config config/deployment/lab.yaml
 python tools/check_deployment.py --config config/deployment/lab.yaml \
   --probe-camera --build-model
+# When GelSight is enabled and connected:
+python tools/check_deployment.py --config config/deployment/lab.yaml \
+  --probe-camera --probe-gelsight --build-model
 ```
 
 The preflight never connects to the robot and never sends a command. In the
@@ -83,6 +91,11 @@ legacy alias):
 - `gstreamer`: shared-memory or network pipeline ending in `appsink`. Start from
   `config/deployment/gstreamer.example.yaml` for the old CROG `shmsrc` layout.
 
+The physical lab profile requests a 1280x720 BGR color stream at 30 FPS. The
+model's 416/448 input canvas is independent: ToolRGS letterboxes the camera
+frame for inference and maps the selected grasp back to 1280x720 source pixels
+before robot transmission.
+
 ## 4. Dry-run the GUI
 
 Keep `robot.enabled: false` and run:
@@ -92,8 +105,10 @@ python deploy_gui.py --config config/deployment/lab.yaml
 ```
 
 Check the segmentation overlay, grasp rectangle, center, angle, and width before
-using a physical robot. The object detector and audio controls only appear when
-their respective `enabled` settings are true.
+using a physical robot. Object detector, audio, and GelSight controls only
+appear when their respective `enabled` settings are true. GelSight follows the
+historic checkpoint contract (`arch`, `classes`, and `model`/`state_dict`) and
+labels confidence below `confidence_threshold` as `Nothing`.
 
 ## 5. Receiver and coordinate contract
 
@@ -108,11 +123,29 @@ The sender emits one ASCII line per command:
 {x, y, theta, width, depth}\n
 ```
 
+`robot.type: legacy_tcp` opens a TCP socket to the configured `host` and
+`port` (the compatibility profile uses `192.168.38.10:3000`) and calls
+`sendall` with this exact newline-terminated payload. The GUI exposes Connect,
+Disconnect, Arm, and Send controls; a socket error closes the connection and
+requires an explicit reconnect. With `auto_send: true`, the same guarded socket
+path is rate-limited by `auto_send_interval_s`.
+
 - `x`, `y`: grasp center in the configured coordinate space.
 - `theta`: image-plane grasp angle in degrees.
 - `width`: gripper rectangle width in pixels.
 - `depth`: the old demo's semantic tier (`-1`, `0`, or `1`), **not a RealSense
   depth measurement**.
+
+The robot conversion rules are explicit in YAML:
+
+- `width_policy.type: model` sends the predicted grasp width.
+- `width_policy.type: mask_span` measures the segmentation span along the
+  grasp axis and adds `safety_margin` (30 pixels in the legacy experiment).
+  Tape and cable can be excluded without accidentally excluding tape measure.
+- `theta_policy` applies the receiver's sign, offset, and normalization. The
+  RealSense compatibility profile uses the deployed `theta + 180` convention.
+- `depth_policy.class_tiers` overrides individual entries in the 22-class
+  semantic-depth table when a particular robot setup uses a different tier.
 
 Set `robot.coordinate_space` to match the receiver calibration:
 
@@ -149,15 +182,13 @@ Automatic sending additionally requires `auto_send: true` and an armed GUI;
 `auto_send_interval_s` rate-limits it. Manual sending is recommended until the
 whole calibrated workspace has been tested.
 
-## Ported and intentionally excluded pieces
+## Ported components
 
 The reusable pieces from the local server snapshot are now modules: grasp GUI,
 shared-memory/direct camera access, optional 13-class detector, Whisper input,
-semantic depth tiers, and the legacy TCP sender. Absolute `/home/...` paths,
-fixed CUDA devices, Qt plugin paths, global `torch.load` monkey patches, and
-automatic every-50-frame sends were removed.
-
-The experimental GelSight scripts were not copied into the default deployment:
-their classifier weights and a stable sensor/label contract are absent from the
-snapshot. They can be added as an optional adapter once those artifacts and the
-intended GelSight task are provided, without changing the grasp/robot path.
+GelSight classifier/tab, 22-class semantic depth tiers, mask-derived opening
+width, receiver angle conversion, and the legacy TCP sender. All are selected
+through YAML and registered components. Absolute `/home/...` paths, fixed CUDA
+devices, Qt plugin paths, global `torch.load` monkey patches, and automatic
+every-50-frame sends were removed. Robot output still requires both the
+`--allow-robot` launch permission and explicit arming in the GUI.

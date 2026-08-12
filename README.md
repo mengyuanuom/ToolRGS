@@ -442,7 +442,11 @@ restarting the camera layer, understands fixed-height, predicted-short-side and
 offset heads, and can download a missing published checkpoint from
 `checkpoint_url`. It supports the RGB ToolRGS grasp architectures, OpenCV/video,
 RealSense, GStreamer shared memory, optional MMDetection and Whisper, and the
-legacy Kinova TCP command format. Start in dry-run mode:
+optional GelSight classifier used by the 22-class lab workflow. Mask-span
+gripper width, semantic depth tiers, receiver angle conversion, and the legacy
+Kinova TCP command format are configured in YAML. The direct RealSense profile
+uses a 1280x720 color stream and maps model predictions back to that source
+canvas before sending. Start in dry-run mode:
 
 ```bash
 cp config/deployment/lab.example.yaml config/deployment/lab.yaml
@@ -460,7 +464,7 @@ move the physical robot.
 
 ToolRGS now has MMDetection-style registries for models, datasets, transforms,
 losses, metrics, postprocessors, loops, hooks, cameras, robot clients,
-detectors, and audio inputs.
+detectors, audio inputs, and tactile inputs.
 Existing training configs and builders remain compatible while new components
 can be selected by `type` without extending central `if/elif` factories.
 

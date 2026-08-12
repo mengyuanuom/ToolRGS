@@ -100,9 +100,16 @@ class DeploymentRegistryTest(unittest.TestCase):
     def test_hardware_components_are_registered_without_opening_hardware(self):
         import deployment.audio  # noqa: F401
         import deployment.detector  # noqa: F401
+        import deployment.gelsight  # noqa: F401
         import deployment.sources  # noqa: F401
         from deployment.robot import build_robot_client
-        from toolrgs.registry import AUDIO_INPUTS, CAMERAS, DETECTORS, ROBOT_CLIENTS
+        from toolrgs.registry import (
+            AUDIO_INPUTS,
+            CAMERAS,
+            DETECTORS,
+            ROBOT_CLIENTS,
+            TACTILE_INPUTS,
+        )
 
         self.assertIn("opencv", CAMERAS)
         self.assertIn("realsense", CAMERAS)
@@ -110,6 +117,7 @@ class DeploymentRegistryTest(unittest.TestCase):
         self.assertIn("legacy_tcp", ROBOT_CLIENTS)
         self.assertIn("mmdetection", DETECTORS)
         self.assertIn("whisper", AUDIO_INPUTS)
+        self.assertIn("classifier", TACTILE_INPUTS)
 
         client = build_robot_client(
             {"type": "legacy_tcp", "host": "127.0.0.1", "port": 3000}

@@ -24,6 +24,7 @@ from toolrgs.registry import (  # noqa: E402
     POSTPROCESSORS,
     ROBOT_CLIENTS,
     RUNNERS,
+    TACTILE_INPUTS,
     TRANSFORMS,
 )
 
@@ -44,6 +45,7 @@ REGISTRIES = {
     "robot_clients": ROBOT_CLIENTS,
     "detectors": DETECTORS,
     "audio_inputs": AUDIO_INPUTS,
+    "tactile_inputs": TACTILE_INPUTS,
 }
 
 POPULATORS = {
@@ -60,6 +62,7 @@ POPULATORS = {
     "robot_clients": ("deployment.robot",),
     "detectors": ("deployment.detector",),
     "audio_inputs": ("deployment.audio",),
+    "tactile_inputs": ("deployment.gelsight",),
 }
 
 

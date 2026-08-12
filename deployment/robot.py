@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import math
+import re
 import socket
 from typing import Dict, Iterable, Mapping, Optional, Sequence
 
@@ -10,29 +11,75 @@ from toolrgs.registry import ROBOT_CLIENTS
 
 TIER_DEPTH: Dict[str, int] = {"L1": -1, "L2": 0, "L3": 1}
 TOOL_TIERS: Dict[str, str] = {
-    "box": "L1",
-    "clamp": "L3",
-    "clip": "L1",
-    "crimp": "L2",
-    "hex key": "L3",
-    "mallet": "L3",
-    "marker": "L2",
-    "screwdriver": "L2",
-    "sponge": "L1",
-    "spool": "L2",
-    "tape measure": "L1",
-    "tape": "L1",
-    "wrench": "L3",
+    "clip": "L1", "marker": "L1", "sponge": "L2", "tape": "L2",
+    "l-hex key": "L1", "t-hex key": "L1", "hex key": "L1",
+    "box": "L3", "screwdriver": "L1", "spool": "L2",
+    "tape measure": "L1", "mallet": "L3", "clamps": "L2",
+    "wrench": "L1", "crimp tool": "L2", "pliers": "L2",
+    "file": "L1", "ruler": "L2", "scissors": "L1", "cable": "L1",
+    "nut": "L1", "screw": "L1", "stapler": "L1",
 }
+TOOL_PATTERNS = (
+    ("tape measure", (r"\btape\s*-?\s*measure\b", r"\bmeasuring\s+tape\b")),
+    ("crimp tool", (r"\bcrimp(?:ing)?\s*-?\s*(?:tool|pliers)\b", r"\bcrimper\b")),
+    ("l-hex key", (r"\bl[-\s]*(?:shaped?\s*)?hex\s*-?\s*key\b",)),
+    ("t-hex key", (r"\bt[-\s]*(?:handle\s*)?hex\s*-?\s*key\b",)),
+    ("hex key", (r"\bhex\s*-?\s*key\b", r"\ballen\s*(?:key|wrench)\b")),
+    ("screwdriver", (r"\bscrewdriver\b", r"\bphillips?\b", r"\bflat\s*head\b")),
+    ("clamps", (r"\bclamps?\b", r"\b[gc]\s*-?\s*clamp\b")),
+    ("tape", (r"\btape(?!\s*-?\s*measure)\b",)),
+    ("clip", (r"\bclip\b", r"\bbinder\s+clip\b")),
+    ("mallet", (r"\bmallet\b", r"\bdead\s+blow\s+hammer\b")),
+    ("marker", (r"\bmarker\b", r"\bsharpie\b", r"\bhighlighter\b")),
+    ("sponge", (r"\bsponge\b", r"\bscrubber\b")),
+    ("spool", (r"\bspool\b", r"\breel\b", r"\bbobbin\b")),
+    ("wrench", (r"\bwrench\b", r"\bspanner\b")),
+    ("box", (r"\bbox(?:es)?\b", r"\bcontainer\b", r"\bcarton\b")),
+    ("pliers", (r"\bpliers?\b", r"\btongs\b")),
+    ("file", (r"\bfiles?\b", r"\brasps?\b")),
+    ("ruler", (r"\bruler\b", r"\bstraightedge\b")),
+    ("scissors", (r"\bscissors\b", r"\bshears\b")),
+    ("cable", (r"\bcable\b", r"\bcord\b", r"\bwire\b")),
+    ("nut", (r"\bnuts?\b",)),
+    ("screw", (r"\bscrews?\b", r"\bbolts?\b")),
+    ("stapler", (r"\bstapler\b", r"\bstaple\s+gun\b")),
+)
 
 
-def semantic_depth(text: str, default: int = 0) -> int:
-    """Match the object-tier depth convention used by the server CROG demo."""
-    lowered = text.casefold()
-    for keyword in sorted(TOOL_TIERS, key=len, reverse=True):
-        if keyword in lowered:
-            return TIER_DEPTH[TOOL_TIERS[keyword]]
-    return int(default)
+def find_tool_classes(text: str):
+    """Return ordered, non-duplicated 22-class matches from a prompt."""
+    matches = []
+    for class_name, patterns in TOOL_PATTERNS:
+        if any(re.search(pattern, str(text), flags=re.IGNORECASE) for pattern in patterns):
+            matches.append(class_name)
+    return matches
+
+
+def semantic_depth(
+    text: str,
+    default: int = 0,
+    class_tiers: Optional[Mapping[str, str]] = None,
+    policy: str = "max",
+) -> int:
+    """Resolve the 22-class semantic tier used by the robot receiver."""
+    tiers = dict(TOOL_TIERS)
+    if class_tiers:
+        tiers.update({str(key).casefold(): str(value).upper() for key, value in class_tiers.items()})
+    matches = []
+    for class_name in find_tool_classes(text):
+        tier = tiers.get(class_name)
+        if tier not in TIER_DEPTH:
+            raise ValueError(f"Invalid semantic depth tier for {class_name}: {tier}")
+        matches.append(TIER_DEPTH[tier])
+    if not matches:
+        return int(default)
+    if policy == "max":
+        return max(matches)
+    if policy == "min":
+        return min(matches)
+    if policy == "first":
+        return matches[0]
+    raise ValueError("robot.depth_policy.multiple_matches must be max, min, or first")
 
 
 def _wire_number(value: float) -> str:

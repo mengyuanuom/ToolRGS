@@ -13,6 +13,8 @@ from .inference import GraspPrediction, ToolRGSInference
 from .config import activate_model_profile
 from .detector import build_detector
 from .audio import build_audio_input
+from .gelsight import build_gelsight
+from .grasp_policy import command_theta, command_width
 from .robot import GraspCommand, LegacyTCPGraspClient, build_robot_client, semantic_depth
 from .sources import FrameSource, build_source
 
@@ -51,6 +53,11 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
     robot_cfg = config["robot"]
     gui_cfg = config["gui"]
     audio = build_audio_input(config["audio"]) if config.get("audio", {}).get("enabled") else None
+    gelsight_cfg = config.get("gelsight", {})
+    gelsight = (
+        build_gelsight(gelsight_cfg, config["_repo_root"])
+        if gelsight_cfg.get("enabled") else None
+    )
 
     class MainWindow(QMainWindow):
         def __init__(self, frame_source: FrameSource):
@@ -61,6 +68,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.last_inference_at = 0.0
             self.last_detection_at = 0.0
             self.last_send_at = 0.0
+            self.last_gelsight_at = 0.0
+            self.gelsight_available = gelsight is not None
             self.inference_busy = False
             self.inference = inference
             self.active_model = str(config.get("_active_model", "model"))
@@ -126,6 +135,13 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 maps_layout.addWidget(label, index // 2, index % 2)
                 self.map_labels[name] = label
             self.tabs.addTab(maps_page, "Dense maps")
+            self.gelsight_tab_index = -1
+            self.gelsight_label = None
+            if gelsight is not None:
+                self.gelsight_label = self._image_label("Waiting for GelSight frame")
+                self.gelsight_tab_index = self.tabs.addTab(
+                    self.gelsight_label, "GelSight"
+                )
             layout.addWidget(self.tabs, 1)
 
             robot_row = QHBoxLayout()
@@ -134,6 +150,10 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             robot_allowed = bool(robot_cfg.get("enabled")) and allow_robot
             self.connect_button.setEnabled(robot_allowed)
             robot_row.addWidget(self.connect_button)
+            self.disconnect_button = QPushButton("Disconnect receiver")
+            self.disconnect_button.clicked.connect(self._disconnect_robot)
+            self.disconnect_button.setEnabled(False)
+            robot_row.addWidget(self.disconnect_button)
             self.arm = QCheckBox("Arm robot output")
             self.arm.setEnabled(False)
             self.arm.toggled.connect(self._refresh_send_state)
@@ -213,6 +233,24 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             interval_s = int(gui_cfg["inference_interval_ms"]) / 1000.0
             now = time.monotonic()
             if (
+                self.gelsight_available
+                and self.tabs.currentIndex() == self.gelsight_tab_index
+                and now - self.last_gelsight_at >= interval_s
+            ):
+                try:
+                    tactile = gelsight.predict(int(gelsight_cfg.get("topk", 3)))
+                    self.gelsight_label.setPixmap(
+                        self._pixmap(tactile.annotated_bgr, self.gelsight_label)
+                    )
+                    self.status.setText(
+                        f"GelSight: {tactile.label} ({tactile.confidence:.2f})"
+                    )
+                    self.last_gelsight_at = now
+                except Exception as exc:
+                    self.gelsight_available = False
+                    gelsight.close()
+                    self._error("GelSight error", exc)
+            elif (
                 detector is not None
                 and self.tabs.currentIndex() == self.detector_tab_index
                 and now - self.last_detection_at >= interval_s
@@ -307,6 +345,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.robot = build_robot_client(robot_cfg)
                 self.robot.connect()
                 self.connect_button.setEnabled(False)
+                self.disconnect_button.setEnabled(True)
                 self.arm.setEnabled(True)
                 self.status.setText(
                     f"Receiver connected: {robot_cfg['host']}:{robot_cfg['port']}"
@@ -315,7 +354,22 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 if self.robot is not None:
                     self.robot.close()
                 self.robot = None
+                self.connect_button.setEnabled(True)
+                self.disconnect_button.setEnabled(False)
                 self._error("Robot receiver connection failed", exc)
+
+        def _disconnect_robot(self) -> None:
+            self.arm.setChecked(False)
+            self.arm.setEnabled(False)
+            if self.robot is not None:
+                self.robot.close()
+            self.robot = None
+            self.disconnect_button.setEnabled(False)
+            self.connect_button.setEnabled(
+                bool(robot_cfg.get("enabled")) and allow_robot
+            )
+            self._refresh_send_state()
+            self.status.setText("Robot receiver disconnected")
 
         def _refresh_send_state(self) -> None:
             can_send = bool(
@@ -343,19 +397,41 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                     ValueError("robot.coordinate_space must be source or model"),
                 )
                 return
+            source_grasp = self.prediction.grasps[0]
+            model_grasp = self.prediction.model_grasps[0]
             grasp = (
-                self.prediction.model_grasps[0]
+                model_grasp
                 if coordinate_space == "model"
-                else self.prediction.grasps[0]
+                else source_grasp
             )
             x, y, width, _height, theta = grasp
+            source_width = command_width(
+                source_grasp[2],
+                self.prediction.segmentation,
+                source_grasp[:2],
+                source_grasp[4],
+                self.prediction.prompt,
+                robot_cfg.get("width_policy", {}),
+            )
+            if coordinate_space == "model":
+                width_scale = model_grasp[2] / max(source_grasp[2], 1e-8)
+                width = source_width * width_scale
+            else:
+                width = source_width
+            theta = command_theta(theta, robot_cfg.get("theta_policy", {}))
+            depth_cfg = robot_cfg.get("depth_policy", {})
             command = GraspCommand(
-                x=x,
-                y=y,
+                # Preserve the deployed socket contract: pixel fields are ints,
+                # theta remains a float, and semantic depth is an integer tier.
+                x=int(x),
+                y=int(y),
                 theta=theta,
-                width=width,
+                width=int(width),
                 depth=semantic_depth(
-                    self.prediction.prompt, int(robot_cfg.get("default_depth", 0))
+                    self.prediction.prompt,
+                    int(robot_cfg.get("default_depth", 0)),
+                    class_tiers=depth_cfg.get("class_tiers", {}),
+                    policy=str(depth_cfg.get("multiple_matches", "max")),
                 ),
             )
             try:
@@ -364,7 +440,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.last_send_at = time.monotonic()
                 self.status.setText(f"Sent: {command.to_wire().decode('ascii').strip()}")
             except Exception as exc:
-                self.arm.setChecked(False)
+                self._disconnect_robot()
                 self._error("Robot command failed", exc)
 
         def _error(self, title: str, exc: Exception) -> None:
@@ -374,6 +450,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         def closeEvent(self, event) -> None:
             self.timer.stop()
             self.source.close()
+            if gelsight is not None:
+                gelsight.close()
             if self.robot is not None:
                 self.robot.close()
             event.accept()
