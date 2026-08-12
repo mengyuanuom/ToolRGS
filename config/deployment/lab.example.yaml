@@ -8,7 +8,7 @@ model_profiles:
     # Filled with the verified GitHub Release asset after the 3090 upload.
     checkpoint_url: ""
     checkpoint_sha256: ""
-    device: cuda:0
+    device: npu:0
     prompt: the screwdriver
     grasp_size_activation: auto
     mask_threshold: 0.35
@@ -27,7 +27,7 @@ model_profiles:
     checkpoint: weights/crog_grasp_tools_v2_best_j1.pth
     checkpoint_url: ""
     checkpoint_sha256: ""
-    device: cuda:0
+    device: npu:0
     prompt: the screwdriver
     grasp_size_activation: auto
     mask_threshold: 0.35
@@ -83,7 +83,7 @@ detector:
   enabled: false
   config: config/deployment/faster-rcnn-13.py
   checkpoint: weights/epoch_48_13.pth
-  device: cuda:0
+  device: npu:0
   score_threshold: 0.70
   classes:
     - box
@@ -104,7 +104,7 @@ audio:
   type: whisper
   enabled: false
   model: small
-  device: cuda
+  device: npu
   sample_rate: 16000
   duration_s: 4.0
   language: en

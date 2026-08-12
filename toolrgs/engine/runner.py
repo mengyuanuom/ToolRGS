@@ -1,4 +1,4 @@
-"""Configuration-driven CUDA runner owning the complete training lifecycle."""
+"""Configuration-driven Ascend NPU runner owning the training lifecycle."""
 
 import datetime
 from functools import partial
@@ -17,12 +17,21 @@ from torch.utils.data.distributed import DistributedSampler
 
 from model import build_model
 from toolrgs.datasets import build_dataset
+from toolrgs.engine.batch import per_process_batch_size
 from toolrgs.engine.hooks import HookList, LoopState
 from toolrgs.engine.loops import GraspTrainLoop  # noqa: F401 - registers loop
 from toolrgs.engine.optim import build_optim_wrapper, build_param_scheduler
 from toolrgs.engine.val_loop import GraspValLoop  # noqa: F401 - registers loop
+from toolrgs.engine.samplers import DistributedEvalSampler
 from toolrgs.models.base import model_requires_depth
 from toolrgs.registry import LOOPS, RUNNERS
+from toolrgs.runtime import (
+    build_grad_scaler,
+    build_optimizer,
+    device_name,
+    require_npu,
+    set_device,
+)
 from utils.misc import init_random_seed, set_random_seed, setup_logger, worker_init_fn
 from utils.pretrained import ensure_pretrained
 
@@ -70,9 +79,9 @@ def _validate_configured_files(cfg):
             setattr(cfg, key, _checked_file(value, key))
 
 
-@RUNNERS.register_module(name="cuda_grasp", aliases=("cuda_runner", "runner"))
-class CUDAGraspRunner:
-    """Build and run one ToolRGS experiment on CUDA."""
+@RUNNERS.register_module(name="npu_grasp", aliases=("npu_runner", "runner"))
+class NPUGraspRunner:
+    """Build and run one ToolRGS experiment on Ascend NPU."""
 
     def __init__(self, cfg):
         self.cfg = cfg
@@ -102,17 +111,18 @@ class CUDAGraspRunner:
         if self.distributed:
             cfg.rank = int(os.environ["RANK"])
             cfg.world_size = int(os.environ["WORLD_SIZE"])
-            cfg.gpu = int(os.environ.get("LOCAL_RANK", 0))
+            cfg.npu = int(os.environ.get("LOCAL_RANK", 0))
         else:
             cfg.rank = 0
             cfg.world_size = 1
-            cfg.gpu = int(getattr(cfg, "gpu", 0))
-        torch.cuda.set_device(cfg.gpu)
-        self.device = torch.device(f"cuda:{cfg.gpu}")
+            cfg.npu = int(getattr(cfg, "npu", 0))
+        # Keep cfg.gpu as a compatibility alias for older model code only.
+        cfg.gpu = cfg.npu
+        self.device = set_device(cfg.npu)
         cfg.device = str(self.device)
-        cfg.dist_backend = "nccl"
+        cfg.dist_backend = "hccl"
         if self.distributed:
-            dist.init_process_group(backend="nccl", init_method=cfg.dist_url)
+            dist.init_process_group(backend="hccl", init_method=cfg.dist_url)
         cfg.distributed = self.distributed
         self.is_main = cfg.rank == 0
 
@@ -153,7 +163,11 @@ class CUDAGraspRunner:
         cfg = self.cfg
         sampler = None
         if self.distributed:
-            sampler = DistributedSampler(dataset, shuffle=bool(train))
+            sampler = (
+                DistributedSampler(dataset, shuffle=True)
+                if train
+                else DistributedEvalSampler(dataset, cfg.world_size, cfg.rank)
+            )
         workers = int(cfg.workers if train else cfg.workers_val)
         init_fn = None
         if train and workers:
@@ -165,23 +179,43 @@ class CUDAGraspRunner:
             )
         loader = DataLoader(
             dataset,
-            batch_size=int(cfg.batch_size if train else cfg.batch_size_val),
+            batch_size=int(
+                cfg.batch_size_per_process
+                if train
+                else cfg.batch_size_val_per_process
+            ),
             shuffle=bool(train and sampler is None),
             sampler=sampler,
             num_workers=workers,
-            pin_memory=bool(getattr(cfg, "pin_memory", True)),
+            pin_memory=bool(getattr(cfg, "pin_memory", False)),
             drop_last=bool(train),
             worker_init_fn=init_fn,
             collate_fn=dataset.collate_fn,
         )
         return loader, sampler
 
+    def _configure_batch_sizes(self):
+        cfg = self.cfg
+        cfg.batch_size_per_process = per_process_batch_size(
+            cfg.batch_size, cfg.world_size, "batch_size"
+        )
+        cfg.batch_size_val_per_process = per_process_batch_size(
+            cfg.batch_size_val, cfg.world_size, "batch_size_val"
+        )
+        logger.info(
+            "Global batch train/val={}/{}; per-process={}/{} across {} rank(s)",
+            cfg.batch_size,
+            cfg.batch_size_val,
+            cfg.batch_size_per_process,
+            cfg.batch_size_val_per_process,
+            cfg.world_size,
+        )
+
     def setup(self):
         if self._is_setup:
             return self
         cfg = self.cfg
-        if not torch.cuda.is_available():
-            raise RuntimeError("ToolRGS training requires a CUDA GPU")
+        require_npu()
         cv2.setNumThreads(0)
         self._setup_distributed()
         cfg.manual_seed = init_random_seed(
@@ -191,6 +225,7 @@ class CUDAGraspRunner:
             world_size=cfg.world_size,
         )
         set_random_seed(cfg.manual_seed, deterministic=False)
+        self._configure_batch_sizes()
 
         cfg.output_dir = os.path.join(cfg.output_folder, cfg.exp_name)
         setup_logger(
@@ -200,7 +235,7 @@ class CUDAGraspRunner:
             mode="a",
         )
         logger.info(cfg)
-        logger.info("CUDA device: {}", self.device)
+        logger.info("Ascend device: {} ({})", self.device, device_name(cfg.npu))
 
         try:
             _validate_configured_files(cfg)
@@ -227,22 +262,13 @@ class CUDAGraspRunner:
         if self.distributed:
             self.model = nn.parallel.DistributedDataParallel(
                 self.model,
-                device_ids=[cfg.gpu],
-                output_device=cfg.gpu,
+                device_ids=[cfg.npu],
+                output_device=cfg.npu,
                 find_unused_parameters=True,
             )
 
-        optimizer_name = str(getattr(cfg, "optimizer", "adam")).lower()
-        if optimizer_name != "adam":
-            raise ValueError(f"Unsupported optimizer {optimizer_name!r}; expected 'adam'")
-        self.optimizer = torch.optim.Adam(
-            parameter_groups,
-            lr=cfg.base_lr,
-            weight_decay=cfg.weight_decay,
-        )
-        self.scaler = torch.cuda.amp.GradScaler(
-            enabled=bool(getattr(cfg, "amp", True))
-        )
+        self.optimizer = build_optimizer(parameter_groups, cfg)
+        self.scaler = build_grad_scaler(enabled=bool(getattr(cfg, "amp", False)))
         self.optim_wrapper = build_optim_wrapper(
             cfg, optimizer=self.optimizer, scaler=self.scaler
         )
@@ -257,7 +283,7 @@ class CUDAGraspRunner:
         self.val_loader, _ = self._build_dataloader(val_data, train=False)
 
         if getattr(cfg, "resume", None):
-            checkpoint = torch.load(cfg.resume, map_location=self.device)
+            checkpoint = torch.load(cfg.resume, map_location="cpu")
             self._load_model_state(checkpoint["state_dict"])
             self.optimizer.load_state_dict(checkpoint["optimizer"])
             self.scheduler.load_state_dict(checkpoint["scheduler"])
@@ -400,7 +426,7 @@ class CUDAGraspRunner:
 
 
 def build_runner(cfg):
-    runner_cfg = getattr(cfg, "runner", None) or {"type": "cuda_grasp"}
+    runner_cfg = getattr(cfg, "runner", None) or {"type": "npu_grasp"}
     if isinstance(runner_cfg, str):
         runner_cfg = {"type": runner_cfg}
     return RUNNERS.build(runner_cfg, default_args={"cfg": cfg})

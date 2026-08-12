@@ -1,0 +1,3 @@
+# Install torch and torch_npu wheels matching the server's CANN release first.
+# They are intentionally not pinned because the valid pair is CANN-dependent.
+-r requirement.txt

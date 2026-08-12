@@ -1,4 +1,4 @@
-"""CUDA adaptation of the official two-stage MapleGrasp model.
+"""ToolRGS adaptation of the official two-stage MapleGrasp model.
 
 Source: https://github.com/vineet2104/MapleGrasp
 Reference commit: c1b1f48e7ff24caaf39daa127d47d9469b93c7a1
@@ -160,7 +160,7 @@ class MultiTaskProjectorPP(nn.Module):
 
 
 class MapleGrasp(nn.Module):
-    """Official MapleGrasp two-stage model adapted to the CUDA runner."""
+    """Official MapleGrasp two-stage model adapted to the ToolRGS runner."""
 
     def __init__(self, cfg):
         super().__init__()

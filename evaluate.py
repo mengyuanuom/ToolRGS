@@ -12,6 +12,7 @@ import utils.config as config
 from model import build_model
 from toolrgs.engine import GraspValLoop  # imports and registers the default loop
 from toolrgs.registry import LOOPS
+from toolrgs.runtime import require_npu, set_device
 from utils.data_builder import build_dataset
 from utils.misc import setup_logger
 
@@ -20,9 +21,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate ToolRGS")
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--npu", type=int, default=0)
     parser.add_argument("--opts", nargs=argparse.REMAINDER)
     cli = parser.parse_args()
     cfg = config.load_cfg_from_cfg_file(cli.config)
+    cfg.npu = cli.npu
+    cfg.gpu = cli.npu
     if cli.opts:
         cfg = config.merge_cfg_from_list(cfg, cli.opts)
     cfg.resume = cli.checkpoint
@@ -44,17 +48,18 @@ def load_state(model, state):
 
 def main():
     args = parse_args()
-    if not torch.cuda.is_available():
-        raise RuntimeError("ToolRGS evaluation currently requires a CUDA GPU")
+    require_npu()
     cv2.setNumThreads(0)
-    args.gpu = 0
+    args.gpu = args.npu
+    device = set_device(args.npu)
+    args.device = str(device)
     args.rank = 0
     args.output_dir = os.path.join(args.output_folder, args.exp_name)
     setup_logger(args.output_dir, distributed_rank=0, filename="eval.log", mode="a")
 
     model, _ = build_model(args)
-    model = model.cuda().eval()
-    checkpoint = torch.load(args.resume, map_location="cuda:0")
+    model = model.to(device).eval()
+    checkpoint = torch.load(args.resume, map_location="cpu")
     load_state(model, checkpoint.get("state_dict", checkpoint))
 
     needs_offset = args.architecture.lower() in {"crogoff", "drogoff"}
@@ -64,7 +69,7 @@ def main():
         batch_size=args.batch_size_val,
         shuffle=False,
         num_workers=args.workers_val,
-        pin_memory=True,
+        pin_memory=bool(getattr(args, "pin_memory", False)),
         collate_fn=dataset.collate_fn,
     )
     val_loop_class = LOOPS.require(getattr(args, "val_loop", "grasp_val"))

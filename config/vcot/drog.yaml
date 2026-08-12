@@ -10,6 +10,8 @@ DATA:
 MODEL:
   architecture: drog
 TRAIN:
+  pin_memory: False
+  amp: False
   version: multiple
   visual_adapter_dim: 128
   visual_adapter_layer: [1,3,5,7,9,11]
@@ -32,7 +34,7 @@ TRAIN:
   vis_dim: 512
   fpn_in: [768, 768, 768] #dinov2 backbone
   fpn_out: [256, 512, 1024]
-  sync_bn: True
+  sync_bn: False
   projector: dynamic
   # Decoder
   num_layers: 3
@@ -47,8 +49,8 @@ TRAIN:
   epochs: 65
   milestones: [35,55]
   start_epoch: 0
-  batch_size: 8  # per GPU; global batch size 16 with two GPUs
-  batch_size_val: 8
+  batch_size: 64  # global batch for eight NPUs
+  batch_size_val: 64
   base_lr: 0.0001
   lr_decay: 0.1
   lr_multi: 1
@@ -66,7 +68,7 @@ TRAIN:
   use_grasp_masks: True # evaluate on validation set, extra gpu memory needed and small batch_size_val is recommend
 Distributed:
   dist_url: env://
-  dist_backend: 'nccl'
+  dist_backend: 'hccl'
   multiprocessing_distributed: True
   world_size: 1
   rank: 0

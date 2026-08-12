@@ -48,7 +48,7 @@ def _build_depth_backbone(cfg):
         import torchvision
     except (ImportError, OSError) as exc:
         raise RuntimeError(
-            "ETRG requires torchvision matching the installed PyTorch/CUDA build."
+            "ETRG requires torchvision matching the installed PyTorch build."
         ) from exc
 
     local_weight = getattr(cfg, "depth_pretrain", None)

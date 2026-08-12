@@ -1,4 +1,4 @@
-"""MMEngine-style optimization components for CUDA training."""
+"""MMEngine-style optimization components for Ascend training."""
 
 import torch
 from torch.optim.lr_scheduler import MultiStepLR
@@ -6,8 +6,8 @@ from torch.optim.lr_scheduler import MultiStepLR
 from toolrgs.registry import OPTIM_WRAPPERS, PARAM_SCHEDULERS
 
 
-@OPTIM_WRAPPERS.register_module(name="cuda_amp", aliases=("amp",))
-class CUDAAmpOptimWrapper:
+@OPTIM_WRAPPERS.register_module(name="npu_amp", aliases=("amp",))
+class NPUAmpOptimWrapper:
     """Own zero-grad, scaled backward, clipping, and optimizer stepping."""
 
     def __init__(self, optimizer, scaler, max_norm=0.0):
@@ -33,7 +33,7 @@ PARAM_SCHEDULERS.register_module(
 
 
 def build_optim_wrapper(cfg, optimizer, scaler):
-    wrapper_cfg = getattr(cfg, "optim_wrapper", None) or {"type": "cuda_amp"}
+    wrapper_cfg = getattr(cfg, "optim_wrapper", None) or {"type": "npu_amp"}
     if isinstance(wrapper_cfg, str):
         wrapper_cfg = {"type": wrapper_cfg}
     return OPTIM_WRAPPERS.build(

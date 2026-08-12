@@ -80,16 +80,16 @@ its historical tuples.
 
 ## Loops, hooks, metrics, and postprocessing
 
-`CUDAGraspRunner` owns NCCL initialization, component construction, dataset
+`NPUGraspRunner` owns HCCL initialization, component construction, dataset
 loaders, train/validation sequencing, resume, and shutdown. `GraspTrainLoop`
-and `GraspValLoop` remain independently registered. `CUDAAmpOptimWrapper` owns
+and `GraspValLoop` remain independently registered. `NPUAmpOptimWrapper` owns
 scaled backward, gradient clipping, and stepping; `CheckpointHook` and
 `LoggerHook` own epoch persistence and summaries.
 
 ```yaml
 RUNTIME:
-  runner: {type: cuda_grasp}
-  optim_wrapper: {type: cuda_amp}
+  runner: {type: npu_grasp}
+  optim_wrapper: {type: npu_amp}
   param_scheduler:
     type: multi_step
     milestones: [35]
@@ -149,7 +149,7 @@ implementation in `utils.data_builder`.
   `DATASETS`.
 - `build_model(cfg)` still returns `(model, optimizer_parameter_groups)`.
 - `build_dataset(cfg, split, with_offset)` keeps its existing signature.
-- `engine.engine.validate_with_grasp(...)` remains as a compatibility wrapper
+- Evaluation is implemented by `toolrgs.engine.val_loop.GraspValLoop`.
   around `GraspValLoop`; the previous implementation is retained privately as
   `_legacy_validate_with_grasp` for short-term parity diagnosis.
 - Dataset-specific optional arguments are signature-filtered; custom registered

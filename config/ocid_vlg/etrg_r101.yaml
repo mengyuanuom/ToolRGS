@@ -9,6 +9,8 @@ DATA:
 MODEL:
   architecture: etrg
 TRAIN:
+  pin_memory: False
+  amp: False
   # RGB-only ETRG R101 profile. The auxiliary encoder consumes RGB.
   etrg_input_mode: rgb
   clip_pretrain: pretrain/RN101.pt
@@ -24,7 +26,7 @@ TRAIN:
   vis_dim: 512
   fpn_in: [512, 1024, 512]
   fpn_out: [256, 512, 1024]
-  sync_bn: true
+  sync_bn: false
   num_layers: 3
   num_head: 8
   dim_ffn: 512
@@ -35,8 +37,8 @@ TRAIN:
   epochs: 40
   milestones: [35]
   start_epoch: 0
-  batch_size: 6
-  batch_size_val: 6
+  batch_size: 48
+  batch_size_val: 48
   base_lr: 0.0001
   lr_decay: 0.1
   lr_multi: 1.0
@@ -52,7 +54,7 @@ TRAIN:
   evaluate: true
 Distributed:
   dist_url: env://
-  dist_backend: nccl
+  dist_backend: hccl
   multiprocessing_distributed: true
   world_size: 1
   rank: 0

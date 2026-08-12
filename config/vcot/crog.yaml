@@ -11,6 +11,8 @@ DATA:
 MODEL:
   architecture: crog
 TRAIN:
+  pin_memory: False
+  amp: False
   # Base Arch
   clip_pretrain: pretrain/RN50.pt
   version: multiple
@@ -20,7 +22,7 @@ TRAIN:
   vis_dim: 512
   fpn_in: [512, 1024, 1024]
   fpn_out: [256, 512, 1024]
-  sync_bn: True
+  sync_bn: False
   # Decoder
   num_layers: 3
   num_head: 8
@@ -33,8 +35,8 @@ TRAIN:
   epochs: 36
   milestones: [30]
   start_epoch: 0
-  batch_size: 8  # per GPU; global batch size 16 with two GPUs
-  batch_size_val: 8
+  batch_size: 64  # global batch for eight NPUs
+  batch_size_val: 64
   base_lr: 0.00001
   lr_decay: 0.1
   lr_multi: 0.1
@@ -60,7 +62,7 @@ TRAIN:
   short_side_loss_weight: 1.0
 Distributed:
   dist_url: env://
-  dist_backend: 'nccl'
+  dist_backend: 'hccl'
   multiprocessing_distributed: True
   world_size: 1
   rank: 0

@@ -9,6 +9,8 @@ DATA:
 MODEL:
   architecture: crogoff
 TRAIN:
+  pin_memory: False
+  amp: False
   # Base Arch
   clip_pretrain: pretrain/RN50.pt
   version: multiple
@@ -18,7 +20,7 @@ TRAIN:
   vis_dim: 512
   fpn_in: [512, 1024, 1024]
   fpn_out: [256, 512, 1024]
-  sync_bn: True
+  sync_bn: False
   # Decoder
   num_layers: 3
   num_head: 8
@@ -31,8 +33,8 @@ TRAIN:
   epochs: 5000
   milestones: [5000]
   start_epoch: 0
-  batch_size: 2  # batch size for training
-  batch_size_val: 2  # batch size for validation during training, memory and speed tradeoff
+  batch_size: 16  # batch size for training
+  batch_size_val: 16  # batch size for validation during training, memory and speed tradeoff
   base_lr: 0.00001
   lr_decay: 0.1
   lr_multi: 0.1
@@ -53,8 +55,8 @@ TRAIN:
   use_pretrained_clip: True
   use_grasp_masks: True
 Distributed:
-  dist_url: tcp://localhost:3681
-  dist_backend: 'nccl'
+  dist_url: env://
+  dist_backend: 'hccl'
   multiprocessing_distributed: True
   world_size: 1
   rank: 0

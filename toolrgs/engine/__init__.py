@@ -12,7 +12,7 @@ __all__ = [
     "LoggerHook",
     "LoopState",
     "NoOpHook",
-    "CUDAGraspRunner",
+    "NPUGraspRunner",
     "build_runner",
 ]
 
@@ -26,11 +26,11 @@ def __getattr__(name):
         from .val_loop import GraspValLoop
 
         return GraspValLoop
-    if name in {"CUDAGraspRunner", "build_runner"}:
-        from .runner import CUDAGraspRunner, build_runner
+    if name in {"NPUGraspRunner", "build_runner"}:
+        from .runner import NPUGraspRunner, build_runner
 
         return {
-            "CUDAGraspRunner": CUDAGraspRunner,
+            "NPUGraspRunner": NPUGraspRunner,
             "build_runner": build_runner,
         }[name]
     raise AttributeError(name)

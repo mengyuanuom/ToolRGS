@@ -26,7 +26,7 @@ class MMDetectionAdapter:
             raise FileNotFoundError(f"Detector checkpoint does not exist: {checkpoint_path}")
         self.inference_detector = inference_detector
         self.model = init_detector(
-            str(config_path), str(checkpoint_path), device=str(cfg.get("device", "cuda:0"))
+            str(config_path), str(checkpoint_path), device=str(cfg.get("device", "npu:0"))
         )
         self.threshold = float(cfg.get("score_threshold", 0.7))
         self.classes = list(cfg.get("classes") or getattr(self.model, "dataset_meta", {}).get("classes", []))

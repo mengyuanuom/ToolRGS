@@ -1,4 +1,4 @@
-"""Compatibility CLI for the MMEngine-style ToolRGS CUDA runner."""
+"""Compatibility CLI for the MMEngine-style ToolRGS Ascend runner."""
 
 import argparse
 
@@ -10,12 +10,13 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Train ToolRGS")
     parser.add_argument("--config", required=True, help="Experiment YAML file")
     parser.add_argument(
-        "--gpu", type=int, default=0, help="CUDA GPU index for single-process runs"
+        "--npu", type=int, default=0, help="Ascend NPU index for single-process runs"
     )
     parser.add_argument("--opts", nargs=argparse.REMAINDER)
     cli = parser.parse_args()
     cfg = config.load_cfg_from_cfg_file(cli.config)
-    cfg.gpu = cli.gpu
+    cfg.npu = cli.npu
+    cfg.gpu = cli.npu
     if cli.opts:
         cfg = config.merge_cfg_from_list(cfg, cli.opts)
     return cfg

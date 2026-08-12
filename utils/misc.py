@@ -10,8 +10,10 @@ import torch
 from torch import nn
 import torch.distributed as dist
 
+from toolrgs.runtime import seed_all
 
-def init_random_seed(seed=None, device='cuda', rank=0, world_size=1):
+
+def init_random_seed(seed=None, device='npu', rank=0, world_size=1):
     """Initialize random seed."""
     if seed is not None:
         return seed
@@ -35,11 +37,10 @@ def set_random_seed(seed, deterministic=False):
     """Set random seed."""
     random.seed(seed)
     np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
+    seed_all(seed)
     if deterministic:
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+        # Ascend determinism is controlled by CANN/PyTorch environment options.
+        logger.warning("deterministic=True requested; configure deterministic CANN ops as needed")
 
 
 @torch.no_grad()

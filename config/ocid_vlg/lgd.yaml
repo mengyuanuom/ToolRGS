@@ -9,6 +9,8 @@ DATA:
 MODEL:
   architecture: lgd
 TRAIN:
+  pin_memory: False
+  amp: False
   clip_pretrain: pretrain/RN50.pt
   version: multiple
   input_size: 224
@@ -24,14 +26,14 @@ TRAIN:
   lgd_contrastive_weight: 0.0
   lgd_geometry_mask_threshold: 0.05
   lgd_contrastive_temperature: 0.1
-  sync_bn: True
+  sync_bn: False
   workers: 8
   workers_val: 4
   epochs: 100
   milestones: [70, 90]
   start_epoch: 0
-  batch_size: 16
-  batch_size_val: 8
+  batch_size: 128
+  batch_size_val: 64
   base_lr: 0.0001
   lr_decay: 0.1
   lr_multi: 0.1
@@ -47,7 +49,7 @@ TRAIN:
   evaluate: True
 Distributed:
   dist_url: env://
-  dist_backend: nccl
+  dist_backend: hccl
   multiprocessing_distributed: True
   world_size: 1
   rank: 0

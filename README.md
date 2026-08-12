@@ -25,7 +25,8 @@ ToolRGS/
 │   ├── segmenter.py
 │   └── dinov2/
 ├── config/grasp_tools/
-├── engine/engine.py
+├── toolrgs/engine/
+├── toolrgs/runtime/
 ├── utils/dataset.py
 ├── train.py
 └── evaluate.py
@@ -45,7 +46,7 @@ MODEL:
 ```
 
 New experiments can use composable MMEngine-style `_base_` configs. Model,
-dataset, schedule, and CUDA runtime settings live independently under
+dataset, schedule, and Ascend runtime settings live independently under
 `configs/_base_/`:
 
 ```yaml
@@ -53,7 +54,7 @@ _base_:
   - ../_base_/datasets/ocid_vlg.yaml
   - ../_base_/models/etrg_r50.yaml
   - ../_base_/schedules/etrg_40e.yaml
-  - ../_base_/runtime/cuda.yaml
+  - ../_base_/runtime/ascend.yaml
 
 TRAIN:
   exp_name: etrg_r50_ocid_vlg
@@ -63,13 +64,43 @@ TRAIN:
 Preferred training entrypoint:
 
 ```bash
-python tools/train.py --config configs/etrg/etrg_r50_ocid_vlg.yaml
+bash tools/train_npu.sh configs/etrg/etrg_r50_ocid_vlg.yaml
 ```
 
-`CUDAGraspRunner`, `CUDAAmpOptimWrapper`, registered schedulers, and runner
-hooks own construction, CUDA AMP/backward, epoch scheduling, logging, and
+`NPUGraspRunner`, `NPUAmpOptimWrapper`, registered schedulers, and runner
+hooks own construction, optional NPU AMP/backward, epoch scheduling, logging, and
 checkpoints. The old `python train.py --config config/...` command remains
-compatible.
+compatible for a single NPU.
+
+## Ascend NPU quick start
+
+Install the PyTorch and `torch_npu` pair required by the server's CANN version,
+then install the remaining dependencies and verify the device:
+
+```bash
+pip install -r requirement-npu.txt
+python tools/check_npu_env.py
+```
+
+The one-line launcher defaults to eight NPUs and reads AMP only from YAML:
+
+```bash
+bash tools/train_npu.sh config/grasp_tools/drogoff_v2.yaml
+```
+
+All checked-in training configs default to FP32 (`amp: false`), HCCL, no
+SyncBatchNorm, and no pinned host memory. `TRAIN.batch_size` and
+`TRAIN.batch_size_val` are global batch sizes: with eight processes, a global
+batch of 128 gives 16 samples per NPU. To use fewer devices:
+
+```bash
+ASCEND_RT_VISIBLE_DEVICES=0,1 NPROC_PER_NODE=2 \
+  bash tools/train_npu.sh config/ocid_vlg/drogoff.yaml
+```
+
+GraspMamba still depends on CUDA-specific MambaVision kernels and is not part of
+the supported Ascend model set unless an NPU-compatible implementation of those
+kernels is installed.
 
 The nine RGB model families are available for every dataset. ETRG-A is added
 for OCID-VLG because it requires real aligned depth:
@@ -171,12 +202,12 @@ python train.py --config config/vcot/drogoff.yaml --opts \
   DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything
 ```
 
-### Recommended VCoT profile for two RTX 3090 GPUs
+### VCoT profile on eight Ascend NPUs
 
-VCoT YAML batch sizes and worker counts are per distributed process (per GPU).
-The checked-in profile targets two 24 GB RTX 3090 cards:
+VCoT YAML batch sizes are global; the runner divides them equally among eight
+processes. Worker counts remain per process:
 
-| Model | Input | Train batch/GPU | Global batch | Epochs | LR milestones |
+| Model | Input | Train batch/NPU | Global batch | Epochs | LR milestones |
 | --- | ---: | ---: | ---: | ---: | --- |
 | CROG | 416 | 8 | 16 | 36 | 30 |
 | MapleGrasp Stage 1 / 2 | 416 | 8 | 16 | 24 each | 20 |
@@ -188,18 +219,16 @@ The checked-in profile targets two 24 GB RTX 3090 cards:
 | LGD | 224 | 16 | 32 | 100 | 70, 90 |
 
 Most VCoT profiles use eight training workers and four validation workers per
-process. The heavier DROG-OFF profile uses four and two respectively, avoiding
-CPU/RAM and shared-memory pressure when two GPU processes run together. Start
-a two-GPU run with `torchrun`:
+process. Start an eight-NPU run with the launcher:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train.py \
-  --config config/vcot/graspmamba.yaml --opts \
-  DATA.root_path /mnt/ssd0/mengyuan/data/grasp-anything
+DATA_ROOT=/mnt/ssd0/mengyuan/data/grasp-anything \
+  bash tools/train_npu.sh config/vcot/drogoff.yaml
 ```
 
-If a heavy model runs out of memory, reduce both per-GPU batches without
-editing YAML, for example `TRAIN.batch_size 4 TRAIN.batch_size_val 4`.
+If a heavy model runs out of memory, reduce both global batch values while
+keeping them divisible by eight, for example
+`TRAIN.batch_size 32 TRAIN.batch_size_val 16`.
 
 ## OCID-VLG data
 
@@ -290,13 +319,11 @@ RGB-D architecture. Unlike the RGB-only models, it routes the aligned
 OCID-VLG depth map through a ResNet-18 encoder and fuses depth, visual, and
 language tokens inside the frozen CLIP backbone adapters.
 
-Run the R50 profile on two GPUs with:
+Run the R50 profile on eight NPUs with:
 
 ```bash
-CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train.py \
-  --config config/ocid_vlg/etrg.yaml --opts \
-  DATA.root_path /path/to/OCID-VLG \
-  TRAIN.clip_pretrain pretrain/RN50.pt
+DATA_ROOT=/path/to/OCID-VLG \
+  bash tools/train_npu.sh config/ocid_vlg/etrg.yaml
 ```
 
 The R101 alternative is `config/ocid_vlg/etrg_r101.yaml`. ETRG requires real

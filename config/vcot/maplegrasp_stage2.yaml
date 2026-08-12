@@ -18,11 +18,11 @@ TRAIN:
   vis_dim: 512
   fpn_in: [512, 1024, 1024]
   fpn_out: [256, 512, 1024]
-  sync_bn: True
-  amp: True
+  sync_bn: False
+  amp: False
   optimizer: adam
   optimizer_foreach: True
-  pin_memory: True
+  pin_memory: False
   num_layers: 3
   num_head: 8
   dim_ffn: 2048
@@ -42,8 +42,8 @@ TRAIN:
   epochs: 24
   milestones: [20]
   start_epoch: 0
-  batch_size: 8  # per GPU; global batch size 16 on two RTX 3090s
-  batch_size_val: 4
+  batch_size: 64  # global batch for eight NPUs
+  batch_size_val: 32
   gradient_accumulation_steps: 1
   base_lr: 0.0001
   lr_decay: 0.1
@@ -64,7 +64,7 @@ TRAIN:
   evaluate: True
 Distributed:
   dist_url: env://
-  dist_backend: nccl
+  dist_backend: hccl
   multiprocessing_distributed: True
   world_size: 1
   rank: 0

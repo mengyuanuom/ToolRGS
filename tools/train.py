@@ -1,4 +1,4 @@
-"""MMDetection-style CUDA training entrypoint."""
+"""MMDetection-style Ascend NPU training entrypoint."""
 
 from pathlib import Path
 import sys

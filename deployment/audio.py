@@ -30,11 +30,11 @@ class WhisperRecorder:
         if self._model is None:
             self._model = whisper.load_model(
                 str(self.cfg.get("model", "small")),
-                device=str(self.cfg.get("device", "cuda")),
+                device=str(self.cfg.get("device", "npu")),
             )
         result = self._model.transcribe(
             recording.reshape(-1),
-            fp16=str(self.cfg.get("device", "cuda")).startswith("cuda"),
+            fp16=False,
             language=self.cfg.get("language") or None,
         )
         text = str(result.get("text", "")).strip()

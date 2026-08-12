@@ -9,6 +9,8 @@ DATA:
 MODEL:
   architecture: maplegrasp
 TRAIN:
+  pin_memory: False
+  amp: False
   version: multiple
   clip_pretrain: pretrain/RN50.pt
   input_size: 416
@@ -17,7 +19,7 @@ TRAIN:
   vis_dim: 512
   fpn_in: [512, 1024, 1024]
   fpn_out: [256, 512, 1024]
-  sync_bn: True
+  sync_bn: False
   num_layers: 3
   num_head: 8
   dim_ffn: 2048
@@ -36,8 +38,8 @@ TRAIN:
   epochs: 50
   milestones: [35, 45]
   start_epoch: 0
-  batch_size: 8
-  batch_size_val: 8
+  batch_size: 64
+  batch_size_val: 64
   base_lr: 0.0001
   lr_decay: 0.1
   lr_multi: 0.1
@@ -53,7 +55,7 @@ TRAIN:
   evaluate: True
 Distributed:
   dist_url: env://
-  dist_backend: nccl
+  dist_backend: hccl
   multiprocessing_distributed: True
   world_size: 1
   rank: 0

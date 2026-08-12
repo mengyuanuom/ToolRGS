@@ -21,6 +21,7 @@ from toolrgs.evaluation import (
     targets_to_six,
 )
 from toolrgs.registry import LOOPS, METRICS, POSTPROCESSORS
+from toolrgs.runtime import current_device, move_to_device
 from toolrgs.structures import GraspModelResult
 from utils.grasp_eval import calculate_jacquard_index
 from utils.config import resolve_grasp_size_activation
@@ -49,6 +50,7 @@ class GraspValLoop(BaseLoop):
         self.dataloader = dataloader
         self.model = model
         self.cfg = cfg
+        self.device = current_device(int(getattr(cfg, "npu", 0)))
         self.topk = tuple(getattr(cfg, "grasp_topk", (1, 5)))
         if not self.topk or any(int(value) <= 0 for value in self.topk):
             raise ValueError(f"grasp_topk must contain positive integers, got {self.topk}")
@@ -127,26 +129,26 @@ class GraspValLoop(BaseLoop):
         self.model.eval()
         rank = int(getattr(self.cfg, "rank", 0))
         progress = tqdm(self.dataloader, disable=rank != 0)
-        device = torch.device("cuda", int(getattr(self.cfg, "gpu", 0)))
+        device = self.device
 
         for iteration, data in enumerate(progress):
             self.state.iteration = iteration
             self.state.batch = data
             self.hooks.call("before_iter", self, self.state)
 
-            image = data["img"].cuda(non_blocking=True)
-            text = data["word_vec"].cuda(non_blocking=True)
-            target_segmentation = data["mask"].cuda(non_blocking=True).unsqueeze(1)
-            target_quality = data["grasp_masks"]["qua"].cuda(non_blocking=True).unsqueeze(1)
-            target_sine = data["grasp_masks"]["sin"].cuda(non_blocking=True).unsqueeze(1)
-            target_cosine = data["grasp_masks"]["cos"].cuda(non_blocking=True).unsqueeze(1)
-            target_width = data["grasp_masks"]["wid"].cuda(non_blocking=True).unsqueeze(1)
+            image = move_to_device(data["img"], device)
+            text = move_to_device(data["word_vec"], device)
+            target_segmentation = move_to_device(data["mask"], device).unsqueeze(1)
+            target_quality = move_to_device(data["grasp_masks"]["qua"], device).unsqueeze(1)
+            target_sine = move_to_device(data["grasp_masks"]["sin"], device).unsqueeze(1)
+            target_cosine = move_to_device(data["grasp_masks"]["cos"], device).unsqueeze(1)
+            target_width = move_to_device(data["grasp_masks"]["wid"], device).unsqueeze(1)
             target_short = data["grasp_masks"].get("short")
             if target_short is not None:
-                target_short = target_short.cuda(non_blocking=True).unsqueeze(1)
+                target_short = move_to_device(target_short, device).unsqueeze(1)
             target_offset = data["grasp_masks"].get("off")
             if target_offset is not None:
-                target_offset = target_offset.cuda(non_blocking=True)
+                target_offset = move_to_device(target_offset, device)
 
             depth_tensor = None
             if model_requires_depth(self.model):
@@ -156,7 +158,7 @@ class GraspValLoop(BaseLoop):
                         "The selected model requires batch['depth'], but the "
                         "validation dataset did not provide it."
                     )
-                depth_tensor = depth.cuda(non_blocking=True)
+                depth_tensor = move_to_device(depth, device)
             model_args = (image, text)
             if depth_tensor is not None:
                 model_args = (image, depth_tensor, text)

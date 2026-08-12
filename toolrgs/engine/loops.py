@@ -5,12 +5,12 @@ import time
 from typing import Any, Iterable, Optional
 
 import torch
-import torch.cuda.amp as amp
 import torch.distributed as dist
 
 from toolrgs.engine.hooks import HookList, LoopState
 from toolrgs.models.base import dense_grasp_target_kwargs, model_requires_depth
 from toolrgs.registry import LOOPS
+from toolrgs.runtime import autocast, current_device, move_to_device
 from toolrgs.structures import GraspModelResult
 from utils.misc import AverageMeter, ProgressMeter, trainMetricGPU
 
@@ -54,6 +54,7 @@ class GraspTrainLoop(BaseLoop):
         self.scaler = scaler
         self.optim_wrapper = optim_wrapper
         self.cfg = cfg
+        self.device = current_device(int(getattr(cfg, "npu", 0)))
 
     def _meters(self, epoch):
         meters = {
@@ -77,22 +78,22 @@ class GraspTrainLoop(BaseLoop):
         )
         return meters, progress
 
-    def _to_cuda(self, data):
+    def _to_device(self, data):
         masks = data["grasp_masks"]
         offset = masks.get("off")
         offset_weight = masks.get("off_w")
         short_side = masks.get("short")
         common = (
-            data["img"].cuda(non_blocking=True),
-            data["word_vec"].cuda(non_blocking=True),
-            data["mask"].cuda(non_blocking=True).unsqueeze(1),
-            masks["qua"].cuda(non_blocking=True).unsqueeze(1),
-            masks["sin"].cuda(non_blocking=True).unsqueeze(1),
-            masks["cos"].cuda(non_blocking=True).unsqueeze(1),
-            masks["wid"].cuda(non_blocking=True).unsqueeze(1),
-            offset.cuda(non_blocking=True) if offset is not None else None,
-            offset_weight.cuda(non_blocking=True) if offset_weight is not None else None,
-            short_side.cuda(non_blocking=True).unsqueeze(1)
+            move_to_device(data["img"], self.device),
+            move_to_device(data["word_vec"], self.device),
+            move_to_device(data["mask"], self.device).unsqueeze(1),
+            move_to_device(masks["qua"], self.device).unsqueeze(1),
+            move_to_device(masks["sin"], self.device).unsqueeze(1),
+            move_to_device(masks["cos"], self.device).unsqueeze(1),
+            move_to_device(masks["wid"], self.device).unsqueeze(1),
+            move_to_device(offset, self.device) if offset is not None else None,
+            move_to_device(offset_weight, self.device) if offset_weight is not None else None,
+            move_to_device(short_side, self.device).unsqueeze(1)
             if short_side is not None else None,
         )
         if not model_requires_depth(self.model):
@@ -103,7 +104,7 @@ class GraspTrainLoop(BaseLoop):
                 "The selected model requires batch['depth'], but the dataset did "
                 "not provide it. Use OCID-VLG with DATA.with_depth=True."
             )
-        return (common[0], depth.cuda(non_blocking=True), *common[1:])
+        return (common[0], move_to_device(depth, self.device), *common[1:])
 
     def run_epoch(self, epoch: int):
         self.state = LoopState(epoch=epoch)
@@ -117,10 +118,10 @@ class GraspTrainLoop(BaseLoop):
             self.state.batch = data
             self.hooks.call("before_iter", self, self.state)
             meters["data"].update(time.time() - end)
-            inputs = self._to_cuda(data)
+            inputs = self._to_device(data)
             image = inputs[0]
 
-            with amp.autocast(enabled=bool(getattr(self.cfg, "amp", True))):
+            with autocast(enabled=bool(getattr(self.cfg, "amp", False))):
                 image, words = inputs[:2]
                 target_values = inputs[2:]
                 if model_requires_depth(self.model):

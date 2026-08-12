@@ -17,6 +17,7 @@ from utils.dataset import CLIP_MEAN, CLIP_STD, tokenize
 from toolrgs.structures import GraspModelResult
 from toolrgs.evaluation import DenseGraspPostProcessor  # registers evaluation components
 from toolrgs.registry import POSTPROCESSORS
+from toolrgs.runtime import require_npu, set_device
 
 from .config import resolve_repo_path
 from .weights import ensure_deployment_checkpoint
@@ -105,14 +106,22 @@ class ToolRGSInference:
                 "select a ToolRGS grasp architecture"
             )
         self._resolve_pretrained_paths()
-        self.device = torch.device(str(self.model_cfg.get("device", "cuda:0")))
-        if self.device.type == "cuda" and not torch.cuda.is_available():
-            raise RuntimeError(f"CUDA was requested ({self.device}) but is not available")
+        requested_device = str(self.model_cfg.get("device", "npu:0"))
+        if not requested_device.startswith("npu"):
+            raise ValueError(f"The NPU branch requires an NPU device, got {requested_device!r}")
+        require_npu()
+        device_index = (
+            int(requested_device.split(":", 1)[1])
+            if ":" in requested_device
+            else 0
+        )
+        self.device = set_device(device_index)
 
-        self.cfg.gpu = self.device.index or 0
+        self.cfg.npu = self.device.index or 0
+        self.cfg.gpu = self.cfg.npu
         self.cfg.rank = 0
         self.model, _ = build_model(self.cfg)
-        checkpoint = torch.load(str(checkpoint_path), map_location=self.device)
+        checkpoint = torch.load(str(checkpoint_path), map_location="cpu")
         self.grasp_size_activation = resolve_grasp_size_activation(
             self.model_cfg.get(
                 "grasp_size_activation",

@@ -8,6 +8,8 @@ DATA:
 MODEL:
   architecture: graspmamba
 TRAIN:
+  pin_memory: False
+  amp: False
   clip_pretrain: pretrain/RN50.pt
   use_pretrained_clip: True
   mamba_model: mamba_vision_T
@@ -19,14 +21,14 @@ TRAIN:
   input_size: 416
   word_len: 17
   word_dim: 1024
-  sync_bn: True
+  sync_bn: False
   workers: 4
   workers_val: 4
   epochs: 65
   milestones: [35, 55]
   start_epoch: 0
-  batch_size: 8
-  batch_size_val: 8
+  batch_size: 64
+  batch_size_val: 64
   base_lr: 0.001
   lr_decay: 0.1
   lr_multi: 1.0
@@ -42,8 +44,8 @@ TRAIN:
   evaluate: True
   use_grasp_masks: True
 Distributed:
-  dist_url: tcp://localhost:3681
-  dist_backend: nccl
+  dist_url: env://
+  dist_backend: hccl
   multiprocessing_distributed: True
   world_size: 1
   rank: 0
