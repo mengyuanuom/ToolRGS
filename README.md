@@ -456,6 +456,9 @@ python tools/check_deployment.py \
 python deploy_gui.py
 ```
 
+On Linux the launcher automatically selects the active PyQt5 platform plugins,
+preventing the incompatible `cv2/qt/plugins` xcb path from taking over.
+
 Put the original Faster R-CNN checkpoint at `weights/epoch_48_13.pth` and
 install `requirement-detector.txt`. No YAML copy or edit step is required for
 the standard grasp-plus-detection GUI.

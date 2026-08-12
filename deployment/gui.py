@@ -15,11 +15,15 @@ from .detector import build_detector
 from .audio import build_audio_input
 from .gelsight import build_gelsight
 from .grasp_policy import command_theta, command_width
+from .qt import configure_pyqt5_plugins
 from .robot import GraspCommand, LegacyTCPGraspClient, build_robot_client, semantic_depth
 from .sources import FrameSource, build_source
 
 
 def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
+    qt_platforms = configure_pyqt5_plugins()
+    if qt_platforms is not None:
+        print(f"[gui] PyQt5 platform plugins: {qt_platforms}")
     try:
         from PyQt5.QtCore import Qt, QTimer
         from PyQt5.QtGui import QImage, QPixmap

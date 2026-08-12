@@ -71,6 +71,14 @@ def main() -> int:
     require_module(report, "cv2", "opencv-python")
     require_module(report, "PyQt5")
     require_module(report, "yaml", "PyYAML")
+    try:
+        from deployment.qt import configure_pyqt5_plugins
+
+        qt_platforms = configure_pyqt5_plugins()
+        if qt_platforms is not None:
+            report.ok(f"PyQt5 platform plugins: {qt_platforms}")
+    except Exception as exc:
+        report.fail(f"PyQt5 plugin setup failed: {exc}")
 
     model_cfg = cfg["model"]
     experiment = resolve_repo_path(model_cfg["config"], cfg["_repo_root"])

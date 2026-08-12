@@ -14,6 +14,7 @@ from deployment.detector import (
     _trusted_mmengine_checkpoint_context,
 )
 from deployment.grasp_policy import command_theta, command_width, mask_span_width
+from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
 
@@ -231,6 +232,39 @@ class DeploymentContractTest(unittest.TestCase):
             path = Path(directory) / "model.pth"
             path.write_bytes(b"toolrgs-test")
             self.assertEqual(ensure_deployment_checkpoint(path), path)
+
+    def test_qt_plugin_path_prefers_active_pyqt_installation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plugin_root = Path(directory) / "plugins"
+            platforms = plugin_root / "platforms"
+            platforms.mkdir(parents=True)
+
+            class FakeLibraryInfo:
+                PluginsPath = object()
+
+                @staticmethod
+                def location(_):
+                    return str(plugin_root)
+
+            fake_qtcore = mock.Mock()
+            fake_qtcore.QLibraryInfo = FakeLibraryInfo
+            with mock.patch.dict(
+                sys.modules,
+                {
+                    "PyQt5": mock.Mock(),
+                    "PyQt5.QtCore": fake_qtcore,
+                },
+            ), mock.patch.dict(
+                "os.environ",
+                {"QT_QPA_PLATFORM_PLUGIN_PATH": "/bad/cv2/qt/plugins"},
+                clear=False,
+            ):
+                resolved = configure_pyqt5_plugins()
+                self.assertEqual(resolved, platforms.resolve())
+                self.assertEqual(
+                    __import__("os").environ["QT_QPA_PLATFORM_PLUGIN_PATH"],
+                    str(platforms.resolve()),
+                )
 
 
 if __name__ == "__main__":

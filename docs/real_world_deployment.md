@@ -23,6 +23,13 @@ pip install -r requirement.txt
 pip install -r requirement-deploy.txt
 ```
 
+On Linux, ToolRGS resets `QT_QPA_PLATFORM_PLUGIN_PATH` after importing OpenCV
+so that QApplication uses the active PyQt5 installation instead of
+`cv2/qt/plugins`. Startup prints the selected directory as
+`[gui] PyQt5 platform plugins: ...`. For a non-standard PyQt installation,
+set `TOOLRGS_QT_PLUGIN_PATH` to its plugin root (the parent of
+`platforms/libqxcb.so`).
+
 For GStreamer on Ubuntu, install the system GI bindings and plugins. PyGObject
 is normally installed through `apt`, not `pip`:
 
