@@ -467,9 +467,10 @@ python tools/check_deployment.py --build-detector
 Detector class order, palette, threshold, refresh interval, and optional
 checkpoint URL/SHA-256 are all configured under `detector` in the same YAML.
 The bundled legacy MMEngine checkpoint is marked `trusted_checkpoint: true`
-so PyTorch 2.6+ can allowlist its `HistoryBuffer` metadata without globally
-disabling weights-only loading. Keep this enabled only for your own trusted
-lab checkpoint.
+so PyTorch 2.6+ can load its `HistoryBuffer` metadata. Compatibility mode is
+restricted to that exact resolved detector checkpoint path and is restored
+immediately after MMDetection initialization. Keep this enabled only for your
+own trusted lab checkpoint.
 
 See [docs/real_world_deployment.md](docs/real_world_deployment.md) before
 enabling robot output. The repository contains the sender but not the external

@@ -75,9 +75,11 @@ ToolRGS downloads and verifies the detector weight just like the grasp model.
 The checked-in lab profile sets `trusted_checkpoint: true` because the
 original detector checkpoint was produced by the trusted lab training
 environment and contains MMEngine `HistoryBuffer` metadata. On PyTorch 2.6+,
-ToolRGS locally allowlists only that metadata type while the detector is being
-initialized; it does not globally set `weights_only=False`. Never enable this
-option for an untrusted checkpoint.
+ToolRGS allowlists that metadata type and, for this exact resolved checkpoint
+path only, temporarily passes `weights_only=False` while MMDetection
+initializes it. The original `torch.load` is restored immediately afterward;
+other files and the DROG-OFF loader are unaffected. Never enable this option for
+an untrusted checkpoint.
 
 The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
 The DROG-OFF profile downloads the V2 best-J@1 checkpoint from the

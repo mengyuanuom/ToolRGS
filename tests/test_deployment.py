@@ -9,7 +9,10 @@ import numpy as np
 import yaml
 
 from deployment.config import activate_model_profile, load_deployment_config
-from deployment.detector import _trusted_mmengine_checkpoint_context
+from deployment.detector import (
+    _trusted_checkpoint_load_context,
+    _trusted_mmengine_checkpoint_context,
+)
 from deployment.grasp_policy import command_theta, command_width, mask_span_width
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
@@ -178,6 +181,28 @@ class DeploymentContractTest(unittest.TestCase):
     def test_untrusted_detector_keeps_default_safe_context(self):
         with _trusted_mmengine_checkpoint_context(False):
             pass
+
+    def test_trusted_detector_disables_weights_only_for_exact_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            trusted = Path(directory) / "detector.pth"
+            other = Path(directory) / "other.pth"
+            original_load = mock.Mock(return_value={"state_dict": {}})
+            fake_torch = mock.Mock()
+            fake_torch.load = original_load
+            with mock.patch.dict(sys.modules, {"torch": fake_torch}):
+                with _trusted_checkpoint_load_context(True, trusted):
+                    fake_torch.load(str(trusted), map_location="cpu")
+                    fake_torch.load(str(other), map_location="cpu")
+            self.assertIs(fake_torch.load, original_load)
+            self.assertEqual(
+                original_load.call_args_list,
+                [
+                    mock.call(
+                        str(trusted), map_location="cpu", weights_only=False
+                    ),
+                    mock.call(str(other), map_location="cpu"),
+                ],
+            )
 
     def test_model_profiles_can_be_selected(self):
         with tempfile.TemporaryDirectory() as directory:

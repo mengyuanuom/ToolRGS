@@ -1,6 +1,6 @@
 """Optional MMDetection adapter used by the server demo's detection tab."""
 
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from typing import Any, Dict
 
@@ -29,6 +29,33 @@ def _trusted_mmengine_checkpoint_context(enabled: bool):
     return safe_globals([HistoryBuffer])
 
 
+@contextmanager
+def _trusted_checkpoint_load_context(enabled: bool, checkpoint_path: Path):
+    """Use unrestricted unpickling only for one explicitly trusted local file."""
+    if not enabled:
+        yield
+        return
+    import torch
+
+    original_load = torch.load
+    trusted_path = checkpoint_path.resolve()
+
+    def load_trusted_file(file, *args, **kwargs):
+        try:
+            candidate = Path(file).expanduser().resolve()
+        except (TypeError, ValueError):
+            candidate = None
+        if candidate == trusted_path:
+            kwargs["weights_only"] = False
+        return original_load(file, *args, **kwargs)
+
+    torch.load = load_trusted_file
+    try:
+        yield
+    finally:
+        torch.load = original_load
+
+
 class MMDetectionAdapter:
     def __init__(self, cfg: Dict[str, Any], repo_root: str):
         try:
@@ -50,13 +77,21 @@ class MMDetectionAdapter:
         )
         self.inference_detector = inference_detector
         trusted_checkpoint = bool(cfg.get("trusted_checkpoint", False))
+        print(
+            "[detector] checkpoint trust: "
+            f"{'enabled' if trusted_checkpoint else 'disabled'} "
+            f"({checkpoint_path})"
+        )
         try:
             with _trusted_mmengine_checkpoint_context(trusted_checkpoint):
-                self.model = init_detector(
-                    str(config_path),
-                    str(checkpoint_path),
-                    device=str(cfg.get("device", "cuda:0")),
-                )
+                with _trusted_checkpoint_load_context(
+                    trusted_checkpoint, checkpoint_path
+                ):
+                    self.model = init_detector(
+                        str(config_path),
+                        str(checkpoint_path),
+                        device=str(cfg.get("device", "cuda:0")),
+                    )
         except Exception as exc:
             if "Weights only load failed" in str(exc) and not trusted_checkpoint:
                 raise RuntimeError(
