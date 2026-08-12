@@ -455,6 +455,18 @@ python tools/check_deployment.py --config config/deployment/lab.yaml \
 python deploy_gui.py --config config/deployment/lab.yaml
 ```
 
+For the optional 13-class Object detection tab, put the original Faster R-CNN
+checkpoint at `weights/epoch_48_13.pth`, set `detector.enabled: true` in
+`config/deployment/lab.yaml`, install `requirement-detector.txt`, and run:
+
+```bash
+python tools/check_deployment.py --config config/deployment/lab.yaml \
+  --build-detector
+```
+
+Detector class order, palette, threshold, refresh interval, and optional
+checkpoint URL/SHA-256 are all configured under `detector` in the same YAML.
+
 See [docs/real_world_deployment.md](docs/real_world_deployment.md) before
 enabling robot output. The repository contains the sender but not the external
 Kinova receiver/controller or its calibration, so a clone alone cannot safely

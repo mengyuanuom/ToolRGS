@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 
 from .config import resolve_repo_path
+from .weights import ensure_deployment_checkpoint
 from toolrgs.registry import DETECTORS
 
 
@@ -22,14 +23,44 @@ class MMDetectionAdapter:
         checkpoint_path = resolve_repo_path(cfg.get("checkpoint"), repo_root)
         if config_path is None or not config_path.is_file():
             raise FileNotFoundError(f"Detector config does not exist: {config_path}")
-        if checkpoint_path is None or not checkpoint_path.is_file():
-            raise FileNotFoundError(f"Detector checkpoint does not exist: {checkpoint_path}")
+        if checkpoint_path is None:
+            raise FileNotFoundError("Detector checkpoint path is empty")
+        checkpoint_path = ensure_deployment_checkpoint(
+            checkpoint_path,
+            cfg.get("checkpoint_url", ""),
+            cfg.get("checkpoint_sha256", ""),
+        )
         self.inference_detector = inference_detector
         self.model = init_detector(
             str(config_path), str(checkpoint_path), device=str(cfg.get("device", "cuda:0"))
         )
         self.threshold = float(cfg.get("score_threshold", 0.7))
-        self.classes = list(cfg.get("classes") or getattr(self.model, "dataset_meta", {}).get("classes", []))
+        if not 0.0 <= self.threshold <= 1.0:
+            raise ValueError("detector.score_threshold must be between 0 and 1")
+        self.max_detections = int(cfg.get("max_detections", 100))
+        if self.max_detections < 1:
+            raise ValueError("detector.max_detections must be at least 1")
+        self.box_thickness = max(1, int(cfg.get("box_thickness", 2)))
+        self.text_scale = float(cfg.get("text_scale", 0.55))
+        dataset_meta = getattr(self.model, "dataset_meta", {}) or {}
+        self.classes = list(cfg.get("classes") or dataset_meta.get("classes", []))
+        self.palette = list(cfg.get("palette") or dataset_meta.get("palette", []))
+        if not self.classes:
+            raise ValueError(
+                "Detector classes are empty; keep the 13 training classes in deployment YAML"
+            )
+        bbox_head = getattr(getattr(self.model, "roi_head", None), "bbox_head", None)
+        num_classes = getattr(bbox_head, "num_classes", None)
+        if num_classes is not None and int(num_classes) != len(self.classes):
+            raise ValueError(
+                f"Detector checkpoint/config expects {num_classes} classes, "
+                f"but deployment YAML defines {len(self.classes)}"
+            )
+        self.model.dataset_meta = {
+            **dataset_meta,
+            "classes": tuple(self.classes),
+            "palette": self.palette,
+        }
 
     def predict(self, frame_bgr: np.ndarray) -> np.ndarray:
         result = self.inference_detector(self.model, frame_bgr)
@@ -38,22 +69,38 @@ class MMDetectionAdapter:
         boxes = instances.bboxes.numpy()
         labels = instances.labels.numpy()
         output = frame_bgr.copy()
+        kept = 0
         for score, box, label in zip(scores, boxes, labels):
             if float(score) < self.threshold:
                 continue
+            label_index = int(label)
+            if label_index < 0 or label_index >= len(self.classes):
+                raise ValueError(
+                    f"Detector returned class index {label_index}, but only "
+                    f"{len(self.classes)} classes are configured"
+                )
             x1, y1, x2, y2 = (int(round(value)) for value in box)
-            cv2.rectangle(output, (x1, y1), (x2, y2), (30, 220, 30), 2)
-            name = self.classes[int(label)] if int(label) < len(self.classes) else str(int(label))
+            if label_index < len(self.palette):
+                color = tuple(int(value) for value in self.palette[label_index])
+            else:
+                color = (30, 220, 30)
+            cv2.rectangle(
+                output, (x1, y1), (x2, y2), color, self.box_thickness
+            )
+            name = self.classes[label_index]
             cv2.putText(
                 output,
                 f"{name} {float(score):.2f}",
                 (x1, max(20, y1 - 7)),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (30, 220, 30),
-                2,
+                self.text_scale,
+                color,
+                self.box_thickness,
                 cv2.LINE_AA,
             )
+            kept += 1
+            if kept >= self.max_detections:
+                break
         return output
 
 

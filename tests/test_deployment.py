@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+import runpy
 import unittest
 from unittest import mock
 
@@ -125,6 +126,24 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual((cfg["camera"]["width"], cfg["camera"]["height"]), (1280, 720))
         self.assertEqual(cfg["robot"]["coordinate_space"], "source")
         self.assertEqual(cfg["robot"]["theta_policy"]["offset_degrees"], 180.0)
+        self.assertEqual(len(cfg["detector"]["classes"]), 13)
+        self.assertEqual(cfg["detector"]["classes"][0], "box")
+        self.assertEqual(cfg["detector"]["classes"][-1], "wrench")
+        self.assertEqual(cfg["detector"]["checkpoint"], "weights/epoch_48_13.pth")
+
+    def test_detector_live_inference_pipeline_needs_no_annotations(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        detector_cfg = runpy.run_path(
+            str(repo_root / "config" / "deployment" / "faster-rcnn-13.py")
+        )
+        pipeline_types = [
+            transform["type"] for transform in detector_cfg["test_pipeline"]
+        ]
+        self.assertNotIn("LoadAnnotations", pipeline_types)
+        self.assertEqual(len(detector_cfg["metainfo"]["classes"]), 13)
+        self.assertEqual(
+            detector_cfg["model"]["roi_head"]["bbox_head"]["num_classes"], 13
+        )
 
     def test_model_profiles_can_be_selected(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -25,6 +25,11 @@ def parse_args():
         "--build-model", action="store_true", help="Load all model weights on the configured device"
     )
     parser.add_argument(
+        "--build-detector",
+        action="store_true",
+        help="Load the optional MMDetection model and its checkpoint",
+    )
+    parser.add_argument(
         "--probe-gelsight", action="store_true",
         help="Load the GelSight classifier and classify one tactile frame",
     )
@@ -114,14 +119,43 @@ def main() -> int:
     if backend == "gstreamer":
         require_module(report, "cv2", "OpenCV with GStreamer support")
         report.warn("Confirm cv2.getBuildInformation() reports GStreamer: YES")
-    if cfg.get("detector", {}).get("enabled"):
+    detector_cfg = cfg.get("detector", {})
+    if detector_cfg.get("enabled") or args.build_detector:
         require_module(report, "mmdet")
-        for key in ("config", "checkpoint"):
-            path = resolve_repo_path(cfg["detector"].get(key), cfg["_repo_root"])
-            if path is not None and path.is_file():
-                report.ok(f"Detector {key}: {path}")
-            else:
-                report.fail(f"Detector {key} not found: {path}")
+        detector_config = resolve_repo_path(
+            detector_cfg.get("config"), cfg["_repo_root"]
+        )
+        detector_checkpoint = resolve_repo_path(
+            detector_cfg.get("checkpoint"), cfg["_repo_root"]
+        )
+        if detector_config is not None and detector_config.is_file():
+            report.ok(f"Detector config: {detector_config}")
+        else:
+            report.fail(f"Detector config not found: {detector_config}")
+        if detector_checkpoint is not None and detector_checkpoint.is_file():
+            report.ok(f"Detector checkpoint: {detector_checkpoint}")
+        elif detector_cfg.get("checkpoint_url"):
+            report.warn(
+                "Detector checkpoint is missing and will be downloaded on "
+                f"build: {detector_checkpoint}"
+            )
+        else:
+            report.fail(f"Detector checkpoint not found: {detector_checkpoint}")
+        classes = list(detector_cfg.get("classes") or [])
+        palette = list(detector_cfg.get("palette") or [])
+        if len(classes) != 13:
+            report.fail(
+                f"Detector requires the checkpoint's 13 classes, got {len(classes)}"
+            )
+        elif len(set(classes)) != len(classes):
+            report.fail("Detector class names must be unique")
+        else:
+            report.ok("Detector class order: 13 classes")
+        if palette and len(palette) != len(classes):
+            report.fail("Detector palette length must match detector class count")
+        threshold = float(detector_cfg.get("score_threshold", 0.7))
+        if not 0.0 <= threshold <= 1.0:
+            report.fail("Detector score_threshold must be between 0 and 1")
     if cfg.get("audio", {}).get("enabled"):
         require_module(report, "sounddevice")
         require_module(report, "whisper", "openai-whisper")
@@ -205,6 +239,15 @@ def main() -> int:
             report.ok("Model and checkpoint loaded successfully")
         except Exception as exc:
             report.fail(f"Model build failed: {exc}")
+
+    if args.build_detector and report.failures == 0:
+        try:
+            from deployment.detector import build_detector
+
+            build_detector(detector_cfg, cfg["_repo_root"])
+            report.ok("Detector config and checkpoint loaded successfully")
+        except Exception as exc:
+            report.fail(f"Detector build failed: {exc}")
 
     if args.probe_gelsight and report.failures == 0:
         if not gelsight_cfg.get("enabled"):

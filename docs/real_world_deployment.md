@@ -38,6 +38,17 @@ it is intentionally not included in the base requirements.
 GelSight classification uses `torchvision`; install the torchvision build that
 matches the PyTorch/CUDA environment already used by ToolRGS.
 
+The original 13-class detector environment used MMEngine `0.10.7`, MMCV
+`2.1.0`, and the MMDetection source revision recorded in
+`requirement-detector.txt`. Install these only when the Object detection tab
+is needed:
+
+```bash
+pip install -U openmim
+mim install "mmengine==0.10.7" "mmcv==2.1.0"
+pip install -r requirement-detector.txt
+```
+
 ## 2. Put weights in place
 
 Training, detector, and Whisper weights are not committed to Git. Official
@@ -54,6 +65,13 @@ exp/grasp_tools/drogoff_grasp_tools/best_jindex_model.pth
 weights/epoch_48_13.pth                 # only when detector.enabled=true
 weights/gelsight_best.pt                # only when gelsight.enabled=true
 ```
+
+The 13-class Faster R-CNN checkpoint belongs at
+`weights/epoch_48_13.pth`. Its class order is fixed and must not be changed:
+`box, clamps, clip, crimp tool, hex key, mallet, marker, screwdriver, sponge,
+spool, tape, tape measure, wrench`. The detector section also supports
+`checkpoint_url` and `checkpoint_sha256`; if those values are filled,
+ToolRGS downloads and verifies the detector weight just like the grasp model.
 
 The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
 The DROG-OFF profile downloads the V2 best-J@1 checkpoint from the
@@ -77,6 +95,9 @@ cp config/deployment/lab.example.yaml config/deployment/lab.yaml
 python tools/check_deployment.py --config config/deployment/lab.yaml
 python tools/check_deployment.py --config config/deployment/lab.yaml \
   --probe-camera --build-model
+# When detector.enabled=true:
+python tools/check_deployment.py --config config/deployment/lab.yaml \
+  --build-detector
 # When GelSight is enabled and connected:
 python tools/check_deployment.py --config config/deployment/lab.yaml \
   --probe-camera --probe-gelsight --build-model
@@ -85,6 +106,13 @@ python tools/check_deployment.py --config config/deployment/lab.yaml \
 The preflight never connects to the robot and never sends a command. In the
 GUI, the **Model** selector reloads any entry under `model_profiles` without
 restarting the camera or robot-control layer.
+
+To enable detection, set `detector.enabled: true`. The GUI then creates a
+separate **Object detection** tab. `score_threshold` controls displayed boxes,
+`max_detections` caps boxes per frame, and `inference_interval_ms` controls
+detector refresh independently from grasp inference. The bundled inference
+pipeline accepts live NumPy/RealSense frames and does not require annotation
+files.
 
 Camera components are selected with `camera.type` (`camera.backend` remains a
 legacy alias):

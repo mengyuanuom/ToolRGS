@@ -7,6 +7,39 @@ from typing import Any, Dict, Mapping, Optional, Union
 import yaml
 
 
+DETECTOR_CLASSES = [
+    "box",
+    "clamps",
+    "clip",
+    "crimp tool",
+    "hex key",
+    "mallet",
+    "marker",
+    "screwdriver",
+    "sponge",
+    "spool",
+    "tape",
+    "tape measure",
+    "wrench",
+]
+
+DETECTOR_PALETTE = [
+    [220, 20, 60],
+    [119, 11, 32],
+    [0, 0, 142],
+    [0, 0, 230],
+    [106, 0, 228],
+    [0, 60, 100],
+    [0, 80, 100],
+    [0, 0, 70],
+    [0, 0, 192],
+    [250, 170, 30],
+    [100, 170, 30],
+    [220, 220, 0],
+    [175, 116, 175],
+]
+
+
 DEFAULT_CONFIG: Dict[str, Any] = {
     "model": {
         "config": "config/grasp_tools/drogoff.yaml",
@@ -77,9 +110,16 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "enabled": False,
         "config": "config/deployment/faster-rcnn-13.py",
         "checkpoint": "weights/epoch_48_13.pth",
+        "checkpoint_url": "",
+        "checkpoint_sha256": "",
         "device": "cuda:0",
         "score_threshold": 0.7,
-        "classes": [],
+        "max_detections": 100,
+        "inference_interval_ms": 400,
+        "box_thickness": 2,
+        "text_scale": 0.55,
+        "classes": DETECTOR_CLASSES,
+        "palette": DETECTOR_PALETTE,
     },
     "audio": {
         "type": "whisper",

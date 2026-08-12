@@ -253,7 +253,14 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             elif (
                 detector is not None
                 and self.tabs.currentIndex() == self.detector_tab_index
-                and now - self.last_detection_at >= interval_s
+                and now - self.last_detection_at
+                >= int(
+                    config.get("detector", {}).get(
+                        "inference_interval_ms",
+                        gui_cfg["inference_interval_ms"],
+                    )
+                )
+                / 1000.0
             ):
                 try:
                     detected = detector.predict(frame)
