@@ -114,16 +114,35 @@ calibration, not a retrained model.
 
 ### Current Grasp-Tools V2 strict-IoU results
 
-Both rows use rotated grasp IoU `0.50` and angle error at most `30` degrees.
-The DROG-OFF row is the completed V2 test evaluation. The CROG row is the best
-training-time validation checkpoint at epoch 24; a formal CROG test evaluation
-has not yet been recorded, so the two rows must not be treated as a direct
-test-set ranking.
+All rows below are formal evaluations on the complete Grasp-Tools V2 `test`
+split (8,000 language-conditioned samples). A grasp is successful when its
+rotated rectangle has IoU at least `0.50` with a ground-truth rectangle. The
+headline `J@1`/`J@5` columns use the conventional angle-error limit of `30`
+degrees; the stricter `15`-degree results are shown separately where available.
+Image-mask IoU and `Pr@50`--`Pr@90` measure segmentation rather than grasp
+rectangle success.
 
-| Model | Config | Split | Checkpoint | Seg. IoU | J@1 | J@5 | Eval commit | Notes |
-| --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
-| DROG-OFF | `config/grasp_tools/drogoff.yaml` | V2 test | - | **83.75** | **86.14** | **89.29** | - | Completed 3090 strict-IoU re-evaluation; exact checkpoint/commit still to be recovered from the server. |
-| CROG | `config/grasp_tools/crog.yaml` | V2 val | `best_epoch_024_J1_80.67_J5_83.95.pth` | 80.59 | 80.67 | 83.95 | `499fcba` | Best validation checkpoint at epoch 24; not yet a formal test result. |
+| Model | Config | Checkpoint | Seg. IoU | J@1 (30 deg) | J@5 (30 deg) | J@1 (15 deg) | J@5 (15 deg) | Eval commit |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| **DROG-OFF** | `config/grasp_tools/drogoff.yaml` | `best_epoch_011_J1_29.45_J5_34.67.pth` | **83.75** | **86.14** | **89.29** | - | - | `499fcba` |
+| DROG | `config/grasp_tools/drog.yaml` | `best_epoch_036_J1_81.12_J5_84.47.pth` | 83.10 | 79.60 | 84.82 | 79.50 | 84.70 | `499fcba` + dual-angle evaluator |
+| CROG | `config/grasp_tools/crog.yaml` | `best_epoch_024_J1_80.67_J5_83.95.pth` | 81.47 | 80.20 | 83.75 | 79.84 | 83.39 | `499fcba` + dual-angle evaluator |
+
+The unusual numbers embedded in the DROG-OFF checkpoint filename are historical
+training-time metrics; the values above come from a separate completed strict
+Test run using that exact file. DROG-OFF has not yet been re-evaluated with the
+additional `15`-degree counter, so those two cells remain intentionally blank.
+
+| Model | Pr@50 | Pr@60 | Pr@70 | Pr@80 | Pr@90 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **DROG-OFF** | **99.70** | **98.62** | **92.20** | **72.95** | **25.08** |
+| DROG | 99.60 | 97.95 | 91.15 | 69.88 | 24.24 |
+| CROG | 99.00 | 96.14 | 88.09 | 63.32 | 21.07 |
+
+Under the common 30-degree protocol, DROG-OFF leads CROG by `5.94` J@1 and
+`5.54` J@5 points. DROG is `0.60` points below CROG at J@1 but `1.07` points
+above it at J@5. Tightening the angle threshold from 30 to 15 degrees changes
+DROG by only `-0.10` J@1 / `-0.12` J@5 and CROG by `-0.36` / `-0.36`.
 
 ### Imported ToolRGS legacy records
 
