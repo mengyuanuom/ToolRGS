@@ -72,6 +72,12 @@ The 13-class Faster R-CNN checkpoint belongs at
 spool, tape, tape measure, wrench`. The detector section also supports
 `checkpoint_url` and `checkpoint_sha256`; if those values are filled,
 ToolRGS downloads and verifies the detector weight just like the grasp model.
+The checked-in lab profile sets `trusted_checkpoint: true` because the
+original detector checkpoint was produced by the trusted lab training
+environment and contains MMEngine `HistoryBuffer` metadata. On PyTorch 2.6+,
+ToolRGS locally allowlists only that metadata type while the detector is being
+initialized; it does not globally set `weights_only=False`. Never enable this
+option for an untrusted checkpoint.
 
 The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
 The DROG-OFF profile downloads the V2 best-J@1 checkpoint from the

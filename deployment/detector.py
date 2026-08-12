@@ -1,5 +1,6 @@
 """Optional MMDetection adapter used by the server demo's detection tab."""
 
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Dict
 
@@ -9,6 +10,23 @@ import numpy as np
 from .config import resolve_repo_path
 from .weights import ensure_deployment_checkpoint
 from toolrgs.registry import DETECTORS
+
+
+def _trusted_mmengine_checkpoint_context(enabled: bool):
+    """Allowlist MMEngine metadata without disabling weights-only loading."""
+    if not enabled:
+        return nullcontext()
+    try:
+        import torch
+        from mmengine.logging.history_buffer import HistoryBuffer
+    except ImportError:
+        return nullcontext()
+    safe_globals = getattr(
+        getattr(torch, "serialization", None), "safe_globals", None
+    )
+    if safe_globals is None:
+        return nullcontext()
+    return safe_globals([HistoryBuffer])
 
 
 class MMDetectionAdapter:
@@ -31,9 +49,23 @@ class MMDetectionAdapter:
             cfg.get("checkpoint_sha256", ""),
         )
         self.inference_detector = inference_detector
-        self.model = init_detector(
-            str(config_path), str(checkpoint_path), device=str(cfg.get("device", "cuda:0"))
-        )
+        trusted_checkpoint = bool(cfg.get("trusted_checkpoint", False))
+        try:
+            with _trusted_mmengine_checkpoint_context(trusted_checkpoint):
+                self.model = init_detector(
+                    str(config_path),
+                    str(checkpoint_path),
+                    device=str(cfg.get("device", "cuda:0")),
+                )
+        except Exception as exc:
+            if "Weights only load failed" in str(exc) and not trusted_checkpoint:
+                raise RuntimeError(
+                    "PyTorch blocked legacy MMEngine metadata in the detector "
+                    "checkpoint. If this checkpoint comes from your trusted "
+                    "training/server source, set detector.trusted_checkpoint: "
+                    "true. Do not enable it for downloaded or unverified files."
+                ) from exc
+            raise
         self.threshold = float(cfg.get("score_threshold", 0.7))
         if not 0.0 <= self.threshold <= 1.0:
             raise ValueError("detector.score_threshold must be between 0 and 1")

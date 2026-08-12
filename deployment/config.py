@@ -112,6 +112,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "checkpoint": "weights/epoch_48_13.pth",
         "checkpoint_url": "",
         "checkpoint_sha256": "",
+        "trusted_checkpoint": False,
         "device": "cuda:0",
         "score_threshold": 0.7,
         "max_detections": 100,

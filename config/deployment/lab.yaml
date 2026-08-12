@@ -68,6 +68,8 @@ detector:
   checkpoint: weights/epoch_48_13.pth
   checkpoint_url: ""
   checkpoint_sha256: ""
+  # This is the lab's own MMEngine checkpoint. It contains HistoryBuffer metadata.
+  trusted_checkpoint: true
   device: cuda:0
   score_threshold: 0.70
   max_detections: 100

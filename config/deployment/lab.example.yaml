@@ -103,6 +103,8 @@ detector:
   # Optional Release/HTTP download. Keep empty when the weight is copied manually.
   checkpoint_url: ""
   checkpoint_sha256: ""
+  # Only enable for a checkpoint produced by your trusted training/server source.
+  trusted_checkpoint: true
   device: cuda:0
   score_threshold: 0.70
   max_detections: 100

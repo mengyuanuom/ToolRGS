@@ -134,6 +134,11 @@ def main() -> int:
             report.fail(f"Detector config not found: {detector_config}")
         if detector_checkpoint is not None and detector_checkpoint.is_file():
             report.ok(f"Detector checkpoint: {detector_checkpoint}")
+            if detector_cfg.get("trusted_checkpoint"):
+                report.warn(
+                    "Detector trusted_checkpoint is enabled: legacy MMEngine "
+                    "HistoryBuffer metadata is allowlisted for PyTorch 2.6+"
+                )
         elif detector_cfg.get("checkpoint_url"):
             report.warn(
                 "Detector checkpoint is missing and will be downloaded on "

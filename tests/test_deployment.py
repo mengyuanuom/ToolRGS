@@ -1,6 +1,7 @@
 import tempfile
 from pathlib import Path
 import runpy
+import sys
 import unittest
 from unittest import mock
 
@@ -8,6 +9,7 @@ import numpy as np
 import yaml
 
 from deployment.config import activate_model_profile, load_deployment_config
+from deployment.detector import _trusted_mmengine_checkpoint_context
 from deployment.grasp_policy import command_theta, command_width, mask_span_width
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
@@ -131,6 +133,7 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(cfg["detector"]["classes"][-1], "wrench")
         self.assertEqual(cfg["detector"]["checkpoint"], "weights/epoch_48_13.pth")
         self.assertTrue(cfg["detector"]["enabled"])
+        self.assertTrue(cfg["detector"]["trusted_checkpoint"])
         self.assertFalse(cfg["robot"]["enabled"])
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
@@ -146,6 +149,35 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(
             detector_cfg["model"]["roi_head"]["bbox_head"]["num_classes"], 13
         )
+
+    def test_trusted_detector_allowlists_only_history_buffer(self):
+        fake_context = mock.Mock()
+        fake_torch = mock.Mock()
+        fake_torch.serialization.safe_globals.return_value = fake_context
+        fake_history_module = mock.Mock()
+
+        class HistoryBuffer:
+            pass
+
+        fake_history_module.HistoryBuffer = HistoryBuffer
+        with mock.patch.dict(
+            sys.modules,
+            {
+                "torch": fake_torch,
+                "mmengine": mock.Mock(),
+                "mmengine.logging": mock.Mock(),
+                "mmengine.logging.history_buffer": fake_history_module,
+            },
+        ):
+            context = _trusted_mmengine_checkpoint_context(True)
+        self.assertIs(context, fake_context)
+        fake_torch.serialization.safe_globals.assert_called_once_with(
+            [HistoryBuffer]
+        )
+
+    def test_untrusted_detector_keeps_default_safe_context(self):
+        with _trusted_mmengine_checkpoint_context(False):
+            pass
 
     def test_model_profiles_can_be_selected(self):
         with tempfile.TemporaryDirectory() as directory:
