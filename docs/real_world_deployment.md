@@ -58,6 +58,9 @@ weights/gelsight_best.pt                # only when gelsight.enabled=true
 The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
 The DROG-OFF profile downloads the formally evaluated Grasp-Tools V2 checkpoint
 from the [ToolRGS weight release](https://github.com/mengyuanuom/ToolRGS/releases/tag/grasp-tools-v2-weights).
+The published asset is `drogoff_grasp_tools_v2_best_j1.pth`: it is the
+ordinary `drogoff` run's validation-J@1-best checkpoint (epoch 11), not a
+GWD/IoU-aware variant.
 Its size is `952769586` bytes and its SHA-256 is
 `7fcef57dd968a381d61bab7ef35e5e3906149bcec9f4fdbb6658da23659e73d5`.
 ToolRGS validates that digest before loading the checkpoint.
