@@ -120,7 +120,7 @@ class DeploymentContractTest(unittest.TestCase):
     def test_lab_profile_uses_physical_realsense_resolution(self):
         repo_root = Path(__file__).resolve().parents[1]
         cfg = load_deployment_config(
-            str(repo_root / "config" / "deployment" / "lab.example.yaml")
+            str(repo_root / "config" / "deployment" / "lab.yaml")
         )
         self.assertEqual(cfg["camera"]["type"], "realsense")
         self.assertEqual((cfg["camera"]["width"], cfg["camera"]["height"]), (1280, 720))
@@ -130,6 +130,8 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(cfg["detector"]["classes"][0], "box")
         self.assertEqual(cfg["detector"]["classes"][-1], "wrench")
         self.assertEqual(cfg["detector"]["checkpoint"], "weights/epoch_48_13.pth")
+        self.assertTrue(cfg["detector"]["enabled"])
+        self.assertFalse(cfg["robot"]["enabled"])
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]

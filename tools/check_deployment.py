@@ -17,7 +17,7 @@ from utils.pretrained import ARTIFACTS
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default="config/deployment/lab.example.yaml")
+    parser.add_argument("--config", default="config/deployment/lab.yaml")
     parser.add_argument(
         "--probe-camera", action="store_true", help="Open the camera and read one frame"
     )

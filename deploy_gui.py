@@ -9,7 +9,9 @@ from deployment.gui import run_gui
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--config", default="config/deployment/lab.example.yaml", help="Deployment YAML"
+        "--config",
+        default="config/deployment/lab.yaml",
+        help="Deployment YAML (default: ready-to-run grasp + detector lab profile)",
     )
     parser.add_argument(
         "--allow-robot",

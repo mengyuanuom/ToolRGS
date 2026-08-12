@@ -87,21 +87,21 @@ ToolRGS validates that digest before loading the checkpoint.
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
 command can be run from any working directory.
 
-## 3. Create a lab config and preflight it
+## 3. Preflight the checked-in lab configuration
 
 ```bash
-cp config/deployment/lab.example.yaml config/deployment/lab.yaml
-# Edit active_model/model_profiles, camera path/device, and prompt.
-python tools/check_deployment.py --config config/deployment/lab.yaml
-python tools/check_deployment.py --config config/deployment/lab.yaml \
-  --probe-camera --build-model
-# When detector.enabled=true:
-python tools/check_deployment.py --config config/deployment/lab.yaml \
-  --build-detector
+python tools/check_deployment.py
+python tools/check_deployment.py \
+  --probe-camera --build-model --build-detector
 # When GelSight is enabled and connected:
 python tools/check_deployment.py --config config/deployment/lab.yaml \
   --probe-camera --probe-gelsight --build-model
 ```
+
+`config/deployment/lab.yaml` is committed as the ready-to-run physical
+profile: RealSense, DROG-OFF, and the 13-class Faster R-CNN detector are
+enabled, while robot output remains disabled. `lab.example.yaml` remains the
+extended reference. A normal deployment no longer needs a YAML copy/edit step.
 
 The preflight never connects to the robot and never sends a command. In the
 GUI, the **Model** selector reloads any entry under `model_profiles` without
@@ -131,10 +131,10 @@ before robot transmission.
 
 ## 4. Dry-run the GUI
 
-Keep `robot.enabled: false` and run:
+The committed profile already keeps `robot.enabled: false`. Run:
 
 ```bash
-python deploy_gui.py --config config/deployment/lab.yaml
+python deploy_gui.py
 ```
 
 Check the segmentation overlay, grasp rectangle, center, angle, and width before

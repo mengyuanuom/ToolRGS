@@ -446,22 +446,22 @@ optional GelSight classifier used by the 22-class lab workflow. Mask-span
 gripper width, semantic depth tiers, receiver angle conversion, and the legacy
 Kinova TCP command format are configured in YAML. The direct RealSense profile
 uses a 1280x720 color stream and maps model predictions back to that source
-canvas before sending. Start in dry-run mode:
+canvas before sending. The committed lab profile already enables RealSense,
+DROG-OFF, and the 13-class detector while keeping robot output disabled. Start
+in dry-run mode:
 
 ```bash
-cp config/deployment/lab.example.yaml config/deployment/lab.yaml
-python tools/check_deployment.py --config config/deployment/lab.yaml \
-  --probe-camera --build-model
-python deploy_gui.py --config config/deployment/lab.yaml
+python tools/check_deployment.py \
+  --probe-camera --build-model --build-detector
+python deploy_gui.py
 ```
 
-For the optional 13-class Object detection tab, put the original Faster R-CNN
-checkpoint at `weights/epoch_48_13.pth`, set `detector.enabled: true` in
-`config/deployment/lab.yaml`, install `requirement-detector.txt`, and run:
+Put the original Faster R-CNN checkpoint at `weights/epoch_48_13.pth` and
+install `requirement-detector.txt`. No YAML copy or edit step is required for
+the standard grasp-plus-detection GUI.
 
 ```bash
-python tools/check_deployment.py --config config/deployment/lab.yaml \
-  --build-detector
+python tools/check_deployment.py --build-detector
 ```
 
 Detector class order, palette, threshold, refresh interval, and optional

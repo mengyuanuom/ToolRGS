@@ -1,0 +1,92 @@
+# Ready-to-run lab profile: DROG-OFF grasping + 13-class Faster R-CNN.
+# Robot output stays disabled until explicitly enabled and launched with
+# --allow-robot.
+active_model: drogoff-grasptools-v2
+
+model_profiles:
+  drogoff-grasptools-v2:
+    config: config/grasp_tools/drogoff_v2.yaml
+    checkpoint: weights/drogoff_grasp_tools_v2_best_j1.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/drogoff_grasp_tools_v2_best_j1.pth
+    checkpoint_sha256: 7fcef57dd968a381d61bab7ef35e5e3906149bcec9f4fdbb6658da23659e73d5
+    device: cuda:0
+    prompt: the screwdriver
+    grasp_size_activation: auto
+    mask_threshold: 0.35
+    quality_threshold: 0.40
+    num_grasps: 1
+    postprocessor:
+      type: dense_grasp
+      min_distance: 2
+      width_factor: 100.0
+      grasp_height: 20.0
+    gate_quality_by_mask: true
+    scale_grasp_to_source: true
+    overrides: {}
+
+camera:
+  type: realsense
+  device: 0
+  width: 1280
+  height: 720
+  fps: 30
+
+robot:
+  type: legacy_tcp
+  enabled: false
+  host: 192.168.38.10
+  port: 3000
+  timeout_s: 2.0
+  auto_send: false
+  auto_send_interval_s: 2.0
+  default_depth: 0
+  coordinate_space: source
+  width_policy:
+    type: mask_span
+    step: 0.5
+    safety_margin: 30.0
+    maximum: 600
+    exclude: [tape, cable]
+  theta_policy:
+    sign: 1.0
+    offset_degrees: 180.0
+    normalization: zero_360
+  depth_policy:
+    multiple_matches: max
+    class_tiers: {}
+  limits:
+    x: [0, 1280]
+    y: [0, 720]
+    theta: [0, 360]
+    width: [1, 600]
+    depth: [-1, 1]
+
+detector:
+  type: mmdetection
+  enabled: true
+  config: config/deployment/faster-rcnn-13.py
+  checkpoint: weights/epoch_48_13.pth
+  checkpoint_url: ""
+  checkpoint_sha256: ""
+  device: cuda:0
+  score_threshold: 0.70
+  max_detections: 100
+  inference_interval_ms: 400
+  box_thickness: 2
+  text_scale: 0.55
+
+audio:
+  type: whisper
+  enabled: false
+
+gelsight:
+  type: classifier
+  enabled: false
+
+gui:
+  title: ToolRGS Real-world Grasp Demo
+  window_width: 1500
+  window_height: 900
+  camera_interval_ms: 33
+  inference_interval_ms: 400
+  continuous_inference: true
