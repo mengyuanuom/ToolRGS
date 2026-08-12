@@ -56,13 +56,15 @@ weights/gelsight_best.pt                # only when gelsight.enabled=true
 ```
 
 The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
-The current ordinary DROG-OFF retraining has not produced a checkpoint yet, so
-that profile intentionally has an empty `checkpoint_url`. Do not deploy the
-2026-08-08 legacy release asset as the current model, and do not substitute a
-`drogoff_gwd` checkpoint: the architectures are different. After the ordinary
-`drogoff` run completes, publish its validation-J@1-best
-`best_j1_model.pth`, then fill in the URL and SHA-256 here. ToolRGS validates
-the configured digest before loading a downloaded checkpoint.
+The DROG-OFF profile downloads the V2 best-J@1 checkpoint from the
+[ToolRGS weight release](https://github.com/mengyuanuom/ToolRGS/releases/tag/grasp-tools-v2-weights).
+The strict Test log records that this exact checkpoint produced segmentation
+IoU `83.75`, J@1 `86.14`, and J@5 `89.29` under rotated IoU `>0.50` and
+angle error `<=30` degrees. The lower `29.45/34.67` values in its original
+training filename came from the older validation path; they are not its strict
+Test scores. The asset is `952769586` bytes with SHA-256
+`7fcef57dd968a381d61bab7ef35e5e3906149bcec9f4fdbb6658da23659e73d5`.
+ToolRGS validates that digest before loading the checkpoint.
 
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
 command can be run from any working directory.
