@@ -20,6 +20,9 @@ model_profiles:
       min_distance: 2
       width_factor: 100.0
       grasp_height: 20.0
+      # Restore the long side once from the 448px canvas; keep the fixed
+      # short side at 20px in source-image coordinates.
+      size_coordinate: canvas
     gate_quality_by_mask: true
     scale_grasp_to_source: true
     overrides: {}

@@ -82,7 +82,24 @@ class EvaluationComponentTest(unittest.TestCase):
         self.assertEqual((detection.x, detection.y), (4.0, 3.0))
         self.assertAlmostEqual(detection.angle_degrees, 45.0, places=5)
         self.assertAlmostEqual(detection.width, 100.0)
-        self.assertAlmostEqual(detection.height, 40.0)
+        self.assertAlmostEqual(detection.height, 20.0)
+
+    def test_original_coordinate_width_is_not_scaled_twice(self):
+        quality = np.zeros((8, 8), dtype=np.float32)
+        quality[3, 4] = 0.9
+        sine = np.zeros_like(quality)
+        cosine = np.ones_like(quality)
+        width = np.full_like(quality, 0.5)
+        detection = DenseGraspPostProcessor(
+            num_grasps=1,
+            width_factor=300.0,
+            grasp_height=20.0,
+            size_coordinate="original",
+        )(
+            quality, sine, cosine, width, spatial_scale=1280.0 / 448.0
+        )[0]
+        self.assertAlmostEqual(detection.width, 150.0)
+        self.assertAlmostEqual(detection.height, 20.0)
 
     def test_dense_grasp_postprocessor_decodes_predicted_short_side(self):
         quality = np.zeros((8, 8), dtype=np.float32)

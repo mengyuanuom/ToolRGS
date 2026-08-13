@@ -33,12 +33,19 @@ class DenseGraspPostProcessor:
         num_grasps: int = 1,
         width_factor: float = 100.0,
         grasp_height: float = 20.0,
+        size_coordinate: str = "canvas",
     ):
         self.quality_threshold = float(quality_threshold)
         self.min_distance = int(min_distance)
         self.num_grasps = int(num_grasps)
         self.width_factor = float(width_factor)
         self.grasp_height = float(grasp_height)
+        self.size_coordinate = str(size_coordinate).strip().lower()
+        if self.size_coordinate not in {"canvas", "original"}:
+            raise ValueError(
+                "size_coordinate must be 'canvas' or 'original', got "
+                f"{size_coordinate!r}"
+            )
 
     def __call__(
         self,
@@ -72,14 +79,20 @@ class DenseGraspPostProcessor:
             num_peaks=count,
         )
         angle = np.arctan2(sine, cosine) / 2.0
-        scale = float(spatial_scale)
+        # Long-side maps from legacy checkpoints are normalized in model-canvas
+        # pixels and need one canvas->source scale. New checkpoints may predict
+        # original-image pixels directly and must not be scaled again.
+        scale = float(spatial_scale) if self.size_coordinate == "canvas" else 1.0
         return [
             GraspDetection(
                 x=float(column),
                 y=float(row),
                 width=max(1.0, float(width[row, column]) * self.width_factor * scale),
                 height=(
-                    self.grasp_height * scale
+                    # CROG/Grasp-Tools evaluation defines the fixed short side
+                    # in final source-image coordinates. It is always 20 px by
+                    # default, independent of the 448->camera scaling factor.
+                    self.grasp_height
                     if short_side is None
                     else max(
                         1.0,
