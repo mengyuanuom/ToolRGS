@@ -88,15 +88,23 @@ initializes it. The original `torch.load` is restored immediately afterward;
 other files and the DROG-OFF loader are unaffected. Never enable this option for
 an untrusted checkpoint.
 
-The checked-in `lab.example.yaml` contains separate CROG and DROG-OFF profiles.
-The DROG-OFF profile downloads the V2 best-J@1 checkpoint from the
+The checked-in lab profiles select `drogoff-grasptools-v2-original300` by
+default. It downloads the current original-coordinate checkpoint from the
 [ToolRGS weight release](https://github.com/mengyuanuom/ToolRGS/releases/tag/grasp-tools-v2-weights).
-The strict Test log records that this exact checkpoint produced segmentation
-IoU `83.75`, J@1 `86.14`, and J@5 `89.29` under rotated IoU `>0.50` and
-angle error `<=30` degrees. The lower `29.45/34.67` values in its original
-training filename came from the older validation path; they are not its strict
-Test scores. The asset is `952769586` bytes with SHA-256
-`7fcef57dd968a381d61bab7ef35e5e3906149bcec9f4fdbb6658da23659e73d5`.
+This is the epoch-11 J@1-best checkpoint from the ongoing original-scale run;
+its validation result is segmentation IoU `84.64`, J@1 `60.65`, and J@5
+`62.02` under rotated IoU `>0.50` and angle error `<=30` degrees. It has not
+yet received a formal test-set score and therefore does not replace the older
+published Test result in `performance_summary.md`.
+
+The model and GUI now share the same size contract: grasp long-side values use
+an original-image normalization factor of `300`, while the displayed short
+side is always `20` original-image pixels. `size_coordinate: original`
+prevents a 1280x720 RealSense frame from applying the 448px canvas scale to
+the grasp width a second time. The asset is named
+`drogoff_grasp_tools_v2_original300_best_j1.pth`, is `952762694` bytes, and has
+SHA-256
+`261283bed3cbf0f743541b85b6b33b43af0512d253d12312041776a088e9dbd3`.
 ToolRGS validates that digest before loading the checkpoint.
 
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
