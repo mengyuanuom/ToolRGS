@@ -152,6 +152,31 @@ The committed profile already keeps `robot.enabled: false`. Run:
 python deploy_gui.py
 ```
 
+### Linux 无摄像头验证
+
+GUI 可以直接把静态图片当作相机帧，不需要安装 RealSense SDK，也不会连接机械臂。
+仓库自带样例图时，直接运行：
+
+```bash
+python deploy_gui.py \
+  --config config/deployment/lab.yaml \
+  --image \
+  --prompt "the tool"
+```
+
+使用自己的图片：
+
+```bash
+python deploy_gui.py \
+  --config config/deployment/lab.yaml \
+  --image /absolute/path/to/test.jpg \
+  --prompt "the sponge"
+```
+
+图片模式会自动关闭连续推理。GUI 打开后点击 **Predict now**，即可检查语言抓取、
+分割图、质量图、角度图和宽度图；若部署 YAML 已启用目标检测，目标检测页也会使用
+同一张图片。不要添加 `--allow-robot`，并保持 `robot.enabled: false`。
+
 Check the segmentation overlay, grasp rectangle, center, angle, and width before
 using a physical robot. Object detector, audio, and GelSight controls only
 appear when their respective `enabled` settings are true. GelSight follows the

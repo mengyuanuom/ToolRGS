@@ -43,12 +43,15 @@ model_profiles:
 
 camera:
   # image | opencv | video | realsense | gstreamer
+  # No camera on Linux? Run:
+  # python deploy_gui.py --config config/deployment/lab.yaml --image
+  # Or set type: image and image_path to any JPG/PNG below.
   type: realsense
   device: 0
   width: 1280
   height: 720
   fps: 30
-  image_path: assets/test_frame.jpg
+  image_path: assets/grasp_tools/graspall/000000000000.jpg
   video_path: assets/test_video.mp4
   gstreamer_pipeline: >-
     shmsrc socket-path=/path/to/fooA is-live=true do-timestamp=true !

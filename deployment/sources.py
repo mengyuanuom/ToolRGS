@@ -19,6 +19,8 @@ class FrameSource:
 
 class ImageSource(FrameSource):
     def __init__(self, image_path: str):
+        if not str(image_path).strip():
+            raise ValueError("camera.image_path is required when camera.type is 'image'")
         self.path = Path(image_path)
         self.image = cv2.imread(str(self.path), cv2.IMREAD_COLOR)
         if self.image is None:
@@ -144,7 +146,9 @@ class GStreamerSource(FrameSource):
 
 @CAMERAS.register_module(name="image")
 def _build_image_source(camera_cfg: Dict[str, Any], repo_root: str) -> FrameSource:
-    value = camera_cfg.get("image_path")
+    value = str(camera_cfg.get("image_path", "")).strip()
+    if not value:
+        raise ValueError("camera.image_path is required when camera.type is 'image'")
     path = Path(value).expanduser()
     if not path.is_absolute():
         path = Path(repo_root) / path

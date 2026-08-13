@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 import runpy
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -17,9 +18,31 @@ from deployment.grasp_policy import command_theta, command_width, mask_span_widt
 from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
+from deploy_gui import DEFAULT_SAMPLE_IMAGE, apply_runtime_overrides, parse_args
 
 
 class DeploymentContractTest(unittest.TestCase):
+    def test_image_cli_uses_bundled_sample_by_default(self):
+        args = parse_args(["--image"])
+        self.assertEqual(args.image, DEFAULT_SAMPLE_IMAGE)
+
+    def test_image_cli_switches_off_camera_and_continuous_inference(self):
+        with tempfile.TemporaryDirectory() as directory:
+            image = Path(directory) / "sample.jpg"
+            image.write_bytes(b"placeholder")
+            config = {
+                "_repo_root": directory,
+                "camera": {"type": "realsense", "image_path": ""},
+                "gui": {"continuous_inference": True},
+                "model": {"prompt": "the tool"},
+            }
+            args = SimpleNamespace(image=str(image), prompt="the sponge")
+            updated = apply_runtime_overrides(config, args)
+        self.assertEqual(updated["camera"]["type"], "image")
+        self.assertEqual(updated["camera"]["backend"], "image")
+        self.assertFalse(updated["gui"]["continuous_inference"])
+        self.assertEqual(updated["model"]["prompt"], "the sponge")
+
     def test_legacy_wire_protocol(self):
         command = GraspCommand(12.5, 33, -45.25, 80, 1)
         self.assertEqual(command.to_wire(), b"{12.5, 33, -45.25, 80, 1}\n")
