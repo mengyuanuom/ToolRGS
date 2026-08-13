@@ -30,7 +30,6 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         from PyQt5.QtWidgets import (
             QApplication,
             QCheckBox,
-            QComboBox,
             QGridLayout,
             QHBoxLayout,
             QLabel,
@@ -38,7 +37,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             QMainWindow,
             QMessageBox,
             QPushButton,
-            QTabWidget,
+            QSizePolicy,
+            QStackedWidget,
             QVBoxLayout,
             QWidget,
         )
@@ -79,7 +79,10 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.active_model = str(config.get("_active_model", "model"))
             self.audio_results = queue.Queue()
             self.robot: Optional[LegacyTCPGraspClient] = None
+            self.current_mode = 0
+            self.model_selector = None
             self.setWindowTitle(str(gui_cfg["title"]))
+            self.setMinimumSize(1200, 760)
             self.resize(int(gui_cfg["window_width"]), int(gui_cfg["window_height"]))
             self._build_ui()
             self.timer = QTimer(self)
@@ -90,65 +93,107 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             root = QWidget(self)
             layout = QVBoxLayout(root)
 
-            prompt_row = QHBoxLayout()
-            profiles = config.get("_model_profiles", {})
-            if profiles:
-                prompt_row.addWidget(QLabel("Model:"))
-                self.model_selector = QComboBox()
-                self.model_selector.addItems(list(profiles))
-                self.model_selector.setCurrentText(self.active_model)
-                self.model_selector.currentTextChanged.connect(
-                    self._change_model
+            # Match the deployed 22-class GUI: three large mode buttons on top,
+            # one central page at a time, and no tab bar.
+            mode_row = QHBoxLayout()
+            self.object_button = QPushButton("Object Detection")
+            self.grasping_button = QPushButton("Grasping Points Detection")
+            self.gelsight_button = QPushButton("GelSight")
+            for button in (
+                self.object_button,
+                self.grasping_button,
+                self.gelsight_button,
+            ):
+                button.setMinimumHeight(40)
+                mode_row.addWidget(button, 1)
+            self.object_button.clicked.connect(lambda: self._switch_mode(0))
+            self.grasping_button.clicked.connect(lambda: self._switch_mode(1))
+            self.gelsight_button.clicked.connect(lambda: self._switch_mode(2))
+            self.object_button.setEnabled(detector is not None)
+            self.gelsight_button.setEnabled(gelsight is not None)
+            layout.addLayout(mode_row)
+
+            self.pages = QStackedWidget()
+
+            # Object detection page.
+            detection_page = QWidget()
+            detection_layout = QVBoxLayout(detection_page)
+            self.detection_label = self._image_label(
+                "Waiting for object detection"
+                if detector is not None
+                else "Object detector is disabled in the deployment config"
+            )
+            self.detection_label.setSizePolicy(
+                QSizePolicy.Expanding, QSizePolicy.Expanding
+            )
+            detection_layout.addWidget(self.detection_label)
+            self.pages.addWidget(detection_page)
+
+            # Grasp page: two large images above three small dense maps, matching
+            # realsense_object_grasp_detection_gelsight_*_widthdepth_22.py.
+            grasp_page = QWidget()
+            grasp_layout = QVBoxLayout(grasp_page)
+            grasp_grid = QGridLayout()
+            self.live_label = self._image_label("Grasp Result")
+            self.mask_label = self._image_label("Segmentation Mask")
+            grasp_grid.addWidget(
+                self._labeled_image(self.live_label, "Grasp Result"), 0, 0, 1, 3
+            )
+            grasp_grid.addWidget(
+                self._labeled_image(self.mask_label, "Segmentation Mask"), 0, 3, 1, 3
+            )
+            self.map_labels = {}
+            for column, (name, title) in enumerate(
+                (("quality", "Quality Mask"), ("angle", "Angle Mask"), ("width", "Width Mask"))
+            ):
+                label = self._image_label(title, minimum=(160, 120))
+                label.setMaximumHeight(180)
+                self.map_labels[name] = label
+                grasp_grid.addWidget(
+                    self._labeled_image(label, title), 1, column * 2, 1, 2
                 )
-                prompt_row.addWidget(self.model_selector)
-            else:
-                self.model_selector = None
-            prompt_row.addWidget(QLabel("Language instruction:"))
+            grasp_layout.addLayout(grasp_grid, 1)
+
+            self.sentence_label = QLabel(
+                f"Current target: {config['model']['prompt']}"
+            )
+            self.sentence_label.setAlignment(Qt.AlignCenter)
+            self.sentence_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+            grasp_layout.addWidget(self.sentence_label)
+
+            prompt_row = QHBoxLayout()
+            self.audio_button = QPushButton("Speak")
+            self.audio_button.clicked.connect(self._record_instruction)
+            self.audio_button.setEnabled(audio is not None)
+            prompt_row.addWidget(self.audio_button)
             self.prompt = QLineEdit(str(config["model"]["prompt"]))
+            self.prompt.setPlaceholderText("Type a language instruction and press Enter")
             self.prompt.returnPressed.connect(self._predict_now)
             prompt_row.addWidget(self.prompt, 1)
             self.predict_button = QPushButton("Predict now")
             self.predict_button.clicked.connect(self._predict_now)
             prompt_row.addWidget(self.predict_button)
-            self.audio_button = QPushButton("Record instruction")
-            self.audio_button.clicked.connect(self._record_instruction)
-            self.audio_button.setVisible(audio is not None)
-            prompt_row.addWidget(self.audio_button)
-            self.continuous = QCheckBox("Continuous")
-            self.continuous.setChecked(bool(gui_cfg["continuous_inference"]))
-            prompt_row.addWidget(self.continuous)
-            layout.addLayout(prompt_row)
+            grasp_layout.addLayout(prompt_row)
+            self.pages.addWidget(grasp_page)
 
-            self.tabs = QTabWidget()
-            self.live_label = self._image_label("Waiting for camera frame")
-            self.tabs.addTab(self.live_label, "Live grasp")
-            self.detector_tab_index = -1
-            self.detection_label = None
-            if detector is not None:
-                self.detection_label = self._image_label("Waiting for detector")
-                self.detector_tab_index = self.tabs.addTab(
-                    self.detection_label, "Object detection"
-                )
-            maps_page = QWidget()
-            maps_layout = QGridLayout(maps_page)
-            self.map_labels = {}
-            for index, name in enumerate(
-                ("segmentation", "quality", "angle", "width", "short_side")
-            ):
-                label = self._image_label(name)
-                maps_layout.addWidget(label, index // 2, index % 2)
-                self.map_labels[name] = label
-            self.tabs.addTab(maps_page, "Dense maps")
-            self.gelsight_tab_index = -1
-            self.gelsight_label = None
-            if gelsight is not None:
-                self.gelsight_label = self._image_label("Waiting for GelSight frame")
-                self.gelsight_tab_index = self.tabs.addTab(
-                    self.gelsight_label, "GelSight"
-                )
-            layout.addWidget(self.tabs, 1)
+            # GelSight page.
+            gelsight_page = QWidget()
+            gelsight_layout = QVBoxLayout(gelsight_page)
+            self.gelsight_label = self._image_label(
+                "Waiting for GelSight frame"
+                if gelsight is not None
+                else "GelSight is disabled in the deployment config"
+            )
+            self.gelsight_label.setSizePolicy(
+                QSizePolicy.Expanding, QSizePolicy.Expanding
+            )
+            gelsight_layout.addWidget(self.gelsight_label)
+            self.pages.addWidget(gelsight_page)
 
-            robot_row = QHBoxLayout()
+            layout.addWidget(self.pages, 1)
+
+            robot_controls = QWidget()
+            robot_row = QHBoxLayout(robot_controls)
             self.connect_button = QPushButton("Connect receiver")
             self.connect_button.clicked.connect(self._connect_robot)
             robot_allowed = bool(robot_cfg.get("enabled")) and allow_robot
@@ -174,8 +219,34 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             else:
                 self.status.setText("Robot output permitted but disconnected")
             robot_row.addWidget(self.status, 1)
-            layout.addLayout(robot_row)
+            robot_controls.setVisible(robot_allowed)
+            layout.addWidget(robot_controls)
             self.setCentralWidget(root)
+            self._switch_mode(0 if detector is not None else 1)
+
+        @staticmethod
+        def _labeled_image(label, title: str):
+            container = QWidget()
+            box = QVBoxLayout(container)
+            box.setContentsMargins(4, 4, 4, 4)
+            box.addWidget(label, 1)
+            caption = QLabel(title)
+            caption.setAlignment(Qt.AlignCenter)
+            box.addWidget(caption)
+            return container
+
+        def _switch_mode(self, index: int) -> None:
+            self.current_mode = int(index)
+            self.pages.setCurrentIndex(self.current_mode)
+            for button, active in (
+                (self.object_button, self.current_mode == 0),
+                (self.grasping_button, self.current_mode == 1),
+                (self.gelsight_button, self.current_mode == 2),
+            ):
+                button.setChecked(active)
+                button.setStyleSheet(
+                    "font-weight: bold;" if active else "font-weight: normal;"
+                )
 
         def _change_model(self, name: str) -> None:
             name = str(name)
@@ -201,10 +272,10 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.inference_busy = False
 
         @staticmethod
-        def _image_label(text: str):
+        def _image_label(text: str, minimum=(320, 240)):
             label = QLabel(text)
             label.setAlignment(Qt.AlignCenter)
-            label.setMinimumSize(320, 240)
+            label.setMinimumSize(*minimum)
             label.setStyleSheet("background: #181818; color: #dddddd;")
             return label
 
@@ -233,12 +304,13 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 return
             self.current_frame = frame
             display = self.prediction.annotated_bgr if self.prediction is not None else frame
-            self.live_label.setPixmap(self._pixmap(display, self.live_label))
+            if self.current_mode == 1:
+                self.live_label.setPixmap(self._pixmap(display, self.live_label))
             interval_s = int(gui_cfg["inference_interval_ms"]) / 1000.0
             now = time.monotonic()
             if (
                 self.gelsight_available
-                and self.tabs.currentIndex() == self.gelsight_tab_index
+                and self.current_mode == 2
                 and now - self.last_gelsight_at >= interval_s
             ):
                 try:
@@ -256,7 +328,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                     self._error("GelSight error", exc)
             elif (
                 detector is not None
-                and self.tabs.currentIndex() == self.detector_tab_index
+                and self.current_mode == 0
                 and now - self.last_detection_at
                 >= int(
                     config.get("detector", {}).get(
@@ -273,8 +345,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 except Exception as exc:
                     self._error("Detection error", exc)
             elif (
-                self.tabs.currentIndex() == 0
-                and self.continuous.isChecked()
+                self.current_mode == 1
+                and bool(gui_cfg["continuous_inference"])
                 and now - self.last_inference_at >= interval_s
             ):
                 self._predict_now()
@@ -316,6 +388,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.prediction = self.inference.predict(
                     self.current_frame.copy(), self.prompt.text()
                 )
+                self.sentence_label.setText(
+                    f"Current target: {self.prompt.text()}"
+                )
                 self.last_inference_at = time.monotonic()
                 self.live_label.setPixmap(
                     self._pixmap(self.prediction.annotated_bgr, self.live_label)
@@ -323,6 +398,10 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 for name, image in self.inference.visualization_maps(
                     self.prediction
                 ).items():
+                    if name == "segmentation":
+                        self.mask_label.setPixmap(
+                            self._pixmap(image, self.mask_label)
+                        )
                     if name in self.map_labels:
                         self.map_labels[name].setPixmap(
                             self._pixmap(image, self.map_labels[name])
