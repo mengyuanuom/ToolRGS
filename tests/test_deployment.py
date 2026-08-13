@@ -15,6 +15,8 @@ from deployment.detector import (
     _trusted_mmengine_checkpoint_context,
 )
 from deployment.grasp_policy import command_theta, command_width, mask_span_width
+from deployment.gui import build_grasp_command
+from deployment.inference import GraspPrediction
 from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
@@ -46,6 +48,34 @@ class DeploymentContractTest(unittest.TestCase):
     def test_legacy_wire_protocol(self):
         command = GraspCommand(12.5, 33, -45.25, 80, 1)
         self.assertEqual(command.to_wire(), b"{12.5, 33, -45.25, 80, 1}\n")
+
+    def test_gui_preview_command_matches_legacy_socket_payload(self):
+        prediction = GraspPrediction(
+            prompt="grasp the screwdriver",
+            annotated_bgr=np.zeros((720, 1280, 3), dtype=np.uint8),
+            segmentation=np.ones((720, 1280), dtype=np.uint8),
+            quality=np.zeros((720, 1280), dtype=np.float32),
+            angle=np.zeros((720, 1280), dtype=np.float32),
+            width=np.zeros((720, 1280), dtype=np.float32),
+            short_side=None,
+            grasps=[[640.9, 360.2, 150.0, 20.0, -25.0]],
+            model_grasps=[[224.0, 224.0, 52.5, 20.0, -25.0]],
+            scores=[0.9],
+        )
+        command = build_grasp_command(
+            prediction,
+            {
+                "coordinate_space": "source",
+                "width_policy": {"type": "model"},
+                "theta_policy": {
+                    "offset_degrees": 180,
+                    "normalization": "zero_360",
+                },
+                "depth_policy": {},
+                "default_depth": 0,
+            },
+        )
+        self.assertEqual(command.to_wire(), b"{640, 360, 155, 150, -1}\n")
 
     @mock.patch("deployment.robot.socket.create_connection")
     def test_tcp_socket_connects_and_sends_legacy_payload(self, create_connection):

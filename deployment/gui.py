@@ -20,6 +20,47 @@ from .robot import GraspCommand, LegacyTCPGraspClient, build_robot_client, seman
 from .sources import FrameSource, build_source
 
 
+def build_grasp_command(
+    prediction: GraspPrediction, robot_cfg: Dict[str, Any]
+) -> Optional[GraspCommand]:
+    """Build the one command shared by GUI preview and TCP transmission."""
+    if not (prediction and prediction.grasps):
+        return None
+    coordinate_space = str(robot_cfg.get("coordinate_space", "source")).lower()
+    if coordinate_space not in {"source", "model"}:
+        raise ValueError("robot.coordinate_space must be source or model")
+    source_grasp = prediction.grasps[0]
+    model_grasp = prediction.model_grasps[0]
+    grasp = model_grasp if coordinate_space == "model" else source_grasp
+    x, y, _model_width, _height, theta = grasp
+    source_width = command_width(
+        source_grasp[2],
+        prediction.segmentation,
+        source_grasp[:2],
+        source_grasp[4],
+        prediction.prompt,
+        robot_cfg.get("width_policy", {}),
+    )
+    if coordinate_space == "model":
+        width_scale = model_grasp[2] / max(source_grasp[2], 1e-8)
+        width = source_width * width_scale
+    else:
+        width = source_width
+    depth_cfg = robot_cfg.get("depth_policy", {})
+    return GraspCommand(
+        x=int(x),
+        y=int(y),
+        theta=command_theta(theta, robot_cfg.get("theta_policy", {})),
+        width=int(width),
+        depth=semantic_depth(
+            prediction.prompt,
+            int(robot_cfg.get("default_depth", 0)),
+            class_tiers=depth_cfg.get("class_tiers", {}),
+            policy=str(depth_cfg.get("multiple_matches", "max")),
+        ),
+    )
+
+
 def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
     qt_platforms = configure_pyqt5_plugins()
     if qt_platforms is not None:
@@ -30,6 +71,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         from PyQt5.QtWidgets import (
             QApplication,
             QCheckBox,
+            QFrame,
             QGridLayout,
             QHBoxLayout,
             QLabel,
@@ -91,11 +133,19 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
 
         def _build_ui(self) -> None:
             root = QWidget(self)
+            root.setObjectName("AppRoot")
             layout = QVBoxLayout(root)
+            layout.setContentsMargins(18, 16, 18, 16)
+            layout.setSpacing(12)
 
             # Match the deployed 22-class GUI: three large mode buttons on top,
             # one central page at a time, and no tab bar.
             mode_row = QHBoxLayout()
+            mode_row.setContentsMargins(6, 6, 6, 6)
+            mode_row.setSpacing(10)
+            mode_bar = QFrame()
+            mode_bar.setObjectName("TopBar")
+            mode_bar.setLayout(mode_row)
             self.object_button = QPushButton("Object Detection")
             self.grasping_button = QPushButton("Grasping Points Detection")
             self.gelsight_button = QPushButton("GelSight")
@@ -105,13 +155,15 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.gelsight_button,
             ):
                 button.setMinimumHeight(40)
+                button.setCheckable(True)
+                button.setObjectName("ModeButton")
                 mode_row.addWidget(button, 1)
             self.object_button.clicked.connect(lambda: self._switch_mode(0))
             self.grasping_button.clicked.connect(lambda: self._switch_mode(1))
             self.gelsight_button.clicked.connect(lambda: self._switch_mode(2))
             self.object_button.setEnabled(detector is not None)
             self.gelsight_button.setEnabled(gelsight is not None)
-            layout.addLayout(mode_row)
+            layout.addWidget(mode_bar)
 
             self.pages = QStackedWidget()
 
@@ -158,7 +210,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 f"Current target: {config['model']['prompt']}"
             )
             self.sentence_label.setAlignment(Qt.AlignCenter)
-            self.sentence_label.setStyleSheet("font-size: 18px; font-weight: bold;")
+            self.sentence_label.setObjectName("TargetLabel")
             grasp_layout.addWidget(self.sentence_label)
 
             prompt_row = QHBoxLayout()
@@ -171,9 +223,13 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.prompt.returnPressed.connect(self._predict_now)
             prompt_row.addWidget(self.prompt, 1)
             self.predict_button = QPushButton("Predict now")
+            self.predict_button.setObjectName("PrimaryButton")
             self.predict_button.clicked.connect(self._predict_now)
             prompt_row.addWidget(self.predict_button)
-            grasp_layout.addLayout(prompt_row)
+            prompt_card = QFrame()
+            prompt_card.setObjectName("ControlCard")
+            prompt_card.setLayout(prompt_row)
+            grasp_layout.addWidget(prompt_card)
             self.pages.addWidget(grasp_page)
 
             # GelSight page.
@@ -192,8 +248,54 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
 
             layout.addWidget(self.pages, 1)
 
-            robot_controls = QWidget()
-            robot_row = QHBoxLayout(robot_controls)
+            # Command preview stays visible in dry-run mode. Connecting and
+            # sending remain guarded by robot.enabled and --allow-robot.
+            robot_controls = QFrame()
+            robot_controls.setObjectName("RobotCard")
+            robot_layout = QVBoxLayout(robot_controls)
+            robot_layout.setContentsMargins(14, 10, 14, 10)
+            robot_layout.setSpacing(8)
+
+            command_row = QHBoxLayout()
+            command_row.setSpacing(10)
+            command_title = QLabel("ROBOT COMMAND")
+            command_title.setObjectName("SectionTitle")
+            command_row.addWidget(command_title)
+            self.connection_badge = QLabel("OFFLINE")
+            self.connection_badge.setObjectName("ConnectionBadge")
+            self.connection_badge.setProperty("connected", False)
+            command_row.addWidget(self.connection_badge)
+            self.command_fields = {}
+            for field, label_text in (
+                ("x", "X"),
+                ("y", "Y"),
+                ("theta", "Theta"),
+                ("width", "Width"),
+                ("depth", "Depth"),
+            ):
+                field_box = QFrame()
+                field_box.setObjectName("CommandField")
+                field_layout = QHBoxLayout(field_box)
+                field_layout.setContentsMargins(9, 5, 9, 5)
+                field_layout.setSpacing(6)
+                name_label = QLabel(label_text)
+                name_label.setObjectName("CommandName")
+                value_label = QLabel("--")
+                value_label.setObjectName("CommandValue")
+                value_label.setMinimumWidth(48)
+                value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                field_layout.addWidget(name_label)
+                field_layout.addWidget(value_label)
+                command_row.addWidget(field_box)
+                self.command_fields[field] = value_label
+            self.wire_preview = QLabel("{--, --, --, --, --}")
+            self.wire_preview.setObjectName("WirePreview")
+            self.wire_preview.setToolTip("Exact TCP payload sent to the receiver")
+            command_row.addWidget(self.wire_preview, 1)
+            robot_layout.addLayout(command_row)
+
+            robot_row = QHBoxLayout()
+            robot_row.setSpacing(8)
             self.connect_button = QPushButton("Connect receiver")
             self.connect_button.clicked.connect(self._connect_robot)
             robot_allowed = bool(robot_cfg.get("enabled")) and allow_robot
@@ -208,10 +310,12 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.arm.toggled.connect(self._refresh_send_state)
             robot_row.addWidget(self.arm)
             self.send_button = QPushButton("Send current grasp")
+            self.send_button.setObjectName("SendButton")
             self.send_button.clicked.connect(self._send_grasp)
             self.send_button.setEnabled(False)
             robot_row.addWidget(self.send_button)
             self.status = QLabel()
+            self.status.setObjectName("StatusText")
             if robot_cfg.get("enabled") and not allow_robot:
                 self.status.setText("DRY RUN: restart with --allow-robot to permit a connection")
             elif not robot_cfg.get("enabled"):
@@ -219,19 +323,24 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             else:
                 self.status.setText("Robot output permitted but disconnected")
             robot_row.addWidget(self.status, 1)
-            robot_controls.setVisible(robot_allowed)
+            robot_layout.addLayout(robot_row)
+            robot_controls.setVisible(True)
             layout.addWidget(robot_controls)
             self.setCentralWidget(root)
+            self._apply_theme()
             self._switch_mode(0 if detector is not None else 1)
 
         @staticmethod
         def _labeled_image(label, title: str):
-            container = QWidget()
+            container = QFrame()
+            container.setObjectName("ImageCard")
             box = QVBoxLayout(container)
-            box.setContentsMargins(4, 4, 4, 4)
+            box.setContentsMargins(8, 8, 8, 7)
+            box.setSpacing(5)
             box.addWidget(label, 1)
             caption = QLabel(title)
             caption.setAlignment(Qt.AlignCenter)
+            caption.setObjectName("ImageCaption")
             box.addWidget(caption)
             return container
 
@@ -244,9 +353,6 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 (self.gelsight_button, self.current_mode == 2),
             ):
                 button.setChecked(active)
-                button.setStyleSheet(
-                    "font-weight: bold;" if active else "font-weight: normal;"
-                )
 
         def _change_model(self, name: str) -> None:
             name = str(name)
@@ -276,7 +382,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             label = QLabel(text)
             label.setAlignment(Qt.AlignCenter)
             label.setMinimumSize(*minimum)
-            label.setStyleSheet("background: #181818; color: #dddddd;")
+            label.setObjectName("PreviewCanvas")
             return label
 
         @staticmethod
@@ -291,6 +397,156 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             return QPixmap.fromImage(qimage).scaled(
                 label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
             )
+
+        def _apply_theme(self) -> None:
+            """Apply a restrained dark laboratory theme without changing layout."""
+            self.setStyleSheet(
+                """
+                QWidget#AppRoot {
+                    background: #0b1017;
+                    color: #dce7f3;
+                    font-family: "Inter", "Segoe UI", Arial, sans-serif;
+                    font-size: 13px;
+                }
+                QFrame#TopBar, QFrame#ControlCard, QFrame#RobotCard {
+                    background: #111a25;
+                    border: 1px solid #223247;
+                    border-radius: 10px;
+                }
+                QPushButton {
+                    min-height: 30px;
+                    padding: 5px 14px;
+                    color: #d7e3ef;
+                    background: #172333;
+                    border: 1px solid #2a3d55;
+                    border-radius: 7px;
+                    font-weight: 600;
+                }
+                QPushButton:hover { background: #203249; border-color: #3f6388; }
+                QPushButton:pressed { background: #122033; }
+                QPushButton:disabled { color: #627184; background: #101720; border-color: #1b2735; }
+                QPushButton#ModeButton:checked {
+                    color: #06131b;
+                    background: #55d6be;
+                    border-color: #79ead5;
+                }
+                QPushButton#PrimaryButton, QPushButton#SendButton {
+                    color: #06131b;
+                    background: #55d6be;
+                    border-color: #79ead5;
+                    font-weight: 700;
+                }
+                QPushButton#PrimaryButton:hover, QPushButton#SendButton:hover {
+                    background: #71e4ce;
+                }
+                QPushButton#SendButton:disabled {
+                    color: #607180;
+                    background: #18242f;
+                    border-color: #243442;
+                }
+                QLineEdit {
+                    min-height: 32px;
+                    padding: 3px 11px;
+                    color: #e6eef7;
+                    background: #0c141e;
+                    border: 1px solid #2a3d55;
+                    border-radius: 7px;
+                    selection-background-color: #347e78;
+                }
+                QLineEdit:focus { border-color: #55d6be; }
+                QFrame#ImageCard {
+                    background: #101823;
+                    border: 1px solid #203148;
+                    border-radius: 10px;
+                }
+                QLabel#PreviewCanvas {
+                    color: #718297;
+                    background: #05090e;
+                    border: 1px solid #1b2a3d;
+                    border-radius: 7px;
+                }
+                QLabel#ImageCaption {
+                    color: #a9b9ca;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                QLabel#TargetLabel {
+                    color: #edf5fc;
+                    font-size: 17px;
+                    font-weight: 700;
+                    padding: 5px;
+                }
+                QLabel#SectionTitle {
+                    color: #8294a8;
+                    font-size: 10px;
+                    font-weight: 800;
+                    letter-spacing: 1px;
+                }
+                QFrame#CommandField {
+                    background: #0b131d;
+                    border: 1px solid #24374d;
+                    border-radius: 6px;
+                }
+                QLabel#CommandName { color: #71859a; font-size: 11px; font-weight: 700; }
+                QLabel#CommandValue { color: #f0f6fb; font-family: "Consolas", monospace; font-weight: 700; }
+                QLabel#WirePreview {
+                    color: #7fe1cf;
+                    background: #09121a;
+                    border: 1px solid #25463f;
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    font-family: "Consolas", monospace;
+                }
+                QLabel#ConnectionBadge {
+                    color: #ffb4ad;
+                    background: #3a1f25;
+                    border: 1px solid #6e343d;
+                    border-radius: 7px;
+                    padding: 3px 8px;
+                    font-size: 10px;
+                    font-weight: 800;
+                }
+                QLabel#ConnectionBadge[connected="true"] {
+                    color: #95f0d6;
+                    background: #14332d;
+                    border-color: #2e7566;
+                }
+                QLabel#StatusText { color: #90a3b7; padding-left: 6px; }
+                QCheckBox { color: #b7c5d4; spacing: 7px; }
+                """
+            )
+
+        def _set_connection_badge(self, connected: bool) -> None:
+            self.connection_badge.setText("CONNECTED" if connected else "OFFLINE")
+            self.connection_badge.setProperty("connected", bool(connected))
+            self.connection_badge.style().unpolish(self.connection_badge)
+            self.connection_badge.style().polish(self.connection_badge)
+
+        def _command_from_prediction(self) -> Optional[GraspCommand]:
+            """Build exactly the command that preview/send share."""
+            return build_grasp_command(self.prediction, robot_cfg)
+
+        def _update_command_preview(self) -> None:
+            try:
+                command = self._command_from_prediction()
+            except Exception as exc:
+                command = None
+                self.status.setText(f"Command preview error: {exc}")
+            if command is None:
+                for label in self.command_fields.values():
+                    label.setText("--")
+                self.wire_preview.setText("{--, --, --, --, --}")
+                return
+            values = {
+                "x": f"{command.x:g}",
+                "y": f"{command.y:g}",
+                "theta": f"{command.theta:.1f} deg",
+                "width": f"{command.width:g} px",
+                "depth": f"{command.depth:d}",
+            }
+            for name, value in values.items():
+                self.command_fields[name].setText(value)
+            self.wire_preview.setText(command.to_wire().decode("ascii").strip())
 
         def _next_frame(self) -> None:
             self._poll_audio()
@@ -408,6 +664,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                         )
                 if self.prediction.grasps:
                     grasp = self.prediction.grasps[0]
+                    self._update_command_preview()
                     self.status.setText(
                         f"Prediction: x={grasp[0]:.1f}, y={grasp[1]:.1f}, "
                         f"angle={grasp[4]:.1f}, width={grasp[2]:.1f}"
@@ -420,6 +677,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                     ):
                         self._send_grasp()
                 else:
+                    self._update_command_preview()
                     self.status.setText("No grasp peak passed the quality threshold")
                 self._refresh_send_state()
             except Exception as exc:
@@ -437,6 +695,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.connect_button.setEnabled(False)
                 self.disconnect_button.setEnabled(True)
                 self.arm.setEnabled(True)
+                self._set_connection_badge(True)
                 self.status.setText(
                     f"Receiver connected: {robot_cfg['host']}:{robot_cfg['port']}"
                 )
@@ -444,6 +703,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 if self.robot is not None:
                     self.robot.close()
                 self.robot = None
+                self._set_connection_badge(False)
                 self.connect_button.setEnabled(True)
                 self.disconnect_button.setEnabled(False)
                 self._error("Robot receiver connection failed", exc)
@@ -454,6 +714,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             if self.robot is not None:
                 self.robot.close()
             self.robot = None
+            self._set_connection_badge(False)
             self.disconnect_button.setEnabled(False)
             self.connect_button.setEnabled(
                 bool(robot_cfg.get("enabled")) and allow_robot
@@ -480,51 +741,10 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 and self.prediction.grasps
             ):
                 return
-            coordinate_space = str(robot_cfg.get("coordinate_space", "source")).lower()
-            if coordinate_space not in {"source", "model"}:
-                self._error(
-                    "Robot configuration error",
-                    ValueError("robot.coordinate_space must be source or model"),
-                )
-                return
-            source_grasp = self.prediction.grasps[0]
-            model_grasp = self.prediction.model_grasps[0]
-            grasp = (
-                model_grasp
-                if coordinate_space == "model"
-                else source_grasp
-            )
-            x, y, width, _height, theta = grasp
-            source_width = command_width(
-                source_grasp[2],
-                self.prediction.segmentation,
-                source_grasp[:2],
-                source_grasp[4],
-                self.prediction.prompt,
-                robot_cfg.get("width_policy", {}),
-            )
-            if coordinate_space == "model":
-                width_scale = model_grasp[2] / max(source_grasp[2], 1e-8)
-                width = source_width * width_scale
-            else:
-                width = source_width
-            theta = command_theta(theta, robot_cfg.get("theta_policy", {}))
-            depth_cfg = robot_cfg.get("depth_policy", {})
-            command = GraspCommand(
-                # Preserve the deployed socket contract: pixel fields are ints,
-                # theta remains a float, and semantic depth is an integer tier.
-                x=int(x),
-                y=int(y),
-                theta=theta,
-                width=int(width),
-                depth=semantic_depth(
-                    self.prediction.prompt,
-                    int(robot_cfg.get("default_depth", 0)),
-                    class_tiers=depth_cfg.get("class_tiers", {}),
-                    policy=str(depth_cfg.get("multiple_matches", "max")),
-                ),
-            )
             try:
+                command = self._command_from_prediction()
+                if command is None:
+                    return
                 command.validate_limits(robot_cfg.get("limits", {}))
                 self.robot.send(command)
                 self.last_send_at = time.monotonic()
