@@ -127,6 +127,13 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.setMinimumSize(1200, 760)
             self.resize(int(gui_cfg["window_width"]), int(gui_cfg["window_height"]))
             self._build_ui()
+            if (
+                bool(robot_cfg.get("enabled"))
+                and allow_robot
+                and bool(robot_cfg.get("auto_connect", False))
+            ):
+                # Defer the connection until the window/event loop is ready.
+                QTimer.singleShot(0, self._connect_robot)
             self.timer = QTimer(self)
             self.timer.timeout.connect(self._next_frame)
             self.timer.start(int(gui_cfg["camera_interval_ms"]))
@@ -695,6 +702,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.connect_button.setEnabled(False)
                 self.disconnect_button.setEnabled(True)
                 self.arm.setEnabled(True)
+                if bool(robot_cfg.get("auto_arm", False)):
+                    self.arm.setChecked(True)
                 self._set_connection_badge(True)
                 self.status.setText(
                     f"Receiver connected: {robot_cfg['host']}:{robot_cfg['port']}"

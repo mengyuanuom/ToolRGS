@@ -77,6 +77,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "host": "192.168.38.10",
         "port": 3000,
         "timeout_s": 2.0,
+        "auto_connect": False,
+        "auto_arm": False,
         "auto_send": False,
         "auto_send_interval_s": 2.0,
         "default_depth": 0,

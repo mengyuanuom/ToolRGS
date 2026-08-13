@@ -1,6 +1,6 @@
 # Ready-to-run lab profile: DROG-OFF grasping + 13-class Faster R-CNN.
-# Robot output stays disabled until explicitly enabled and launched with
-# --allow-robot.
+# Robot auto-connect/auto-send is configured for the lab receiver, but the
+# process still requires the explicit --allow-robot launch flag.
 active_model: drogoff-grasptools-v2-original300
 
 model_profiles:
@@ -36,11 +36,15 @@ camera:
 
 robot:
   type: legacy_tcp
-  enabled: false
+  enabled: true
   host: 192.168.38.10
   port: 3000
   timeout_s: 2.0
-  auto_send: false
+  # Match the original lab GUI: connect/arm on launch and send every valid
+  # prediction automatically. The process still requires --allow-robot.
+  auto_connect: true
+  auto_arm: true
+  auto_send: true
   auto_send_interval_s: 2.0
   default_depth: 0
   coordinate_space: source

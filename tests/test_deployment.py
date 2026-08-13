@@ -191,7 +191,10 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(cfg["detector"]["checkpoint"], "weights/epoch_48_13.pth")
         self.assertTrue(cfg["detector"]["enabled"])
         self.assertTrue(cfg["detector"]["trusted_checkpoint"])
-        self.assertFalse(cfg["robot"]["enabled"])
+        self.assertTrue(cfg["robot"]["enabled"])
+        self.assertTrue(cfg["robot"]["auto_connect"])
+        self.assertTrue(cfg["robot"]["auto_arm"])
+        self.assertTrue(cfg["robot"]["auto_send"])
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]
