@@ -20,7 +20,12 @@ from deployment.inference import GraspPrediction, opencv_grasp_rectangle
 from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
-from deploy_gui import DEFAULT_SAMPLE_IMAGE, apply_runtime_overrides, parse_args
+from deploy_gui import (
+    DEFAULT_SAMPLE_IMAGE,
+    apply_camera_preset,
+    apply_runtime_overrides,
+    parse_args,
+)
 
 
 class DeploymentContractTest(unittest.TestCase):
@@ -44,6 +49,25 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(updated["camera"]["backend"], "image")
         self.assertFalse(updated["gui"]["continuous_inference"])
         self.assertEqual(updated["model"]["prompt"], "the sponge")
+
+    def test_direct_realsense_camera_preset(self):
+        config = {"camera": {"type": "image"}}
+        updated = apply_camera_preset(config, "realsense")
+        self.assertEqual(updated["camera"]["type"], "realsense")
+        self.assertEqual(
+            (updated["camera"]["width"], updated["camera"]["height"]),
+            (1280, 720),
+        )
+
+    def test_gi_camera_preset_uses_validated_shared_memory_socket(self):
+        config = {"camera": {"type": "realsense"}}
+        updated = apply_camera_preset(config, "gi")
+        self.assertEqual(updated["camera"]["type"], "gstreamer")
+        self.assertIn(
+            "socket-path=/home/raico-hri/v1/kinova_rs_grasp/foo/fooA",
+            updated["camera"]["gstreamer_pipeline"],
+        )
+        self.assertIn("format=BGR,width=1280,height=720", updated["camera"]["gstreamer_pipeline"])
 
     def test_legacy_wire_protocol(self):
         command = GraspCommand(12.5, 33, -45.25, 80, 1)

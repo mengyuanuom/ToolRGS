@@ -8,6 +8,13 @@ from deployment.gui import run_gui
 
 
 DEFAULT_SAMPLE_IMAGE = "assets/grasp_tools/graspall/000000000000.jpg"
+GI_REALSENSE_PIPELINE = (
+    "shmsrc socket-path=/home/raico-hri/v1/kinova_rs_grasp/foo/fooA "
+    "is-live=true do-timestamp=true ! video/x-raw,format=BGR,width=1280,"
+    "height=720,pixel-aspect-ratio=1/1,framerate=30/1 ! queue "
+    "leaky=downstream max-size-buffers=1 ! appsink name=toolrgs_sink "
+    "drop=true sync=false max-buffers=1"
+)
 
 
 def parse_args(argv=None):
@@ -63,9 +70,42 @@ def apply_runtime_overrides(config, args):
     return config
 
 
-def main() -> int:
-    args = parse_args()
+def apply_camera_preset(config, preset=None):
+    """Select one validated lab camera transport without changing the YAML."""
+    if preset is None:
+        return config
+    preset = str(preset).strip().lower()
+    if preset == "realsense":
+        config["camera"].update(
+            {
+                "type": "realsense",
+                "backend": "realsense",
+                "device": 0,
+                "width": 1280,
+                "height": 720,
+                "fps": 30,
+            }
+        )
+    elif preset == "gi":
+        config["camera"].update(
+            {
+                "type": "gstreamer",
+                "backend": "gstreamer",
+                "width": 1280,
+                "height": 720,
+                "fps": 30,
+                "gstreamer_pipeline": GI_REALSENSE_PIPELINE,
+            }
+        )
+    else:
+        raise ValueError("camera preset must be realsense or gi")
+    return config
+
+
+def main(argv=None, camera_preset=None) -> int:
+    args = parse_args(argv)
     config = load_deployment_config(args.config)
+    config = apply_camera_preset(config, camera_preset)
     config = apply_runtime_overrides(config, args)
     return run_gui(config, allow_robot=args.allow_robot)
 
