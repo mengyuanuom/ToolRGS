@@ -16,7 +16,7 @@ from deployment.detector import (
 )
 from deployment.grasp_policy import command_theta, command_width, mask_span_width
 from deployment.gui import build_grasp_command
-from deployment.inference import GraspPrediction
+from deployment.inference import GraspPrediction, opencv_grasp_rectangle
 from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
@@ -154,6 +154,14 @@ class DeploymentContractTest(unittest.TestCase):
             command_width(7, mask, (10, 10), 0, "the tape measure", cfg), 7
         )
         self.assertGreater(command_width(7, mask, (10, 10), 0, "the box", cfg), 7)
+
+    def test_gui_preview_does_not_mirror_decoded_angle(self):
+        rectangle = opencv_grasp_rectangle([640, 360, 120, 20, 35])
+        self.assertEqual(rectangle, ((640.0, 360.0), (120.0, 20.0), 35.0))
+        self.assertEqual(
+            command_theta(35, {"offset_degrees": 180, "normalization": "zero_360"}),
+            215,
+        )
 
     def test_theta_policy_reproduces_legacy_wire_convention(self):
         self.assertEqual(

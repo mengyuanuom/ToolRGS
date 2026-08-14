@@ -77,6 +77,19 @@ def _heatmap(value: np.ndarray, color_map: int = cv2.COLORMAP_JET) -> np.ndarray
     return cv2.applyColorMap((normalized * 255).astype(np.uint8), color_map)
 
 
+def opencv_grasp_rectangle(grasp: Sequence[float]):
+    """Convert a decoded grasp to the image convention used by the lab GUI."""
+    x, y, grasp_width, grasp_height, theta = grasp[:5]
+    # The decoded theta already follows the RealSense image coordinates used by
+    # the validated 22-class GUI.  Negating it mirrors the displayed rectangle.
+    # Adding 180 degrees, as the legacy GUI did, is geometrically equivalent.
+    return (
+        (float(x), float(y)),
+        (float(grasp_width), float(grasp_height)),
+        float(theta),
+    )
+
+
 class ToolRGSInference:
     """Load one experiment config/checkpoint and predict pixel-space grasps."""
 
@@ -302,7 +315,7 @@ class ToolRGSInference:
         annotated = cv2.addWeighted(annotated, 0.72, overlay, 0.28, 0.0)
         for index, grasp in enumerate(grasps):
             x, y, grasp_width, grasp_height, theta = grasp
-            rectangle = ((x, y), (grasp_width, grasp_height), -theta)
+            rectangle = opencv_grasp_rectangle(grasp)
             points = np.intp(cv2.boxPoints(rectangle))
             cv2.polylines(annotated, [points], True, (0, 255, 255), 3, cv2.LINE_AA)
             cv2.circle(annotated, (round(x), round(y)), 5, (0, 0, 255), -1)
