@@ -69,6 +69,7 @@ class DeploymentContractTest(unittest.TestCase):
             updated["camera"]["gstreamer_pipeline"],
         )
         self.assertIn("format=BGR,width=1280,height=720", updated["camera"]["gstreamer_pipeline"])
+        self.assertEqual(updated["robot"]["timeout_s"], 2.0)
 
     def test_legacy_gi_entry_keeps_old_layout_and_blocking_socket(self):
         config = {
