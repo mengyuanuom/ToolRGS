@@ -8,6 +8,10 @@ Whisper microphone input. The deployed 22-class workflow is also available as
 optional components: GelSight classification, segmentation-mask span width,
 semantic depth tiers, and receiver-specific angle conversion.
 
+For copy-ready Chinese commands covering the direct RealSense and GI/GStreamer
+launchers, model downloads, `fooA`, TCP port `3000`, coordinate sending and
+fault diagnosis, see [机械臂 GUI 启动与故障排查](robot_gui_quickstart_zh.md).
+
 Supported RGB grasp models are CROG, CROGOFF, DROG, DROGOFF, MapleGrasp,
 GGCNN-CLIP, GR-ConvNet-CLIP, GraspMamba, and LGD. ETRG needs aligned depth and
 is therefore not selectable from the current RGB camera GUI. DETRIS is intentionally excluded here: in

@@ -475,8 +475,9 @@ restricted to that exact resolved detector checkpoint path and is restored
 immediately after MMDetection initialization. Keep this enabled only for your
 own trusted lab checkpoint.
 
-See [docs/real_world_deployment.md](docs/real_world_deployment.md) before
-enabling robot output. The repository contains the sender but not the external
+See [docs/real_world_deployment.md](docs/real_world_deployment.md) and the Chinese
+[robot GUI quickstart and troubleshooting guide](docs/robot_gui_quickstart_zh.md)
+before enabling robot output. The repository contains the sender but not the external
 Kinova receiver/controller or its calibration, so a clone alone cannot safely
 move the physical robot.
 
