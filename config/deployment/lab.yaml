@@ -42,10 +42,9 @@ robot:
   # routing the old lab IP through the Wi-Fi gateway.
   host: 127.0.0.1
   port: 3000
-  # Match the original GI GUI: no application-level connect/send timeout.
-  # The GUI waits for the Docker receiver instead of failing after two seconds.
-  timeout_s: null
-  # Match the original lab GUI: connect/arm on launch and send every valid
+  # Keep the GUI responsive when the Docker receiver is not listening.
+  timeout_s: 2.0
+  # Connect/arm on launch and send every valid
   # prediction automatically. The process still requires --allow-robot.
   auto_connect: true
   auto_arm: true
@@ -54,11 +53,8 @@ robot:
   default_depth: 0
   coordinate_space: source
   width_policy:
-    type: mask_span
-    step: 0.5
-    safety_margin: 30.0
-    maximum: 600
-    exclude: [tape, cable]
+    # Send the DROG-OFF model prediction, already mapped to source-image pixels.
+    type: model
   theta_policy:
     sign: 1.0
     offset_degrees: 180.0

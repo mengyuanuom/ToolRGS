@@ -158,10 +158,12 @@ before robot transmission.
 
 ## 4. Dry-run the GUI
 
-The committed profile already keeps `robot.enabled: false`. Run:
+Robot permission is denied unless the launcher receives `--allow-robot`, even
+though the committed laboratory profile contains the receiver settings. Use the
+official GI preview without that flag:
 
 ```bash
-python deploy_gui.py
+python deploy_gui_gi.py --config config/deployment/lab.yaml
 ```
 
 ### Linux 无摄像头验证
@@ -187,7 +189,7 @@ python deploy_gui.py \
 
 图片模式会自动关闭连续推理。GUI 打开后点击 **Predict now**，即可检查语言抓取、
 分割图、质量图、角度图和宽度图；若部署 YAML 已启用目标检测，目标检测页也会使用
-同一张图片。不要添加 `--allow-robot`，并保持 `robot.enabled: false`。
+同一张图片。不要添加 `--allow-robot`；命令行权限门会阻止 TCP 连接和发送。
 
 Check the segmentation overlay, grasp rectangle, center, angle, and width before
 using a physical robot. Object detector, audio, and GelSight controls only
@@ -209,7 +211,7 @@ The sender emits one ASCII line per command:
 ```
 
 `robot.type: legacy_tcp` opens a TCP socket to the configured `host` and
-`port` (the compatibility profile uses `192.168.38.10:3000`) and calls
+`port` (the current host-network Docker profile uses `127.0.0.1:3000`) and calls
 `sendall` with this exact newline-terminated payload. The GUI exposes Connect,
 Disconnect, Arm, and Send controls; a socket error closes the connection and
 requires an explicit reconnect. With `auto_send: true`, the same guarded socket
@@ -252,12 +254,12 @@ is rejected before any bytes are sent.
 After verifying the receiver, calibration, robot limits, emergency stop, and
 dry-run prediction:
 
-1. Set `robot.enabled: true`, the correct `host`/`port`, and leave
-   `auto_send: false`.
+1. Confirm `robot.enabled: true`, the correct `host`/`port`, and use
+   `auto_send: false` for the first manual test.
 2. Launch with the additional command-line permission:
 
    ```bash
-   python deploy_gui.py --config config/deployment/lab.yaml --allow-robot
+   python deploy_gui_gi.py --config config/deployment/lab.yaml --allow-robot
    ```
 
 3. Click **Connect receiver**, then explicitly tick **Arm robot output**.

@@ -437,31 +437,26 @@ check those terms before redistribution or commercial use.
 ## Real-world demo and robot sender
 
 ToolRGS includes a configuration-driven PyQt demo ported from the local server
-CROG deployment. The GUI can switch among configured model profiles without
-restarting the camera layer, understands fixed-height, predicted-short-side and
-offset heads, and can download a missing published checkpoint from
-`checkpoint_url`. It supports the RGB ToolRGS grasp architectures, OpenCV/video,
-RealSense, GStreamer shared memory, optional MMDetection and Whisper, and the
-optional GelSight classifier used by the 22-class lab workflow. Mask-span
-gripper width, semantic depth tiers, receiver angle conversion, and the legacy
-Kinova TCP command format are configured in YAML. The direct RealSense profile
-uses a 1280x720 color stream and maps model predictions back to that source
-canvas before sending. The committed lab profile already enables RealSense,
-DROG-OFF, and the 13-class detector while keeping robot output disabled. Start
-in dry-run mode:
+CROG deployment. There are two supported operator entrypoints:
+`deploy_gui_realsense.py` is a direct RealSense demo that forcibly disables all
+robot output, while `deploy_gui_gi.py` consumes the laboratory GI/GStreamer
+shared stream and is the only physical-robot entrypoint. The GUI maps model
+predictions back to the 1280x720 source canvas and supports optional
+MMDetection, Whisper and GelSight components. Start with the safe preflight and
+GI preview:
 
 ```bash
-python tools/check_deployment.py \
-  --probe-camera --build-model --build-detector
-python deploy_gui.py
+python tools/check_deployment.py --download-weights
+python deploy_gui_gi.py
 ```
 
 On Linux the launcher automatically selects the active PyQt5 platform plugins,
 preventing the incompatible `cv2/qt/plugins` xcb path from taking over.
 
-Put the original Faster R-CNN checkpoint at `weights/epoch_48_13.pth` and
-install `requirement-detector.txt`. No YAML copy or edit step is required for
-the standard grasp-plus-detection GUI.
+Install `requirement-detector.txt` and put the trusted Faster R-CNN checkpoint
+at `weights/epoch_48_13.pth`. The downloader handles the published DROG-OFF,
+CLIP and DINO weights; it also handles the detector automatically once its
+Release URL/SHA-256 are configured.
 
 ```bash
 python tools/check_deployment.py --build-detector
@@ -477,9 +472,9 @@ own trusted lab checkpoint.
 
 See [docs/real_world_deployment.md](docs/real_world_deployment.md) and the Chinese
 [robot GUI quickstart and troubleshooting guide](docs/robot_gui_quickstart_zh.md)
-before enabling robot output. The repository contains the sender but not the external
-Kinova receiver/controller or its calibration, so a clone alone cannot safely
-move the physical robot.
+before running `python deploy_gui_gi.py --allow-robot`. The repository contains
+the sender but not the external Kinova receiver/controller or its calibration,
+so a clone alone cannot safely move the physical robot.
 
 ## Component architecture
 

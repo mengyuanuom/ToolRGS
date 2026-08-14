@@ -12,12 +12,21 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from deployment.config import load_deployment_config, resolve_repo_path
-from utils.pretrained import ARTIFACTS
+from deployment.weights import ensure_deployment_checkpoint
+from utils.pretrained import ARTIFACTS, ensure_pretrained
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="config/deployment/lab.yaml")
+    parser.add_argument(
+        "--download-weights",
+        action="store_true",
+        help=(
+            "Download and verify every missing weight used by the active GUI "
+            "profile; this never opens the camera or connects to the robot"
+        ),
+    )
     parser.add_argument(
         "--probe-camera", action="store_true", help="Open the camera and read one frame"
     )
@@ -58,6 +67,63 @@ def require_module(report, module, label=None):
         report.ok(f"Python package available: {label or module}")
 
 
+def _experiment_values(experiment):
+    if experiment is None or not experiment.is_file():
+        return {}
+    with experiment.open("r", encoding="utf-8") as stream:
+        experiment_yaml = yaml.safe_load(stream) or {}
+    return {
+        key: value
+        for section in experiment_yaml.values()
+        if isinstance(section, dict)
+        for key, value in section.items()
+    }
+
+
+def _download_configured_weights(report, cfg, experiment_values):
+    """Download active grasp, backbone and optional deployment checkpoints."""
+    repo_root = cfg["_repo_root"]
+    model_cfg = cfg["model"]
+    checkpoint = resolve_repo_path(model_cfg.get("checkpoint"), repo_root)
+    try:
+        checkpoint = ensure_deployment_checkpoint(
+            checkpoint,
+            model_cfg.get("checkpoint_url", ""),
+            model_cfg.get("checkpoint_sha256", ""),
+        )
+        report.ok(f"Grasp checkpoint ready: {checkpoint}")
+    except Exception as exc:
+        report.fail(f"Grasp checkpoint download failed: {exc}")
+
+    for key in ("clip_pretrain", "dino_pretrain", "mamba_pretrain"):
+        value = experiment_values.get(key)
+        if not value or str(value).startswith(("http://", "https://")):
+            continue
+        path = resolve_repo_path(value, repo_root)
+        try:
+            path = ensure_pretrained(path)
+            report.ok(f"{key} ready: {path}")
+        except Exception as exc:
+            report.fail(f"{key} download failed: {exc}")
+
+    for label, section in (
+        ("Detector", cfg.get("detector", {})),
+        ("GelSight", cfg.get("gelsight", {})),
+    ):
+        if not section.get("enabled"):
+            continue
+        checkpoint = resolve_repo_path(section.get("checkpoint"), repo_root)
+        try:
+            checkpoint = ensure_deployment_checkpoint(
+                checkpoint,
+                section.get("checkpoint_url", ""),
+                section.get("checkpoint_sha256", ""),
+            )
+            report.ok(f"{label} checkpoint ready: {checkpoint}")
+        except Exception as exc:
+            report.fail(f"{label} checkpoint download failed: {exc}")
+
+
 def main() -> int:
     args = parse_args()
     report = Report()
@@ -87,6 +153,11 @@ def main() -> int:
         report.ok(f"Experiment config: {experiment}")
     else:
         report.fail(f"Experiment config not found: {experiment}")
+
+    experiment_values = _experiment_values(experiment)
+    if args.download_weights:
+        _download_configured_weights(report, cfg, experiment_values)
+
     if checkpoint is not None and checkpoint.is_file():
         report.ok(f"Checkpoint: {checkpoint}")
     elif model_cfg.get("checkpoint_url"):
@@ -96,17 +167,9 @@ def main() -> int:
     else:
         report.fail(f"Checkpoint not found: {checkpoint}")
 
-    if experiment is not None and experiment.is_file():
-        with experiment.open("r", encoding="utf-8") as stream:
-            experiment_yaml = yaml.safe_load(stream) or {}
-        flat = {
-            key: value
-            for section in experiment_yaml.values()
-            if isinstance(section, dict)
-            for key, value in section.items()
-        }
+    if experiment_values:
         for key in ("clip_pretrain", "dino_pretrain", "mamba_pretrain"):
-            value = flat.get(key)
+            value = experiment_values.get(key)
             if not value or str(value).startswith(("http://", "https://")):
                 continue
             path = resolve_repo_path(value, cfg["_repo_root"])

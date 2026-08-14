@@ -97,8 +97,8 @@ def apply_camera_preset(config, preset=None):
                 "gstreamer_pipeline": GI_REALSENSE_PIPELINE,
             }
         )
-        # The designed GI GUI uses a short connection/send timeout. The
-        # legacy GI entrypoint overrides this back to blocking mode.
+        # The official GI robot GUI uses a short connection/send timeout so
+        # an unavailable receiver never freezes the Qt interface.
         config.setdefault("robot", {})["timeout_s"] = 2.0
     else:
         raise ValueError("camera preset must be realsense or gi")

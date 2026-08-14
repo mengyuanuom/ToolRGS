@@ -27,7 +27,7 @@ from deploy_gui import (
     parse_args,
 )
 from deploy_gui_gi import prepare_gi_config
-from deploy_gui_legacy_gi import prepare_legacy_gi_config
+from deploy_gui_realsense import prepare_realsense_demo_config
 
 
 class DeploymentContractTest(unittest.TestCase):
@@ -61,6 +61,23 @@ class DeploymentContractTest(unittest.TestCase):
             (1280, 720),
         )
 
+    def test_realsense_demo_disables_robot_side_effects(self):
+        config = {
+            "camera": {"type": "image"},
+            "robot": {
+                "enabled": True,
+                "auto_connect": True,
+                "auto_arm": True,
+                "auto_send": True,
+            },
+        }
+        updated = prepare_realsense_demo_config(config)
+        self.assertEqual(updated["camera"]["type"], "realsense")
+        self.assertFalse(updated["robot"]["enabled"])
+        self.assertFalse(updated["robot"]["auto_connect"])
+        self.assertFalse(updated["robot"]["auto_arm"])
+        self.assertFalse(updated["robot"]["auto_send"])
+
     def test_gi_camera_preset_uses_validated_shared_memory_socket(self):
         config = {"camera": {"type": "realsense"}}
         updated = apply_camera_preset(config, "gi")
@@ -84,18 +101,6 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(updated["camera"]["type"], "gstreamer")
         self.assertEqual(updated["robot"]["timeout_s"], 2.0)
         self.assertEqual(updated["robot"]["width_policy"]["type"], "model")
-
-    def test_legacy_gi_entry_keeps_old_layout_and_blocking_socket(self):
-        config = {
-            "camera": {"type": "realsense"},
-            "gui": {},
-            "robot": {"timeout_s": 2.0},
-        }
-        updated = prepare_legacy_gi_config(config)
-        self.assertEqual(updated["camera"]["type"], "gstreamer")
-        self.assertEqual(updated["gui"]["layout"], "legacy")
-        self.assertEqual(updated["gui"]["legacy_send_every_frames"], 50)
-        self.assertIsNone(updated["robot"]["timeout_s"])
 
     def test_legacy_wire_protocol(self):
         command = GraspCommand(12.5, 33, -45.25, 80, 1)
