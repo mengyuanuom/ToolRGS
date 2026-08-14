@@ -7,8 +7,8 @@ model_profiles:
   drogoff-grasptools-v2-original300:
     config: config/grasp_tools/drogoff_v2_original_scale.yaml
     checkpoint: weights/drogoff_grasp_tools_v2_original300_best_j1.pth
-    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/drogoff_grasp_tools_v2_original300_best_j1.pth
-    checkpoint_sha256: 261283bed3cbf0f743541b85b6b33b43af0512d253d12312041776a088e9dbd3
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/drogoff_grasp_tools_v2_original300_20260814_epoch32_best_j1.pth
+    checkpoint_sha256: 38b2824b385a293b883bfe03682fec0e2f30c83457e3f86ba08e14d884fd7ecf
     device: cuda:0
     prompt: the screwdriver
     grasp_size_activation: auto
