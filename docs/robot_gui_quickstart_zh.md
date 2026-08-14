@@ -141,6 +141,10 @@ python deploy_gui_realsense.py \
   --allow-robot
 ```
 
+实验室配置中的 `robot.timeout_s: null` 与旧 GI GUI 一致：TCP 连接和发送均
+不设置应用层超时。如果 Docker 接收程序尚未监听，启动过程会停在连接等待，
+而不会在 2 秒后切换为 offline。
+
 `config/deployment/lab.yaml` 当前启用 `auto_connect`、`auto_arm` 和 `auto_send`，
 有效预测会按配置的间隔自动发送。若只想手动发送，将 YAML 中以下两项设为
 `false`：

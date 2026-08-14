@@ -119,6 +119,23 @@ class DeploymentContractTest(unittest.TestCase):
         client.close()
         fake_socket.close.assert_called_once()
 
+    @mock.patch("deployment.robot.socket.create_connection")
+    def test_tcp_socket_supports_blocking_lab_mode(self, create_connection):
+        fake_socket = mock.Mock()
+        create_connection.return_value = fake_socket
+        client = LegacyTCPGraspClient(
+            "192.168.38.10", 3000, timeout_s=None
+        )
+
+        client.connect()
+
+        create_connection.assert_called_once_with(
+            ("192.168.38.10", 3000), timeout=None
+        )
+        fake_socket.settimeout.assert_called_once_with(None)
+        client.close()
+        fake_socket.close.assert_called_once()
+
     def test_invalid_width_is_rejected(self):
         with self.assertRaises(ValueError):
             GraspCommand(1, 2, 3, 0, 0).to_wire()

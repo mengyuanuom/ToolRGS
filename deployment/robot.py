@@ -128,10 +128,16 @@ class GraspCommand:
 class LegacyTCPGraspClient:
     """Explicit-connect TCP sender; it never sends while merely connecting."""
 
-    def __init__(self, host: str, port: int = 3000, timeout_s: float = 2.0):
+    def __init__(
+        self, host: str, port: int = 3000, timeout_s: Optional[float] = 2.0
+    ):
         self.host = str(host)
         self.port = int(port)
-        self.timeout_s = float(timeout_s)
+        if timeout_s is None:
+            self.timeout_s = None
+        else:
+            parsed_timeout = float(timeout_s)
+            self.timeout_s = None if parsed_timeout <= 0 else parsed_timeout
         self._socket: Optional[socket.socket] = None
 
     @property
@@ -141,6 +147,8 @@ class LegacyTCPGraspClient:
     def connect(self) -> None:
         if self.connected:
             return
+        # timeout=None reproduces the original GI GUI's blocking socket. It
+        # also remains blocking after connection so sendall has no 2 s cutoff.
         connection = socket.create_connection(
             (self.host, self.port), timeout=self.timeout_s
         )
