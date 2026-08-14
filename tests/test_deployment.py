@@ -26,6 +26,7 @@ from deploy_gui import (
     apply_runtime_overrides,
     parse_args,
 )
+from deploy_gui_gi import prepare_gi_config
 from deploy_gui_legacy_gi import prepare_legacy_gi_config
 
 
@@ -70,6 +71,19 @@ class DeploymentContractTest(unittest.TestCase):
         )
         self.assertIn("format=BGR,width=1280,height=720", updated["camera"]["gstreamer_pipeline"])
         self.assertEqual(updated["robot"]["timeout_s"], 2.0)
+
+    def test_designed_gi_uses_model_width_and_two_second_timeout(self):
+        config = {
+            "camera": {"type": "realsense"},
+            "robot": {
+                "timeout_s": None,
+                "width_policy": {"type": "mask_span"},
+            },
+        }
+        updated = prepare_gi_config(config)
+        self.assertEqual(updated["camera"]["type"], "gstreamer")
+        self.assertEqual(updated["robot"]["timeout_s"], 2.0)
+        self.assertEqual(updated["robot"]["width_policy"]["type"], "model")
 
     def test_legacy_gi_entry_keeps_old_layout_and_blocking_socket(self):
         config = {
