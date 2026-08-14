@@ -37,7 +37,10 @@ camera:
 robot:
   type: legacy_tcp
   enabled: true
-  host: 192.168.38.10
+  # The Kinova receiver runs in a Docker container with network_mode=host.
+  # The GUI runs on the same host, so connect through loopback instead of
+  # routing the old lab IP through the Wi-Fi gateway.
+  host: 127.0.0.1
   port: 3000
   # Match the original GI GUI: no application-level connect/send timeout.
   # The GUI waits for the Docker receiver instead of failing after two seconds.
