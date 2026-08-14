@@ -71,6 +71,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         from PyQt5.QtWidgets import (
             QApplication,
             QCheckBox,
+            QColorDialog,
             QFrame,
             QGridLayout,
             QHBoxLayout,
@@ -98,6 +99,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
     source = build_source(config["camera"], config["_repo_root"])
     robot_cfg = config["robot"]
     gui_cfg = config["gui"]
+    legacy_layout = str(gui_cfg.get("layout", "modern")).lower() == "legacy"
     audio = build_audio_input(config["audio"]) if config.get("audio", {}).get("enabled") else None
     gelsight_cfg = config.get("gelsight", {})
     gelsight = (
@@ -120,12 +122,20 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.inference = inference
             self.active_model = str(config.get("_active_model", "model"))
             self.audio_results = queue.Queue()
+            self.robot_connect_results = queue.Queue()
             self.robot: Optional[LegacyTCPGraspClient] = None
+            self.robot_connecting = False
+            self.robot_connect_generation = 0
             self.current_mode = 0
+            self.frame_count = 0
             self.model_selector = None
             self.setWindowTitle(str(gui_cfg["title"]))
-            self.setMinimumSize(1200, 760)
-            self.resize(int(gui_cfg["window_width"]), int(gui_cfg["window_height"]))
+            if legacy_layout:
+                self.setMinimumSize(1600, 1000)
+                self.resize(1600, 1000)
+            else:
+                self.setMinimumSize(1200, 760)
+                self.resize(int(gui_cfg["window_width"]), int(gui_cfg["window_height"]))
             self._build_ui()
             if (
                 bool(robot_cfg.get("enabled"))
@@ -165,6 +175,12 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 button.setCheckable(True)
                 button.setObjectName("ModeButton")
                 mode_row.addWidget(button, 1)
+            if legacy_layout:
+                self.appearance_button = QPushButton("Appearance")
+                self.appearance_button.setMinimumHeight(40)
+                self.appearance_button.setObjectName("ModeButton")
+                self.appearance_button.clicked.connect(self._choose_accent)
+                mode_row.addWidget(self.appearance_button, 1)
             self.object_button.clicked.connect(lambda: self._switch_mode(0))
             self.grasping_button.clicked.connect(lambda: self._switch_mode(1))
             self.gelsight_button.clicked.connect(lambda: self._switch_mode(2))
@@ -185,6 +201,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.detection_label.setSizePolicy(
                 QSizePolicy.Expanding, QSizePolicy.Expanding
             )
+            if legacy_layout:
+                self.detection_label.setFixedSize(1280, 720)
             detection_layout.addWidget(self.detection_label)
             self.pages.addWidget(detection_page)
 
@@ -195,6 +213,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             grasp_grid = QGridLayout()
             self.live_label = self._image_label("Grasp Result")
             self.mask_label = self._image_label("Segmentation Mask")
+            if legacy_layout:
+                self.live_label.setFixedSize(640, 480)
+                self.mask_label.setFixedSize(640, 480)
             grasp_grid.addWidget(
                 self._labeled_image(self.live_label, "Grasp Result"), 0, 0, 1, 3
             )
@@ -206,7 +227,10 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 (("quality", "Quality Mask"), ("angle", "Angle Mask"), ("width", "Width Mask"))
             ):
                 label = self._image_label(title, minimum=(160, 120))
-                label.setMaximumHeight(180)
+                if legacy_layout:
+                    label.setFixedSize(160, 120)
+                else:
+                    label.setMaximumHeight(180)
                 self.map_labels[name] = label
                 grasp_grid.addWidget(
                     self._labeled_image(label, title), 1, column * 2, 1, 2
@@ -220,23 +244,30 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.sentence_label.setObjectName("TargetLabel")
             grasp_layout.addWidget(self.sentence_label)
 
-            prompt_row = QHBoxLayout()
             self.audio_button = QPushButton("Speak")
             self.audio_button.clicked.connect(self._record_instruction)
             self.audio_button.setEnabled(audio is not None)
-            prompt_row.addWidget(self.audio_button)
             self.prompt = QLineEdit(str(config["model"]["prompt"]))
             self.prompt.setPlaceholderText("Type a language instruction and press Enter")
             self.prompt.returnPressed.connect(self._predict_now)
-            prompt_row.addWidget(self.prompt, 1)
             self.predict_button = QPushButton("Predict now")
             self.predict_button.setObjectName("PrimaryButton")
             self.predict_button.clicked.connect(self._predict_now)
-            prompt_row.addWidget(self.predict_button)
-            prompt_card = QFrame()
-            prompt_card.setObjectName("ControlCard")
-            prompt_card.setLayout(prompt_row)
-            grasp_layout.addWidget(prompt_card)
+            if legacy_layout:
+                self.audio_button.setMinimumHeight(40)
+                self.prompt.setMinimumHeight(46)
+                grasp_layout.addWidget(self.audio_button)
+                grasp_layout.addWidget(self.prompt)
+                self.predict_button.setVisible(False)
+            else:
+                prompt_row = QHBoxLayout()
+                prompt_row.addWidget(self.audio_button)
+                prompt_row.addWidget(self.prompt, 1)
+                prompt_row.addWidget(self.predict_button)
+                prompt_card = QFrame()
+                prompt_card.setObjectName("ControlCard")
+                prompt_card.setLayout(prompt_row)
+                grasp_layout.addWidget(prompt_card)
             self.pages.addWidget(grasp_page)
 
             # GelSight page.
@@ -250,6 +281,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.gelsight_label.setSizePolicy(
                 QSizePolicy.Expanding, QSizePolicy.Expanding
             )
+            if legacy_layout:
+                self.gelsight_label.setFixedSize(640, 480)
             gelsight_layout.addWidget(self.gelsight_label)
             self.pages.addWidget(gelsight_page)
 
@@ -331,7 +364,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.status.setText("Robot output permitted but disconnected")
             robot_row.addWidget(self.status, 1)
             robot_layout.addLayout(robot_row)
-            robot_controls.setVisible(True)
+            robot_controls.setVisible(not legacy_layout)
             layout.addWidget(robot_controls)
             self.setCentralWidget(root)
             self._apply_theme()
@@ -523,6 +556,24 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 """
             )
 
+        def _choose_accent(self) -> None:
+            """Keep the legacy Appearance control without changing its layout."""
+            color = QColorDialog.getColor(parent=self, title="Choose accent color")
+            if not color.isValid():
+                return
+            accent = color.name()
+            self.setStyleSheet(
+                self.styleSheet()
+                + f"""
+                QPushButton#ModeButton:checked,
+                QPushButton#PrimaryButton,
+                QPushButton#SendButton {{
+                    background: {accent};
+                    border-color: {accent};
+                }}
+                """
+            )
+
         def _set_connection_badge(self, connected: bool) -> None:
             self.connection_badge.setText("CONNECTED" if connected else "OFFLINE")
             self.connection_badge.setProperty("connected", bool(connected))
@@ -557,6 +608,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
 
         def _next_frame(self) -> None:
             self._poll_audio()
+            self._poll_robot_connection()
             try:
                 ok, frame = self.source.read()
             except Exception as exc:
@@ -565,6 +617,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 return
             if not ok or frame is None:
                 return
+            self.frame_count += 1
             self.current_frame = frame
             display = self.prediction.annotated_bgr if self.prediction is not None else frame
             if self.current_mode == 1:
@@ -613,6 +666,16 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 and now - self.last_inference_at >= interval_s
             ):
                 self._predict_now()
+            if (
+                legacy_layout
+                and self.current_mode == 1
+                and self.frame_count
+                % max(1, int(gui_cfg.get("legacy_send_every_frames", 50)))
+                == 0
+                and robot_cfg.get("auto_send")
+                and self.arm.isChecked()
+            ):
+                self._send_grasp()
 
         def _record_instruction(self) -> None:
             if audio is None:
@@ -677,7 +740,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                         f"angle={grasp[4]:.1f}, width={grasp[2]:.1f}"
                     )
                     if (
-                        robot_cfg.get("auto_send")
+                        not legacy_layout
+                        and robot_cfg.get("auto_send")
                         and self.arm.isChecked()
                         and time.monotonic() - self.last_send_at
                         >= float(robot_cfg.get("auto_send_interval_s", 2.0))
@@ -696,9 +760,39 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         def _connect_robot(self) -> None:
             if not (bool(robot_cfg.get("enabled")) and allow_robot):
                 return
+            if self.robot_connecting or (self.robot and self.robot.connected):
+                return
+            self.robot_connecting = True
+            self.robot_connect_generation += 1
+            generation = self.robot_connect_generation
+            client = build_robot_client(robot_cfg)
+            self.connect_button.setEnabled(False)
+            self.status.setText(
+                f"Waiting for receiver: {robot_cfg['host']}:{robot_cfg['port']}"
+            )
+
+            def worker():
+                try:
+                    client.connect()
+                    self.robot_connect_results.put((generation, client, None))
+                except Exception as exc:
+                    client.close()
+                    self.robot_connect_results.put((generation, None, exc))
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        def _poll_robot_connection(self) -> None:
             try:
-                self.robot = build_robot_client(robot_cfg)
-                self.robot.connect()
+                generation, client, error = self.robot_connect_results.get_nowait()
+            except queue.Empty:
+                return
+            if generation != self.robot_connect_generation:
+                if client is not None:
+                    client.close()
+                return
+            self.robot_connecting = False
+            if error is None:
+                self.robot = client
                 self.connect_button.setEnabled(False)
                 self.disconnect_button.setEnabled(True)
                 self.arm.setEnabled(True)
@@ -708,16 +802,17 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.status.setText(
                     f"Receiver connected: {robot_cfg['host']}:{robot_cfg['port']}"
                 )
-            except Exception as exc:
-                if self.robot is not None:
-                    self.robot.close()
+                self.statusBar().showMessage(self.status.text())
+            else:
                 self.robot = None
                 self._set_connection_badge(False)
                 self.connect_button.setEnabled(True)
                 self.disconnect_button.setEnabled(False)
-                self._error("Robot receiver connection failed", exc)
+                self._error("Robot receiver connection failed", error)
 
         def _disconnect_robot(self) -> None:
+            self.robot_connect_generation += 1
+            self.robot_connecting = False
             self.arm.setChecked(False)
             self.arm.setEnabled(False)
             if self.robot is not None:
@@ -758,6 +853,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.robot.send(command)
                 self.last_send_at = time.monotonic()
                 self.status.setText(f"Sent: {command.to_wire().decode('ascii').strip()}")
+                self.statusBar().showMessage(self.status.text())
             except Exception as exc:
                 self._disconnect_robot()
                 self._error("Robot command failed", exc)
@@ -768,6 +864,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
 
         def closeEvent(self, event) -> None:
             self.timer.stop()
+            self.robot_connect_generation += 1
             self.source.close()
             if gelsight is not None:
                 gelsight.close()

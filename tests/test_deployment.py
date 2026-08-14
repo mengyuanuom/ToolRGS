@@ -26,6 +26,7 @@ from deploy_gui import (
     apply_runtime_overrides,
     parse_args,
 )
+from deploy_gui_legacy_gi import prepare_legacy_gi_config
 
 
 class DeploymentContractTest(unittest.TestCase):
@@ -68,6 +69,18 @@ class DeploymentContractTest(unittest.TestCase):
             updated["camera"]["gstreamer_pipeline"],
         )
         self.assertIn("format=BGR,width=1280,height=720", updated["camera"]["gstreamer_pipeline"])
+
+    def test_legacy_gi_entry_keeps_old_layout_and_blocking_socket(self):
+        config = {
+            "camera": {"type": "realsense"},
+            "gui": {},
+            "robot": {"timeout_s": 2.0},
+        }
+        updated = prepare_legacy_gi_config(config)
+        self.assertEqual(updated["camera"]["type"], "gstreamer")
+        self.assertEqual(updated["gui"]["layout"], "legacy")
+        self.assertEqual(updated["gui"]["legacy_send_every_frames"], 50)
+        self.assertIsNone(updated["robot"]["timeout_s"])
 
     def test_legacy_wire_protocol(self):
         command = GraspCommand(12.5, 33, -45.25, 80, 1)

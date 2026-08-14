@@ -3,14 +3,15 @@
 本文档适用于实验室机械臂服务器上的完整 ToolRGS GUI，包括 DROG-OFF
 语言抓取、13 类目标检测、RealSense/GI 图像输入以及 Kinova TCP 坐标发送。
 
-## 1. 两个 GUI 入口
+## 1. 三个 GUI 入口
 
-两个入口共享相同的模型、界面、目标检测和机械臂发送模块，仅图像来源不同。
+三个入口共享相同的 ToolRGS 模型、目标检测、尺度映射和机械臂发送模块。
 
 | 入口 | 图像来源 | 适用场景 |
 | --- | --- | --- |
 | `deploy_gui_realsense.py` | `pyrealsense2` 直接打开物理相机 | 没有其他进程占用 RealSense |
 | `deploy_gui_gi.py` | GStreamer 共享内存 `fooA` | 兼容原 `..._gi_depthwidth_22.py` 实验系统 |
+| `deploy_gui_legacy_gi.py` | GStreamer 共享内存 `fooA` | 旧 GUI 布局和 50 帧发送节奏，仅替换为 ToolRGS 内核 |
 
 原 GI GUI 实际读取的是：
 
@@ -105,6 +106,12 @@ GI 共享流预览：
 python deploy_gui_gi.py --config config/deployment/lab.yaml
 ```
 
+旧版兼容布局预览：
+
+```bash
+python deploy_gui_legacy_gi.py --config config/deployment/lab.yaml
+```
+
 RealSense 直连预览：
 
 ```bash
@@ -133,6 +140,18 @@ python deploy_gui_gi.py \
   --allow-robot
 ```
 
+旧版兼容 GUI（推荐用于复现实验室原工作流）：
+
+```bash
+python deploy_gui_legacy_gi.py \
+  --config config/deployment/lab.yaml \
+  --allow-robot
+```
+
+该入口保留旧 GUI 的顶部三模式、两张 640x480 主图、三张 160x120 稠密图、
+语言输入、GI `fooA` 视频和每 50 帧发送坐标；抓取网络、检测器、坐标/角度/
+宽度映射均来自当前 ToolRGS。
+
 RealSense 直连版本：
 
 ```bash
@@ -142,8 +161,8 @@ python deploy_gui_realsense.py \
 ```
 
 实验室配置中的 `robot.timeout_s: null` 与旧 GI GUI 一致：TCP 连接和发送均
-不设置应用层超时。如果 Docker 接收程序尚未监听，启动过程会停在连接等待，
-而不会在 2 秒后切换为 offline。
+不设置应用层超时。连接在后台线程等待，因此 Docker 接收程序尚未监听时，
+GUI 仍可正常绘制和切换页面，不会再出现主线程阻塞导致的黑屏。
 
 `config/deployment/lab.yaml` 当前启用 `auto_connect`、`auto_arm` 和 `auto_send`，
 有效预测会按配置的间隔自动发送。若只想手动发送，将 YAML 中以下两项设为
