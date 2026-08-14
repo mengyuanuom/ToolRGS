@@ -476,6 +476,10 @@ before running `python deploy_gui_gi.py --allow-robot`. The repository contains
 the sender but not the external Kinova receiver/controller or its calibration,
 so a clone alone cannot safely move the physical robot.
 
+To replace the legacy 13-class GUI detector with a detector trained on the full
+22-class Grasp-Tools V2 taxonomy, follow the
+[MMDetection Faster R-CNN training guide](docs/grasp_tools_detector.md).
+
 ## Component architecture
 
 ToolRGS now has MMDetection-style registries for models, datasets, transforms,
