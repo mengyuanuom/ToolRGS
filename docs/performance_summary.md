@@ -124,7 +124,7 @@ rectangle success.
 
 | Model | Config | Checkpoint | Seg. IoU | J@1 (30 deg) | J@5 (30 deg) | J@1 (15 deg) | J@5 (15 deg) | Eval commit |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| **DROG-OFF** | `config/grasp_tools/drogoff.yaml` | `drogoff_grasp_tools_v2_best_j1.pth` | **83.75** | **86.14** | **89.29** | - | - | `499fcba` |
+| **DROG-OFF** | `config/grasp_tools/drogoff.yaml` | legacy checkpoint (archived) | **83.75** | **86.14** | **89.29** | - | - | `499fcba` |
 | DROG | `config/grasp_tools/drog.yaml` | `best_epoch_036_J1_81.12_J5_84.47.pth` | 83.10 | 79.60 | 84.82 | 79.50 | 84.70 | `499fcba` + dual-angle evaluator |
 | CROG | `config/grasp_tools/crog.yaml` | `best_epoch_024_J1_80.67_J5_83.95.pth` | 81.47 | 80.20 | 83.75 | 79.84 | 83.39 | `499fcba` + dual-angle evaluator |
 
@@ -132,11 +132,11 @@ The DROG-OFF V2 strict Test log explicitly loads the original checkpoint
 `best_epoch_011_J1_29.45_J5_34.67.pth` and reports IoU `83.75`, J@1
 `86.14`, and J@5 `89.29`. The `29.45/34.67` values embedded in that
 original filename are historical training-time validation values from the older
-evaluation path; they are not the strict Test scores. The same bytes are
-published under the unambiguous name
-[drogoff_grasp_tools_v2_best_j1.pth](https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/drogoff_grasp_tools_v2_best_j1.pth)
-with SHA-256
-`7fcef57dd968a381d61bab7ef35e5e3906149bcec9f4fdbb6658da23659e73d5`.
+evaluation path; they are not the strict Test scores. This legacy-scale
+checkpoint was removed from the public Release on 2026-08-16 to prevent it
+from being mixed with the current original-coordinate factor-300 deployment
+protocol. The table retains the measured historical result for reproducibility;
+the server-side experiment record is unchanged.
 DROG-OFF has not yet been re-evaluated with the additional `15`-degree
 counter, so those two cells remain intentionally blank.
 

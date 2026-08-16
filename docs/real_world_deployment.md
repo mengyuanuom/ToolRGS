@@ -94,9 +94,9 @@ an untrusted checkpoint.
 The checked-in lab profiles select `drogoff-grasptools-v2-original300` by
 default. It downloads the current original-coordinate checkpoint from the
 [ToolRGS weight release](https://github.com/mengyuanuom/ToolRGS/releases/tag/grasp-tools-v2-weights).
-This is the epoch-11 J@1-best checkpoint from the ongoing original-scale run;
-its validation result is segmentation IoU `84.64`, J@1 `60.65`, and J@5
-`62.02` under rotated IoU `>0.50` and angle error `<=30` degrees. It has not
+This is the epoch-32 J@1-best checkpoint from the original-scale run;
+its validation result is segmentation IoU `84.19`, J@1 `62.52`, and J@5
+`63.60` under rotated IoU `>0.50` and angle error `<=30` degrees. It has not
 yet received a formal test-set score and therefore does not replace the older
 published Test result in `performance_summary.md`.
 
@@ -104,10 +104,11 @@ The model and GUI now share the same size contract: grasp long-side values use
 an original-image normalization factor of `300`, while the displayed short
 side is always `20` original-image pixels. `size_coordinate: original`
 prevents a 1280x720 RealSense frame from applying the 448px canvas scale to
-the grasp width a second time. The asset is named
-`drogoff_grasp_tools_v2_original300_best_j1.pth`, is `952762694` bytes, and has
+the grasp width a second time. The Release asset is named
+`drogoff_grasp_tools_v2_original300_20260814_epoch32_best_j1.pth`, is
+`952762694` bytes, and has
 SHA-256
-`261283bed3cbf0f743541b85b6b33b43af0512d253d12312041776a088e9dbd3`.
+`38b2824b385a293b883bfe03682fec0e2f30c83457e3f86ba08e14d884fd7ecf`.
 ToolRGS validates that digest before loading the checkpoint.
 
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
