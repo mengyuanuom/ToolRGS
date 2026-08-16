@@ -8,6 +8,16 @@ from utils.pretrained import ensure_pretrained
 from .crog_layers import FPN, MultiTaskProjector, Projector, TransformerDecoder
 
 
+def grasp_width_for_loss(width, activation: str):
+    """Apply the configured bounded-width contract before regression loss."""
+    activation = str(activation).strip().lower()
+    if activation == "sigmoid":
+        return torch.sigmoid(width)
+    if activation == "raw":
+        return width
+    raise ValueError("grasp_width_loss_activation must be 'raw' or 'sigmoid'")
+
+
 class CROG(nn.Module):
     grasp_size_loss_activation = "clamp"
 
@@ -22,6 +32,16 @@ class CROG(nn.Module):
         self.short_side_loss_weight = float(
             getattr(cfg, "short_side_loss_weight", 1.0)
         )
+        self.grasp_width_loss_activation = str(
+            getattr(cfg, "grasp_width_loss_activation", "raw")
+        ).strip().lower()
+        if self.grasp_width_loss_activation not in {"raw", "sigmoid"}:
+            raise ValueError(
+                "grasp_width_loss_activation must be 'raw' or 'sigmoid'"
+            )
+        if self.grasp_width_loss_activation == "sigmoid":
+            # Checkpoint metadata and GUI decoding must match the loss target.
+            self.grasp_size_loss_activation = "sigmoid"
         if self.predicts_grasp_short_side and not self.use_grasp_masks:
             raise ValueError(
                 "CROG short-side prediction requires use_grasp_masks=True"
@@ -161,7 +181,10 @@ class CROG(nn.Module):
         qua_loss = F.smooth_l1_loss(qua, grasp_qua_mask)
         sin_loss = F.smooth_l1_loss(sin, grasp_sin_mask)
         cos_loss = F.smooth_l1_loss(cos, grasp_cos_mask)
-        width_loss = F.smooth_l1_loss(width, grasp_wid_mask)
+        width_loss = F.smooth_l1_loss(
+            grasp_width_for_loss(width, self.grasp_width_loss_activation),
+            grasp_wid_mask,
+        )
         short_side_loss = (
             F.smooth_l1_loss(short_side, grasp_short_mask)
             if self.predicts_grasp_short_side

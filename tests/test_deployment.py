@@ -10,6 +10,7 @@ from unittest import mock
 
 import numpy as np
 import yaml
+import torch
 
 from deployment.config import activate_model_profile, load_deployment_config
 from deployment.detector import (
@@ -26,6 +27,7 @@ from deployment.inference import (
 from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
+from model.crog import grasp_width_for_loss
 from deploy_gui import (
     DEFAULT_SAMPLE_IMAGE,
     apply_camera_preset,
@@ -270,6 +272,15 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertTrue(expanded[3, 5])
         self.assertTrue(expanded[7, 5])
         self.assertFalse(expanded[5, 2])
+
+    def test_aligned_crog_width_loss_uses_sigmoid_contract(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        self.assertTrue(
+            torch.equal(grasp_width_for_loss(raw, "raw"), raw)
+        )
+        bounded = grasp_width_for_loss(raw, "sigmoid")
+        self.assertTrue(torch.all((bounded > 0.0) & (bounded < 1.0)))
+        self.assertAlmostEqual(float(bounded[1]), 0.5)
 
     def test_gui_preview_does_not_mirror_decoded_angle(self):
         rectangle = opencv_grasp_rectangle([640, 360, 120, 20, 35])
