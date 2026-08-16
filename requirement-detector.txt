@@ -3,5 +3,5 @@
 #   pip install -U openmim
 #   mim install "mmengine==0.10.7" "mmcv==2.1.0"
 #
-# This is the MMDetection revision used by the original 13-class GUI.
+# This is the MMDetection revision used by the 22-class Grasp-Tools V2 GUI.
 mmdet @ git+https://github.com/open-mmlab/mmdetection.git@cfd5d3a985b0249de009b67d04f37263e11cdf3d
