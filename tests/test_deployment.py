@@ -28,7 +28,10 @@ from deploy_gui import (
 )
 from deploy_gui_gi import prepare_gi_config
 from deploy_gui_realsense import prepare_realsense_demo_config
-from tools.check_deployment import parse_args as parse_check_args
+
+parse_check_args = runpy.run_path(
+    str(Path(__file__).resolve().parents[1] / "tools" / "check_deployment.py")
+)["parse_args"]
 
 
 class DeploymentContractTest(unittest.TestCase):
