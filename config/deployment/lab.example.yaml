@@ -105,12 +105,11 @@ detector:
   type: mmdetection
   # Set true to create the Object detection tab in the GUI.
   enabled: false
-  config: config/deployment/faster-rcnn-13.py
-  checkpoint: weights/epoch_48_13.pth
-  # Optional Release/HTTP download. Keep empty when the weight is copied manually.
-  checkpoint_url: ""
-  checkpoint_sha256: ""
-  # Only enable for a checkpoint produced by your trusted training/server source.
+  config: configs/detection/faster_rcnn_r50_fpn_grasp_tools_v2_24e.py
+  checkpoint: weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth
+  checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/faster_rcnn_r50_fpn_grasp_tools_v2_epoch24_best_map.pth
+  checkpoint_sha256: 76a4a09164f5de1a410957f4439f801328cf543f28f34fa6fee24a7f7eb49e74
+  # Enable only for this SHA-verified checkpoint from the trusted project Release.
   trusted_checkpoint: true
   device: cuda:0
   score_threshold: 0.70
@@ -119,19 +118,28 @@ detector:
   box_thickness: 2
   text_scale: 0.55
   classes:
-    - box
+    - tape measure
+    - T-hex key
+    - L-hex key
+    - marker
+    - wrench
+    - pliers
+    - mallet
+    - screwdriver
     - clamps
+    - spool
+    - sponge
     - clip
     - crimp tool
-    - hex key
-    - mallet
-    - marker
-    - screwdriver
-    - sponge
-    - spool
+    - screw
     - tape
-    - tape measure
-    - wrench
+    - box
+    - nut
+    - ruler
+    - file
+    - stapler
+    - scissors
+    - cable
   palette:
     - [220, 20, 60]
     - [119, 11, 32]
@@ -146,6 +154,15 @@ detector:
     - [100, 170, 30]
     - [220, 220, 0]
     - [175, 116, 175]
+    - [250, 0, 30]
+    - [165, 42, 42]
+    - [0, 226, 252]
+    - [182, 182, 255]
+    - [0, 82, 0]
+    - [120, 166, 157]
+    - [110, 76, 0]
+    - [174, 57, 255]
+    - [199, 100, 0]
 
 audio:
   type: whisper

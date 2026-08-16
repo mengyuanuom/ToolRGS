@@ -16,16 +16,23 @@ from deployment.weights import ensure_deployment_checkpoint
 from utils.pretrained import ARTIFACTS, ensure_pretrained
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="config/deployment/lab.yaml")
     parser.add_argument(
         "--download-weights",
+        dest="download_weights",
         action="store_true",
         help=(
             "Download and verify every missing weight used by the active GUI "
-            "profile; this never opens the camera or connects to the robot"
+            "profile (default); this never opens the camera or connects to the robot"
         ),
+    )
+    parser.add_argument(
+        "--no-download-weights",
+        dest="download_weights",
+        action="store_false",
+        help="Only report missing weights; do not download them",
     )
     parser.add_argument(
         "--probe-camera", action="store_true", help="Open the camera and read one frame"
@@ -42,7 +49,8 @@ def parse_args():
         "--probe-gelsight", action="store_true",
         help="Load the GelSight classifier and classify one tactile frame",
     )
-    return parser.parse_args()
+    parser.set_defaults(download_weights=True)
+    return parser.parse_args(argv)
 
 
 class Report:
@@ -219,14 +227,12 @@ def main() -> int:
             report.fail(f"Detector checkpoint not found: {detector_checkpoint}")
         classes = list(detector_cfg.get("classes") or [])
         palette = list(detector_cfg.get("palette") or [])
-        if len(classes) != 13:
-            report.fail(
-                f"Detector requires the checkpoint's 13 classes, got {len(classes)}"
-            )
+        if not classes:
+            report.fail("Detector class names are empty")
         elif len(set(classes)) != len(classes):
             report.fail("Detector class names must be unique")
         else:
-            report.ok("Detector class order: 13 classes")
+            report.ok(f"Detector class order: {len(classes)} classes")
         if palette and len(palette) != len(classes):
             report.fail("Detector palette length must match detector class count")
         threshold = float(detector_cfg.get("score_threshold", 0.7))

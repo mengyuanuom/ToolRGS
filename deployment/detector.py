@@ -114,7 +114,7 @@ class MMDetectionAdapter:
         self.palette = list(cfg.get("palette") or dataset_meta.get("palette", []))
         if not self.classes:
             raise ValueError(
-                "Detector classes are empty; keep the 13 training classes in deployment YAML"
+                "Detector classes are empty; keep the training class order in deployment YAML"
             )
         bbox_head = getattr(getattr(self.model, "roi_head", None), "bbox_head", None)
         num_classes = getattr(bbox_head, "num_classes", None)

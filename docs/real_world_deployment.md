@@ -49,7 +49,7 @@ it is intentionally not included in the base requirements.
 GelSight classification uses `torchvision`; install the torchvision build that
 matches the PyTorch/CUDA environment already used by ToolRGS.
 
-The original 13-class detector environment used MMEngine `0.10.7`, MMCV
+The 22-class Grasp-Tools detector environment uses MMEngine `0.10.7`, MMCV
 `2.1.0`, and the MMDetection source revision recorded in
 `requirement-detector.txt`. Install these only when the Object detection tab
 is needed:
@@ -73,16 +73,15 @@ For example:
 pretrain/ViT-B-16.pt
 pretrain/dinov2_vitb14_reg4_pretrain.pth
 exp/grasp_tools/drogoff_grasp_tools/best_jindex_model.pth
-weights/epoch_48_13.pth                 # only when detector.enabled=true
+weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth  # detector.enabled=true
 weights/gelsight_best.pt                # only when gelsight.enabled=true
 ```
 
-The 13-class Faster R-CNN checkpoint belongs at
-`weights/epoch_48_13.pth`. Its class order is fixed and must not be changed:
-`box, clamps, clip, crimp tool, hex key, mallet, marker, screwdriver, sponge,
-spool, tape, tape measure, wrench`. The detector section also supports
-`checkpoint_url` and `checkpoint_sha256`; if those values are filled,
-ToolRGS downloads and verifies the detector weight just like the grasp model.
+The 22-class Faster R-CNN checkpoint belongs at
+`weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth`. Its class order is
+defined by `configs/detection/faster_rcnn_r50_fpn_grasp_tools_v2_24e.py` and
+must not be changed. The checked-in Release URL and SHA-256 let ToolRGS download
+and verify the detector weight just like the grasp model.
 The checked-in lab profile sets `trusted_checkpoint: true` because the
 original detector checkpoint was produced by the trusted lab training
 environment and contains MMEngine `HistoryBuffer` metadata. On PyTorch 2.6+,
@@ -126,7 +125,7 @@ python tools/check_deployment.py --config config/deployment/lab.yaml \
 ```
 
 `config/deployment/lab.yaml` is committed as the ready-to-run physical
-profile: RealSense, DROG-OFF, and the 13-class Faster R-CNN detector are
+profile: RealSense, DROG-OFF, and the 22-class Faster R-CNN detector are
 enabled, while robot output remains disabled. `lab.example.yaml` remains the
 extended reference. A normal deployment no longer needs a YAML copy/edit step.
 
@@ -272,7 +271,7 @@ whole calibrated workspace has been tested.
 ## Ported components
 
 The reusable pieces from the local server snapshot are now modules: grasp GUI,
-shared-memory/direct camera access, optional 13-class detector, Whisper input,
+shared-memory/direct camera access, optional 22-class detector, Whisper input,
 GelSight classifier/tab, 22-class semantic depth tiers, mask-derived opening
 width, receiver angle conversion, and the legacy TCP sender. All are selected
 through YAML and registered components. Absolute `/home/...` paths, fixed CUDA

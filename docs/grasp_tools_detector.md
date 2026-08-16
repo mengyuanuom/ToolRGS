@@ -111,12 +111,11 @@ Record bbox mAP, mAP50, mAP75, small/medium/large AP and the classwise AP table.
 
 ## Deployment hand-off
 
-Do not update the GUI to 22 classes until the checkpoint has completed formal
-testing. The final hand-off consists of:
+The best validation checkpoint has now been published and wired into the GUI:
 
-1. copy the best checkpoint to `weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth`;
-2. publish it as a GitHub Release asset and record SHA-256;
-3. add a 22-class inference config under `config/deployment/`;
-4. update deployment defaults and `config/deployment/lab.yaml` atomically;
-5. run `tools/check_deployment.py --download-weights --build-detector`;
-6. verify detections on real RealSense/GI frames before robot experiments.
+1. local path: `weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth`;
+2. Release asset: `faster_rcnn_r50_fpn_grasp_tools_v2_epoch24_best_map.pth`;
+3. SHA-256: `76a4a09164f5de1a410957f4439f801328cf543f28f34fa6fee24a7f7eb49e74`;
+4. validation bbox mAP/mAP50/mAP75: `0.972 / 0.999 / 0.996`;
+5. run `python tools/check_deployment.py --build-detector` to download, verify,
+   and load it before real RealSense/GI experiments.

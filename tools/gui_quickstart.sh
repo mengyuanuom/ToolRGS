@@ -14,7 +14,7 @@ fi
 case "$ACTION" in
   check)
     exec python tools/check_deployment.py \
-      --config "$CONFIG" --download-weights "$@"
+      --config "$CONFIG" "$@"
     ;;
   demo)
     exec python deploy_gui_realsense.py --config "$CONFIG" "$@"

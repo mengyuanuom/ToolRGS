@@ -1,4 +1,4 @@
-# Ready-to-run lab profile: DROG-OFF grasping + 13-class Faster R-CNN.
+# Ready-to-run lab profile: DROG-OFF grasping + 22-class Faster R-CNN.
 # Robot auto-connect/auto-send is configured for the lab receiver, but the
 # process still requires the explicit --allow-robot launch flag.
 active_model: drogoff-grasptools-v2-original300
@@ -72,11 +72,11 @@ robot:
 detector:
   type: mmdetection
   enabled: true
-  config: config/deployment/faster-rcnn-13.py
-  checkpoint: weights/epoch_48_13.pth
-  checkpoint_url: ""
-  checkpoint_sha256: ""
-  # This is the lab's own MMEngine checkpoint. It contains HistoryBuffer metadata.
+  config: configs/detection/faster_rcnn_r50_fpn_grasp_tools_v2_24e.py
+  checkpoint: weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth
+  checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/faster_rcnn_r50_fpn_grasp_tools_v2_epoch24_best_map.pth
+  checkpoint_sha256: 76a4a09164f5de1a410957f4439f801328cf543f28f34fa6fee24a7f7eb49e74
+  # Trained on our 22-class Grasp-Tools V2 data and verified by SHA-256.
   trusted_checkpoint: true
   device: cuda:0
   score_threshold: 0.70

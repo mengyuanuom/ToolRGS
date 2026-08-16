@@ -28,12 +28,17 @@ from deploy_gui import (
 )
 from deploy_gui_gi import prepare_gi_config
 from deploy_gui_realsense import prepare_realsense_demo_config
+from tools.check_deployment import parse_args as parse_check_args
 
 
 class DeploymentContractTest(unittest.TestCase):
     def test_image_cli_uses_bundled_sample_by_default(self):
         args = parse_args(["--image"])
         self.assertEqual(args.image, DEFAULT_SAMPLE_IMAGE)
+
+    def test_deployment_check_downloads_missing_weights_by_default(self):
+        self.assertTrue(parse_check_args([]).download_weights)
+        self.assertFalse(parse_check_args(["--no-download-weights"]).download_weights)
 
     def test_image_cli_switches_off_camera_and_continuous_inference(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -267,10 +272,17 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual((cfg["camera"]["width"], cfg["camera"]["height"]), (1280, 720))
         self.assertEqual(cfg["robot"]["coordinate_space"], "source")
         self.assertEqual(cfg["robot"]["theta_policy"]["offset_degrees"], 180.0)
-        self.assertEqual(len(cfg["detector"]["classes"]), 13)
-        self.assertEqual(cfg["detector"]["classes"][0], "box")
-        self.assertEqual(cfg["detector"]["classes"][-1], "wrench")
-        self.assertEqual(cfg["detector"]["checkpoint"], "weights/epoch_48_13.pth")
+        self.assertEqual(len(cfg["detector"]["classes"]), 22)
+        self.assertEqual(cfg["detector"]["classes"][0], "tape measure")
+        self.assertEqual(cfg["detector"]["classes"][-1], "cable")
+        self.assertEqual(
+            cfg["detector"]["checkpoint"],
+            "weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth",
+        )
+        self.assertEqual(
+            cfg["detector"]["checkpoint_sha256"],
+            "76a4a09164f5de1a410957f4439f801328cf543f28f34fa6fee24a7f7eb49e74",
+        )
         self.assertTrue(cfg["detector"]["enabled"])
         self.assertTrue(cfg["detector"]["trusted_checkpoint"])
         self.assertTrue(cfg["robot"]["enabled"])
@@ -281,15 +293,20 @@ class DeploymentContractTest(unittest.TestCase):
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]
         detector_cfg = runpy.run_path(
-            str(repo_root / "config" / "deployment" / "faster-rcnn-13.py")
+            str(
+                repo_root
+                / "configs"
+                / "detection"
+                / "faster_rcnn_r50_fpn_grasp_tools_v2_24e.py"
+            )
         )
         pipeline_types = [
             transform["type"] for transform in detector_cfg["test_pipeline"]
         ]
         self.assertNotIn("LoadAnnotations", pipeline_types)
-        self.assertEqual(len(detector_cfg["metainfo"]["classes"]), 13)
+        self.assertEqual(len(detector_cfg["metainfo"]["classes"]), 22)
         self.assertEqual(
-            detector_cfg["model"]["roi_head"]["bbox_head"]["num_classes"], 13
+            detector_cfg["model"]["roi_head"]["bbox_head"]["num_classes"], 22
         )
 
     def test_trusted_detector_allowlists_only_history_buffer(self):

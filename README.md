@@ -446,17 +446,16 @@ MMDetection, Whisper and GelSight components. Start with the safe preflight and
 GI preview:
 
 ```bash
-python tools/check_deployment.py --download-weights
+python tools/check_deployment.py
 python deploy_gui_gi.py
 ```
 
 On Linux the launcher automatically selects the active PyQt5 platform plugins,
 preventing the incompatible `cv2/qt/plugins` xcb path from taking over.
 
-Install `requirement-detector.txt` and put the trusted Faster R-CNN checkpoint
-at `weights/epoch_48_13.pth`. The downloader handles the published DROG-OFF,
-CLIP and DINO weights; it also handles the detector automatically once its
-Release URL/SHA-256 are configured.
+Install `requirement-detector.txt`. The preflight downloads the published
+DROG-OFF, CLIP, DINO, and 22-class Grasp-Tools Faster R-CNN weights to their
+configured paths and validates Release SHA-256 values automatically.
 
 ```bash
 python tools/check_deployment.py --build-detector
@@ -464,7 +463,7 @@ python tools/check_deployment.py --build-detector
 
 Detector class order, palette, threshold, refresh interval, and optional
 checkpoint URL/SHA-256 are all configured under `detector` in the same YAML.
-The bundled legacy MMEngine checkpoint is marked `trusted_checkpoint: true`
+The project-trained MMEngine checkpoint is marked `trusted_checkpoint: true`
 so PyTorch 2.6+ can load its `HistoryBuffer` metadata. Compatibility mode is
 restricted to that exact resolved detector checkpoint path and is restored
 immediately after MMDetection initialization. Keep this enabled only for your
@@ -476,8 +475,7 @@ before running `python deploy_gui_gi.py --allow-robot`. The repository contains
 the sender but not the external Kinova receiver/controller or its calibration,
 so a clone alone cannot safely move the physical robot.
 
-To replace the legacy 13-class GUI detector with a detector trained on the full
-22-class Grasp-Tools V2 taxonomy, follow the
+Training and evaluation details for the deployed 22-class model are in the
 [MMDetection Faster R-CNN training guide](docs/grasp_tools_detector.md).
 
 ## Component architecture

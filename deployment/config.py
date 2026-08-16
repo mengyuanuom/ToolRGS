@@ -8,19 +8,28 @@ import yaml
 
 
 DETECTOR_CLASSES = [
-    "box",
+    "tape measure",
+    "T-hex key",
+    "L-hex key",
+    "marker",
+    "wrench",
+    "pliers",
+    "mallet",
+    "screwdriver",
     "clamps",
+    "spool",
+    "sponge",
     "clip",
     "crimp tool",
-    "hex key",
-    "mallet",
-    "marker",
-    "screwdriver",
-    "sponge",
-    "spool",
+    "screw",
     "tape",
-    "tape measure",
-    "wrench",
+    "box",
+    "nut",
+    "ruler",
+    "file",
+    "stapler",
+    "scissors",
+    "cable",
 ]
 
 DETECTOR_PALETTE = [
@@ -37,6 +46,15 @@ DETECTOR_PALETTE = [
     [100, 170, 30],
     [220, 220, 0],
     [175, 116, 175],
+    [250, 0, 30],
+    [165, 42, 42],
+    [0, 226, 252],
+    [182, 182, 255],
+    [0, 82, 0],
+    [120, 166, 157],
+    [110, 76, 0],
+    [174, 57, 255],
+    [199, 100, 0],
 ]
 
 
@@ -110,11 +128,17 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "detector": {
         "type": "mmdetection",
         "enabled": False,
-        "config": "config/deployment/faster-rcnn-13.py",
-        "checkpoint": "weights/epoch_48_13.pth",
-        "checkpoint_url": "",
-        "checkpoint_sha256": "",
-        "trusted_checkpoint": False,
+        "config": "configs/detection/faster_rcnn_r50_fpn_grasp_tools_v2_24e.py",
+        "checkpoint": "weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth",
+        "checkpoint_url": (
+            "https://github.com/mengyuanuom/ToolRGS/releases/download/"
+            "grasp-tools-v2-weights/"
+            "faster_rcnn_r50_fpn_grasp_tools_v2_epoch24_best_map.pth"
+        ),
+        "checkpoint_sha256": (
+            "76a4a09164f5de1a410957f4439f801328cf543f28f34fa6fee24a7f7eb49e74"
+        ),
+        "trusted_checkpoint": True,
         "device": "cuda:0",
         "score_threshold": 0.7,
         "max_detections": 100,

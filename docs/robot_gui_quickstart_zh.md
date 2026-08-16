@@ -82,8 +82,7 @@ bash tools/gui_quickstart.sh check
 
 ```bash
 python tools/check_deployment.py \
-  --config config/deployment/lab.yaml \
-  --download-weights
+  --config config/deployment/lab.yaml
 ```
 
 该命令不会打开相机、不会连接 TCP、不会发送机械臂指令。它会：
@@ -92,22 +91,20 @@ python tools/check_deployment.py \
 2. 从配置的 GitHub Release 下载 DROG-OFF 抓取权重；
 3. 下载缺失的 CLIP ViT-B/16 和 DINOv2 预训练权重；
 4. 对配置了 Release URL 的权重做 SHA-256 校验；
-5. 检查 13 类目标检测权重。
+5. 下载并校验 22 类 Grasp-Tools Faster R-CNN 目标检测权重。
 
 主要文件应位于：
 
 ```text
 weights/drogoff_grasp_tools_v2_original300_best_j1.pth
-weights/epoch_48_13.pth
+weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth
 pretrain/ViT-B-16.pt
 pretrain/dinov2_vitb14_reg4_pretrain.pth
 ```
 
-抓取、CLIP、DINO 权重已配置自动下载。当前 `epoch_48_13.pth` 尚未发布到 ToolRGS
-Release，因此 `check` 会在完成其他下载后明确报告 Detector 权重缺失；现阶段需从
-实验室可信备份复制到 `weights/epoch_48_13.pth`。它发布到 Release 并在 YAML 填入
-`detector.checkpoint_url`/`checkpoint_sha256` 后，同一条 `check` 命令会自动下载它，
-无需改脚本。
+抓取、CLIP、DINO 和 22 类 Faster R-CNN 权重均已配置自动下载。普通 `check`
+默认下载缺失文件并做 SHA-256 校验；只想离线检查而不下载时使用
+`python tools/check_deployment.py --no-download-weights`。
 
 权重齐全后做一次完整加载验证：
 
@@ -247,9 +244,9 @@ ToolRGS 会优先使用 PyQt5 自己的 platform plugins，避免 OpenCV 的
 
 ### Detector `weights_only` 错误
 
-`epoch_48_13.pth` 包含旧 MMEngine `HistoryBuffer` 元数据。仓库只对配置中明确标记
-为可信的这一个本地路径启用兼容加载；不要对来源不明的 checkpoint 启用
-`trusted_checkpoint`。
+Faster R-CNN 权重来自本项目 3090 训练服务器并通过 Release SHA-256 校验。仓库只对
+配置中明确标记为可信的这一条本地路径启用 MMEngine/PyTorch 2.6 兼容加载；不要对
+来源不明的 checkpoint 启用 `trusted_checkpoint`。
 
 ## 8. 停止 GUI
 
