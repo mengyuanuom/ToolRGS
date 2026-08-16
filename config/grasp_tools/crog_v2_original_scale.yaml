@@ -1,0 +1,39 @@
+_base_: crog.yaml
+
+DATA:
+  grasp_size_factor: 300.0
+  grasp_height: 20.0
+  grasp_size_coordinate: original
+
+TRAIN:
+  amp: True
+  optimizer: adam
+  pin_memory: True
+  workers: 4
+  workers_val: 2
+  epochs: 36
+  milestones: [30]
+  batch_size: 32
+  batch_size_val: 32
+  base_lr: 0.0001
+  print_freq: 100
+  exp_name: crog_grasp_tools_v2_original300_toolrgs
+  save_freq: 5
+  val_start_epoch: 11
+  val_freq: 1
+  save_epochs: [5, 10]
+
+Distributed:
+  dist_url: env://
+
+TEST:
+  evaluation_protocol: crog_legacy
+  test_batch_size: 32
+  test_workers: 2
+  grasp_size_activation: sigmoid
+  grasp_iou_threshold: 0.50
+  grasp_iou_thresholds: [0.25, 0.50]
+  grasp_angle_threshold: 30.0
+  restore_grasp_size_scale: True
+  filter_grasps_by_segmentation: False
+  visualize: False

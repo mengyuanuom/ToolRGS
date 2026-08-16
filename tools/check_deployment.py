@@ -75,44 +75,70 @@ def require_module(report, module, label=None):
         report.ok(f"Python package available: {label or module}")
 
 
-def _experiment_values(experiment):
+def _experiment_values(experiment, _seen=None):
     if experiment is None or not experiment.is_file():
         return {}
+    experiment = experiment.resolve()
+    seen = set() if _seen is None else _seen
+    if experiment in seen:
+        raise ValueError(f"Cyclic experiment _base_ chain: {experiment}")
+    seen.add(experiment)
     with experiment.open("r", encoding="utf-8") as stream:
         experiment_yaml = yaml.safe_load(stream) or {}
-    return {
+    values = {}
+    bases = experiment_yaml.get("_base_", [])
+    if isinstance(bases, (str, Path)):
+        bases = [bases]
+    for base in bases:
+        base_path = Path(base)
+        if not base_path.is_absolute():
+            base_path = experiment.parent / base_path
+        values.update(_experiment_values(base_path, seen))
+    values.update({
         key: value
         for section in experiment_yaml.values()
         if isinstance(section, dict)
         for key, value in section.items()
-    }
+    })
+    seen.remove(experiment)
+    return values
 
 
-def _download_configured_weights(report, cfg, experiment_values):
-    """Download active grasp, backbone and optional deployment checkpoints."""
+def _download_configured_weights(report, cfg, _experiment_values_unused=None):
+    """Download every selectable grasp profile plus optional GUI checkpoints."""
     repo_root = cfg["_repo_root"]
-    model_cfg = cfg["model"]
-    checkpoint = resolve_repo_path(model_cfg.get("checkpoint"), repo_root)
-    try:
-        checkpoint = ensure_deployment_checkpoint(
-            checkpoint,
-            model_cfg.get("checkpoint_url", ""),
-            model_cfg.get("checkpoint_sha256", ""),
-        )
-        report.ok(f"Grasp checkpoint ready: {checkpoint}")
-    except Exception as exc:
-        report.fail(f"Grasp checkpoint download failed: {exc}")
-
-    for key in ("clip_pretrain", "dino_pretrain", "mamba_pretrain"):
-        value = experiment_values.get(key)
-        if not value or str(value).startswith(("http://", "https://")):
-            continue
-        path = resolve_repo_path(value, repo_root)
+    profiles = cfg.get("_model_profiles") or {
+        str(cfg.get("_active_model", "model")): cfg["model"]
+    }
+    pretrained_seen = set()
+    for name, model_cfg in profiles.items():
+        checkpoint = resolve_repo_path(model_cfg.get("checkpoint"), repo_root)
         try:
-            path = ensure_pretrained(path)
-            report.ok(f"{key} ready: {path}")
+            checkpoint = ensure_deployment_checkpoint(
+                checkpoint,
+                model_cfg.get("checkpoint_url", ""),
+                model_cfg.get("checkpoint_sha256", ""),
+            )
+            report.ok(f"Grasp profile {name} ready: {checkpoint}")
         except Exception as exc:
-            report.fail(f"{key} download failed: {exc}")
+            report.fail(f"Grasp profile {name} download failed: {exc}")
+
+        experiment = resolve_repo_path(model_cfg.get("config"), repo_root)
+        experiment_values = _experiment_values(experiment)
+        for key in ("clip_pretrain", "dino_pretrain", "mamba_pretrain"):
+            value = experiment_values.get(key)
+            if not value or str(value).startswith(("http://", "https://")):
+                continue
+            path = resolve_repo_path(value, repo_root)
+            identity = str(path)
+            if identity in pretrained_seen:
+                continue
+            pretrained_seen.add(identity)
+            try:
+                path = ensure_pretrained(path)
+                report.ok(f"{key} ready: {path}")
+            except Exception as exc:
+                report.fail(f"{key} download failed: {exc}")
 
     for label, section in (
         ("Detector", cfg.get("detector", {})),

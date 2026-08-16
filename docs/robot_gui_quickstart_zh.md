@@ -88,8 +88,8 @@ python tools/check_deployment.py \
 该命令不会打开相机、不会连接 TCP、不会发送机械臂指令。它会：
 
 1. 检查 Python/Qt/MMDetection 环境；
-2. 从配置的 GitHub Release 下载 DROG-OFF 抓取权重；
-3. 下载缺失的 CLIP ViT-B/16 和 DINOv2 预训练权重；
+2. 从配置的 GitHub Release 下载全部可选抓取权重（DROG-OFF 与 aligned CROG）；
+3. 下载缺失的 CLIP ViT-B/16、CLIP RN50 和 DINOv2 预训练权重；
 4. 对配置了 Release URL 的权重做 SHA-256 校验；
 5. 下载并校验 22 类 Grasp-Tools Faster R-CNN 目标检测权重。
 
@@ -97,8 +97,10 @@ python tools/check_deployment.py \
 
 ```text
 weights/drogoff_grasp_tools_v2_original300_best_j1.pth
+weights/crog_aligned_grasp_tools_v2_original300_best_j1.pth
 weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth
 pretrain/ViT-B-16.pt
+pretrain/RN50.pt
 pretrain/dinov2_vitb14_reg4_pretrain.pth
 ```
 
@@ -117,6 +119,25 @@ python tools/check_deployment.py \
 ```
 
 看到 `Preflight completed with 0 failure(s).` 才进入正式实验。
+
+### GUI 内切换模型和后处理
+
+点击顶部 **Model & Post-processing** 按钮展开控制区。模型下拉框默认选中
+`config/deployment/lab.yaml` 的 `active_model`，也可以直接切换已配置的
+DROG-OFF 与 aligned CROG。切换模型只重载抓取网络，不会重启相机、检测器或
+机械臂连接。
+
+后处理控件的初始值全部来自当前模型 profile：
+
+- **Gripper height**：抓取框短边，默认原图 `20 px`；
+- **Use mask**：是否在后处理和结果叠加中启用分割 mask；
+- **Mask threshold**：分割概率二值化阈值，默认 `0.35`；
+- **Expand**：二值 mask 向外膨胀的原图像素半径，默认 `0 px`；
+- **Filter grasp points**：同时过滤 mask 外的质量峰和 offset 后抓取中心。
+
+关闭 **Use mask** 时，threshold、expand 和抓取点过滤会自动停用；mask 页面仍
+保留二值分割结果，便于比较与调试。修改控件后下一次预测立即使用新参数，不会
+写回 YAML。
 
 ## 5. 一键启动
 

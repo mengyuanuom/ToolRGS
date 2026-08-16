@@ -66,7 +66,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "checkpoint_sha256": "",
         "device": "cuda:0",
         "prompt": "the tool",
+        "use_mask_postprocessing": True,
         "mask_threshold": 0.35,
+        "mask_expand_px": 0,
         "quality_threshold": 0.4,
         "num_grasps": 1,
         "postprocessor": {
@@ -75,6 +77,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "width_factor": 100.0,
             "grasp_height": 20.0,
         },
+        "filter_grasps_by_mask": True,
         "gate_quality_by_mask": True,
         "scale_grasp_to_source": True,
         "overrides": {},

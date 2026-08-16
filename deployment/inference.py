@@ -77,6 +77,19 @@ def _heatmap(value: np.ndarray, color_map: int = cv2.COLORMAP_JET) -> np.ndarray
     return cv2.applyColorMap((normalized * 255).astype(np.uint8), color_map)
 
 
+def expand_binary_mask(mask: np.ndarray, pixels: int) -> np.ndarray:
+    """Expand a binary segmentation mask by approximately ``pixels`` pixels."""
+    binary = np.asarray(mask, dtype=np.uint8)
+    radius = max(0, int(pixels))
+    if radius == 0:
+        return binary.astype(bool)
+    kernel_size = radius * 2 + 1
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (kernel_size, kernel_size)
+    )
+    return cv2.dilate(binary, kernel, iterations=1).astype(bool)
+
+
 def opencv_grasp_rectangle(grasp: Sequence[float]):
     """Convert a decoded grasp to the image convention used by the lab GUI."""
     x, y, grasp_width, grasp_height, theta = grasp[:5]
@@ -143,6 +156,9 @@ class ToolRGSInference:
         _load_state(self.model, state)
         self.model.to(self.device).eval()
         self.input_hw = _input_size(self.cfg.input_size)
+        self._build_postprocessor()
+
+    def _build_postprocessor(self) -> None:
         postprocessor_cfg = dict(self.model_cfg.get("postprocessor", {}))
         postprocessor_cfg.setdefault("type", "dense_grasp")
         postprocessor_cfg.setdefault(
@@ -152,6 +168,36 @@ class ToolRGSInference:
             "num_grasps", int(self.model_cfg.get("num_grasps", 1))
         )
         self.postprocessor = POSTPROCESSORS.build(postprocessor_cfg)
+
+    def update_postprocessing(
+        self,
+        *,
+        grasp_height: float,
+        use_mask: bool,
+        mask_threshold: float,
+        mask_expand_px: int,
+        filter_grasps_by_mask: bool,
+    ) -> None:
+        """Apply GUI post-processing controls without reloading model weights."""
+        threshold = float(mask_threshold)
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("mask_threshold must be between 0 and 1")
+        height = float(grasp_height)
+        if height <= 0:
+            raise ValueError("grasp_height must be positive")
+        expand_px = int(mask_expand_px)
+        if expand_px < 0:
+            raise ValueError("mask_expand_px cannot be negative")
+
+        postprocessor_cfg = self.model_cfg.setdefault("postprocessor", {})
+        postprocessor_cfg["grasp_height"] = height
+        self.model_cfg["use_mask_postprocessing"] = bool(use_mask)
+        self.model_cfg["mask_threshold"] = threshold
+        self.model_cfg["mask_expand_px"] = expand_px
+        self.model_cfg["filter_grasps_by_mask"] = bool(filter_grasps_by_mask)
+        # Preserve compatibility with older deployment YAML files.
+        self.model_cfg["gate_quality_by_mask"] = bool(filter_grasps_by_mask)
+        self._build_postprocessor()
 
     def _resolve_pretrained_paths(self) -> None:
         for key in (
@@ -258,8 +304,18 @@ class ToolRGSInference:
             )
             if predictions.short_side is not None else None
         )
-        mask = segmentation >= float(self.model_cfg.get("mask_threshold", 0.35))
-        if bool(self.model_cfg.get("gate_quality_by_mask", True)):
+        mask = expand_binary_mask(
+            segmentation >= float(self.model_cfg.get("mask_threshold", 0.35)),
+            int(self.model_cfg.get("mask_expand_px", 0)),
+        )
+        use_mask = bool(self.model_cfg.get("use_mask_postprocessing", True))
+        filter_by_mask = bool(
+            self.model_cfg.get(
+                "filter_grasps_by_mask",
+                self.model_cfg.get("gate_quality_by_mask", True),
+            )
+        )
+        if use_mask and filter_by_mask:
             quality = quality * mask.astype(np.float32)
         angle = np.arctan2(sine, cosine) / 2.0
 
@@ -293,6 +349,12 @@ class ToolRGSInference:
                 y += float(offset[1, row, col]) * radius
             x = float(np.clip(x, 0, ori_w - 1))
             y = float(np.clip(y, 0, ori_h - 1))
+            if (
+                use_mask
+                and filter_by_mask
+                and not mask[int(round(y)), int(round(x))]
+            ):
+                continue
             theta = detection.angle_degrees
             grasp_width = detection.width
             grasp_height = detection.height
@@ -310,9 +372,10 @@ class ToolRGSInference:
             scores.append(detection.score)
 
         annotated = frame_bgr.copy()
-        overlay = annotated.copy()
-        overlay[mask] = (35, 180, 35)
-        annotated = cv2.addWeighted(annotated, 0.72, overlay, 0.28, 0.0)
+        if use_mask:
+            overlay = annotated.copy()
+            overlay[mask] = (35, 180, 35)
+            annotated = cv2.addWeighted(annotated, 0.72, overlay, 0.28, 0.0)
         for index, grasp in enumerate(grasps):
             x, y, grasp_width, grasp_height, theta = grasp
             rectangle = opencv_grasp_rectangle(grasp)

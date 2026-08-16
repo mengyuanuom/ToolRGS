@@ -10,7 +10,9 @@ model_profiles:
     device: cuda:0
     prompt: the screwdriver
     grasp_size_activation: auto
+    use_mask_postprocessing: true
     mask_threshold: 0.35
+    mask_expand_px: 0
     quality_threshold: 0.40
     num_grasps: 1
     postprocessor:
@@ -21,26 +23,30 @@ model_profiles:
       # This checkpoint predicts long-side width in original-image pixels.
       # Do not multiply it by the 448px-to-camera scale a second time.
       size_coordinate: original
+    filter_grasps_by_mask: true
     gate_quality_by_mask: true
     scale_grasp_to_source: true
     overrides: {}
-  crog-grasptools-v2:
-    config: config/grasp_tools/crog.yaml
-    checkpoint: weights/crog_grasp_tools_v2_best_j1.pth
-    checkpoint_url: ""
-    checkpoint_sha256: ""
+  crog-aligned-grasptools-v2-original300:
+    config: config/grasp_tools/crog_aligned_v2_original_scale.yaml
+    checkpoint: weights/crog_aligned_grasp_tools_v2_original300_best_j1.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/crog_aligned_grasp_tools_v2_original300_20260815_epoch25_best_j1.pth
+    checkpoint_sha256: 6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2
     device: cuda:0
     prompt: the screwdriver
     grasp_size_activation: auto
+    use_mask_postprocessing: true
     mask_threshold: 0.35
+    mask_expand_px: 0
     quality_threshold: 0.40
     num_grasps: 1
     postprocessor:
       type: dense_grasp
       min_distance: 2
-      width_factor: 100.0
+      width_factor: 300.0
       grasp_height: 20.0
-      size_coordinate: canvas
+      size_coordinate: original
+    filter_grasps_by_mask: true
     gate_quality_by_mask: true
     scale_grasp_to_source: true
     overrides: {}

@@ -72,6 +72,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             QApplication,
             QCheckBox,
             QColorDialog,
+            QComboBox,
+            QDoubleSpinBox,
             QFrame,
             QGridLayout,
             QHBoxLayout,
@@ -81,6 +83,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             QMessageBox,
             QPushButton,
             QSizePolicy,
+            QSpinBox,
             QStackedWidget,
             QVBoxLayout,
             QWidget,
@@ -129,6 +132,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.current_mode = 0
             self.frame_count = 0
             self.model_selector = None
+            self.settings_panel = None
             self.setWindowTitle(str(gui_cfg["title"]))
             if legacy_layout:
                 self.setMinimumSize(1600, 1000)
@@ -181,12 +185,22 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.appearance_button.setObjectName("ModeButton")
                 self.appearance_button.clicked.connect(self._choose_accent)
                 mode_row.addWidget(self.appearance_button, 1)
+            self.settings_button = QPushButton("Model & Post-processing  ▾")
+            self.settings_button.setMinimumHeight(40)
+            self.settings_button.setCheckable(True)
+            self.settings_button.setObjectName("SettingsButton")
+            self.settings_button.toggled.connect(self._toggle_settings)
+            mode_row.addWidget(self.settings_button)
             self.object_button.clicked.connect(lambda: self._switch_mode(0))
             self.grasping_button.clicked.connect(lambda: self._switch_mode(1))
             self.gelsight_button.clicked.connect(lambda: self._switch_mode(2))
             self.object_button.setEnabled(detector is not None)
             self.gelsight_button.setEnabled(gelsight is not None)
             layout.addWidget(mode_bar)
+
+            self.settings_panel = self._build_settings_panel()
+            self.settings_panel.setVisible(False)
+            layout.addWidget(self.settings_panel)
 
             self.pages = QStackedWidget()
 
@@ -370,6 +384,157 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self._apply_theme()
             self._switch_mode(0 if detector is not None else 1)
 
+        def _build_settings_panel(self):
+            panel = QFrame()
+            panel.setObjectName("SettingsPanel")
+            row = QHBoxLayout(panel)
+            row.setContentsMargins(14, 10, 14, 10)
+            row.setSpacing(14)
+
+            model_label = QLabel("GRASP MODEL")
+            model_label.setObjectName("FieldLabel")
+            row.addWidget(model_label)
+            self.model_selector = QComboBox()
+            self.model_selector.setObjectName("ModelSelector")
+            profiles = list(config.get("_model_profiles", {}).keys())
+            if not profiles:
+                profiles = [self.active_model]
+            self.model_selector.addItems(profiles)
+            self.model_selector.setCurrentText(self.active_model)
+            self.model_selector.setMinimumWidth(285)
+            self.model_selector.currentTextChanged.connect(self._change_model)
+            row.addWidget(self.model_selector)
+
+            height_label = QLabel("Gripper height")
+            height_label.setObjectName("FieldLabel")
+            row.addWidget(height_label)
+            self.grasp_height_input = QDoubleSpinBox()
+            self.grasp_height_input.setRange(1.0, 300.0)
+            self.grasp_height_input.setDecimals(1)
+            self.grasp_height_input.setSingleStep(1.0)
+            self.grasp_height_input.setSuffix(" px")
+            self.grasp_height_input.setToolTip(
+                "Short side of the decoded grasp rectangle in source-image pixels"
+            )
+            row.addWidget(self.grasp_height_input)
+
+            self.use_mask_input = QCheckBox("Use mask")
+            self.use_mask_input.setToolTip(
+                "Apply the thresholded segmentation mask during post-processing"
+            )
+            row.addWidget(self.use_mask_input)
+
+            threshold_label = QLabel("Mask threshold")
+            threshold_label.setObjectName("FieldLabel")
+            row.addWidget(threshold_label)
+            self.mask_threshold_input = QDoubleSpinBox()
+            self.mask_threshold_input.setRange(0.0, 1.0)
+            self.mask_threshold_input.setDecimals(2)
+            self.mask_threshold_input.setSingleStep(0.05)
+            row.addWidget(self.mask_threshold_input)
+
+            expand_label = QLabel("Expand")
+            expand_label.setObjectName("FieldLabel")
+            row.addWidget(expand_label)
+            self.mask_expand_input = QSpinBox()
+            self.mask_expand_input.setRange(0, 100)
+            self.mask_expand_input.setSuffix(" px")
+            self.mask_expand_input.setToolTip(
+                "Dilate the thresholded mask by this radius in source-image pixels"
+            )
+            row.addWidget(self.mask_expand_input)
+
+            self.filter_grasps_input = QCheckBox("Filter grasp points")
+            self.filter_grasps_input.setToolTip(
+                "Reject quality peaks and offset grasp centres outside the mask"
+            )
+            row.addWidget(self.filter_grasps_input)
+            row.addStretch(1)
+
+            self._load_postprocessing_controls(config["model"])
+            self.use_mask_input.toggled.connect(self._mask_controls_changed)
+            self.filter_grasps_input.toggled.connect(
+                self._apply_postprocessing_controls
+            )
+            self.grasp_height_input.valueChanged.connect(
+                self._apply_postprocessing_controls
+            )
+            self.mask_threshold_input.valueChanged.connect(
+                self._apply_postprocessing_controls
+            )
+            self.mask_expand_input.valueChanged.connect(
+                self._apply_postprocessing_controls
+            )
+            self._sync_mask_control_state()
+            return panel
+
+        def _toggle_settings(self, expanded: bool) -> None:
+            self.settings_panel.setVisible(bool(expanded))
+            self.settings_button.setText(
+                "Model & Post-processing  ▴"
+                if expanded
+                else "Model & Post-processing  ▾"
+            )
+
+        def _load_postprocessing_controls(self, model_cfg: Dict[str, Any]) -> None:
+            postprocessor = dict(model_cfg.get("postprocessor", {}))
+            controls = (
+                self.grasp_height_input,
+                self.use_mask_input,
+                self.mask_threshold_input,
+                self.mask_expand_input,
+                self.filter_grasps_input,
+            )
+            for control in controls:
+                control.blockSignals(True)
+            self.grasp_height_input.setValue(
+                float(postprocessor.get("grasp_height", 20.0))
+            )
+            self.use_mask_input.setChecked(
+                bool(model_cfg.get("use_mask_postprocessing", True))
+            )
+            self.mask_threshold_input.setValue(
+                float(model_cfg.get("mask_threshold", 0.35))
+            )
+            self.mask_expand_input.setValue(
+                int(model_cfg.get("mask_expand_px", 0))
+            )
+            self.filter_grasps_input.setChecked(
+                bool(
+                    model_cfg.get(
+                        "filter_grasps_by_mask",
+                        model_cfg.get("gate_quality_by_mask", True),
+                    )
+                )
+            )
+            for control in controls:
+                control.blockSignals(False)
+            self._sync_mask_control_state()
+
+        def _sync_mask_control_state(self) -> None:
+            enabled = self.use_mask_input.isChecked()
+            self.mask_threshold_input.setEnabled(enabled)
+            self.mask_expand_input.setEnabled(enabled)
+            self.filter_grasps_input.setEnabled(enabled)
+
+        def _mask_controls_changed(self, _checked: bool) -> None:
+            self._sync_mask_control_state()
+            self._apply_postprocessing_controls()
+
+        def _apply_postprocessing_controls(self, *_args) -> None:
+            self.inference.update_postprocessing(
+                grasp_height=self.grasp_height_input.value(),
+                use_mask=self.use_mask_input.isChecked(),
+                mask_threshold=self.mask_threshold_input.value(),
+                mask_expand_px=self.mask_expand_input.value(),
+                filter_grasps_by_mask=self.filter_grasps_input.isChecked(),
+            )
+            self.prediction = None
+            if hasattr(self, "status"):
+                self.status.setText(
+                    "Post-processing updated; the next prediction uses these settings"
+                )
+
         @staticmethod
         def _labeled_image(label, title: str):
             container = QFrame()
@@ -405,6 +570,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 selected = activate_model_profile(config, name)
                 self.inference = ToolRGSInference(selected)
                 self.active_model = name
+                self._load_postprocessing_controls(selected["model"])
                 self.prompt.setText(str(selected["model"].get("prompt", "")))
                 self.prediction = None
                 self.status.setText(f"Loaded model profile: {name}")
@@ -453,6 +619,11 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                     border: 1px solid #223247;
                     border-radius: 10px;
                 }
+                QFrame#SettingsPanel {
+                    background: #0e1721;
+                    border: 1px solid #294058;
+                    border-radius: 9px;
+                }
                 QPushButton {
                     min-height: 30px;
                     padding: 5px 14px;
@@ -494,6 +665,22 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                     selection-background-color: #347e78;
                 }
                 QLineEdit:focus { border-color: #55d6be; }
+                QComboBox, QSpinBox, QDoubleSpinBox {
+                    min-height: 30px;
+                    padding: 2px 8px;
+                    color: #e6eef7;
+                    background: #0c141e;
+                    border: 1px solid #2a3d55;
+                    border-radius: 7px;
+                }
+                QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+                    border-color: #55d6be;
+                }
+                QLabel#FieldLabel {
+                    color: #8fa3b7;
+                    font-size: 11px;
+                    font-weight: 700;
+                }
                 QFrame#ImageCard {
                     background: #101823;
                     border: 1px solid #203148;

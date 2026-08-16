@@ -130,9 +130,13 @@ profile: RealSense, DROG-OFF, and the 22-class Faster R-CNN detector are
 enabled, while robot output remains disabled. `lab.example.yaml` remains the
 extended reference. A normal deployment no longer needs a YAML copy/edit step.
 
-The preflight never connects to the robot and never sends a command. In the
-GUI, the **Model** selector reloads any entry under `model_profiles` without
-restarting the camera or robot-control layer.
+The preflight never connects to the robot and never sends a command. It downloads
+and verifies every selectable `model_profiles` checkpoint, not only the active
+one. In the GUI, expand **Model & Post-processing** to switch between the
+published DROG-OFF and aligned CROG profiles without restarting the camera,
+detector, or robot-control layer. The same panel exposes source-pixel grasp
+height, mask threshold, mask expansion radius, and independent mask-based grasp
+point filtering; every initial value comes from the selected YAML profile.
 
 To enable detection, set `detector.enabled: true`. The GUI then creates a
 separate **Object detection** tab. `score_threshold` controls displayed boxes,

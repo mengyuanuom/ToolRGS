@@ -18,7 +18,11 @@ from deployment.detector import (
 )
 from deployment.grasp_policy import command_theta, command_width, mask_span_width
 from deployment.gui import build_grasp_command
-from deployment.inference import GraspPrediction, opencv_grasp_rectangle
+from deployment.inference import (
+    GraspPrediction,
+    expand_binary_mask,
+    opencv_grasp_rectangle,
+)
 from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
@@ -31,9 +35,11 @@ from deploy_gui import (
 from deploy_gui_gi import prepare_gi_config
 from deploy_gui_realsense import prepare_realsense_demo_config
 
-parse_check_args = runpy.run_path(
+check_deployment_symbols = runpy.run_path(
     str(Path(__file__).resolve().parents[1] / "tools" / "check_deployment.py")
-)["parse_args"]
+)
+parse_check_args = check_deployment_symbols["parse_args"]
+experiment_values = check_deployment_symbols["_experiment_values"]
 
 
 class DeploymentContractTest(unittest.TestCase):
@@ -44,6 +50,22 @@ class DeploymentContractTest(unittest.TestCase):
     def test_deployment_check_downloads_missing_weights_by_default(self):
         self.assertTrue(parse_check_args([]).download_weights)
         self.assertFalse(parse_check_args(["--no-download-weights"]).download_weights)
+
+    def test_deployment_check_resolves_inherited_pretrained_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "base.yaml").write_text(
+                "TRAIN:\n  clip_pretrain: pretrain/RN50.pt\n  epochs: 36\n",
+                encoding="utf-8",
+            )
+            child = root / "child.yaml"
+            child.write_text(
+                "_base_: base.yaml\nTRAIN:\n  epochs: 12\n",
+                encoding="utf-8",
+            )
+            values = experiment_values(child)
+        self.assertEqual(values["clip_pretrain"], "pretrain/RN50.pt")
+        self.assertEqual(values["epochs"], 12)
 
     def test_image_cli_switches_off_camera_and_continuous_inference(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -239,6 +261,16 @@ class DeploymentContractTest(unittest.TestCase):
         )
         self.assertGreater(command_width(7, mask, (10, 10), 0, "the box", cfg), 7)
 
+    def test_mask_expansion_uses_source_pixel_radius(self):
+        mask = np.zeros((11, 11), dtype=np.uint8)
+        mask[5, 5] = 1
+        expanded = expand_binary_mask(mask, 2)
+        self.assertTrue(expanded[5, 3])
+        self.assertTrue(expanded[5, 7])
+        self.assertTrue(expanded[3, 5])
+        self.assertTrue(expanded[7, 5])
+        self.assertFalse(expanded[5, 2])
+
     def test_gui_preview_does_not_mirror_decoded_angle(self):
         rectangle = opencv_grasp_rectangle([640, 360, 120, 20, 35])
         self.assertEqual(rectangle, ((640.0, 360.0), (120.0, 20.0), 35.0))
@@ -294,6 +326,29 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertTrue(cfg["robot"]["auto_connect"])
         self.assertTrue(cfg["robot"]["auto_arm"])
         self.assertTrue(cfg["robot"]["auto_send"])
+        self.assertEqual(
+            list(cfg["_model_profiles"]),
+            [
+                "drogoff-grasptools-v2-original300",
+                "crog-aligned-grasptools-v2-original300",
+            ],
+        )
+        self.assertTrue(cfg["model"]["use_mask_postprocessing"])
+        self.assertTrue(cfg["model"]["filter_grasps_by_mask"])
+        self.assertEqual(cfg["model"]["mask_expand_px"], 0)
+        crog = activate_model_profile(
+            cfg, "crog-aligned-grasptools-v2-original300"
+        )
+        self.assertEqual(
+            crog["model"]["postprocessor"]["grasp_height"], 20.0
+        )
+        self.assertEqual(
+            crog["model"]["postprocessor"]["size_coordinate"], "original"
+        )
+        self.assertEqual(
+            crog["model"]["checkpoint_sha256"],
+            "6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2",
+        )
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]

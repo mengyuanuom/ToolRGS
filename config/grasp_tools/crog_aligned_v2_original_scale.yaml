@@ -1,0 +1,7 @@
+_base_: crog_v2_original_scale.yaml
+
+# Match the bounded original-image width contract used by current DROG-OFF:
+# target = original-image grasp width / 300; prediction = sigmoid(raw) * 300.
+TRAIN:
+  grasp_width_loss_activation: sigmoid
+  exp_name: crog_aligned_grasp_tools_v2_original300_toolrgs
