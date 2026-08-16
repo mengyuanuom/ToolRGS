@@ -1,3 +1,5 @@
+import hashlib
+import io
 import tempfile
 from pathlib import Path
 import runpy
@@ -390,6 +392,22 @@ class DeploymentContractTest(unittest.TestCase):
             path = Path(directory) / "model.pth"
             path.write_bytes(b"toolrgs-test")
             self.assertEqual(ensure_deployment_checkpoint(path), path)
+
+    def test_stale_checkpoint_is_atomically_replaced_from_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model.pth"
+            path.write_bytes(b"old-checkpoint")
+            payload = b"new-verified-checkpoint"
+            expected = hashlib.sha256(payload).hexdigest()
+            with mock.patch(
+                "urllib.request.urlopen", return_value=io.BytesIO(payload)
+            ):
+                resolved = ensure_deployment_checkpoint(
+                    path, "https://example.invalid/model.pth", expected
+                )
+            self.assertEqual(resolved, path)
+            self.assertEqual(path.read_bytes(), payload)
+            self.assertFalse(path.with_suffix(".pth.part").exists())
 
     def test_qt_plugin_path_prefers_active_pyqt_installation(self):
         with tempfile.TemporaryDirectory() as directory:

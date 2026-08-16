@@ -19,9 +19,15 @@ def ensure_deployment_checkpoint(path, url="", sha256="") -> Path:
     target = Path(path).expanduser()
     expected = str(sha256 or "").strip().lower()
     if target.is_file() and target.stat().st_size:
-        if expected and _sha256(target) != expected:
+        actual = _sha256(target) if expected else ""
+        if not expected or actual == expected:
+            return target
+        if not url:
             raise RuntimeError(f"Checkpoint SHA-256 mismatch: {target}")
-        return target
+        print(
+            "[deployment] checkpoint is stale; downloading the configured "
+            f"release asset\n  path: {target}\n  found: {actual}\n  want:  {expected}"
+        )
     if not url:
         raise FileNotFoundError(
             f"Checkpoint does not exist: {target}. Set model.checkpoint_url "
@@ -46,6 +52,8 @@ def ensure_deployment_checkpoint(path, url="", sha256="") -> Path:
                     stream.write(block)
         if expected and _sha256(temporary) != expected:
             raise RuntimeError("Downloaded checkpoint failed SHA-256 validation")
+        # os.replace semantics keep the stale checkpoint intact until the new
+        # download has passed SHA-256 validation, then swap it atomically.
         temporary.replace(target)
     except Exception:
         temporary.unlink(missing_ok=True)

@@ -105,6 +105,8 @@ pretrain/dinov2_vitb14_reg4_pretrain.pth
 抓取、CLIP、DINO 和 22 类 Faster R-CNN 权重均已配置自动下载。普通 `check`
 默认下载缺失文件并做 SHA-256 校验；只想离线检查而不下载时使用
 `python tools/check_deployment.py --no-download-weights`。
+如果目标路径已有旧 checkpoint，但 SHA-256 与当前 Release 不一致，`check` 会先
+完整下载并校验新文件，再原子替换旧文件；下载失败时原文件保持不变。
 
 权重齐全后做一次完整加载验证：
 
