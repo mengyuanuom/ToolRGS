@@ -25,6 +25,7 @@ class AsyncGuiTest(unittest.TestCase):
     def test_model_switch_keeps_event_loop_responsive_and_styles_popup(self):
         construction_count = 0
         construction_lock = threading.Lock()
+        source_reads = 0
 
         class FakeInference:
             def __init__(self, _config):
@@ -37,6 +38,8 @@ class AsyncGuiTest(unittest.TestCase):
 
         class FakeSource:
             def read(self):
+                nonlocal source_reads
+                source_reads += 1
                 return True, np.zeros((48, 64, 3), dtype=np.uint8)
 
             def close(self):
@@ -113,7 +116,7 @@ class AsyncGuiTest(unittest.TestCase):
             app = QApplication.instance() or QApplication([])
             observations = {}
 
-            def choose_second_model():
+            def open_model_popup():
                 window = next(widget for widget in app.topLevelWidgets() if widget.isVisible())
                 combo = window.findChild(QComboBox, "ModelSelector")
                 self.assertIsNotNone(combo)
@@ -121,8 +124,17 @@ class AsyncGuiTest(unittest.TestCase):
                 view_palette = combo.view().palette()
                 observations["text"] = view_palette.color(QPalette.Text).name()
                 observations["base"] = view_palette.color(QPalette.Base).name()
+                combo.showPopup()
+                observations["reads_at_open"] = source_reads
+
+            def choose_second_model():
+                window = next(widget for widget in app.topLevelWidgets() if widget.isVisible())
+                combo = window.findChild(QComboBox, "ModelSelector")
+                observations["reads_during_popup"] = source_reads
                 observations["switch_started"] = time.monotonic()
                 combo.setCurrentIndex(1)
+                combo.hidePopup()
+                combo.activated[int].emit(1)
 
             def heartbeat():
                 observations["heartbeat"] = (
@@ -138,12 +150,16 @@ class AsyncGuiTest(unittest.TestCase):
                 window.close()
                 app.quit()
 
-            QTimer.singleShot(20, choose_second_model)
-            QTimer.singleShot(100, heartbeat)
-            QTimer.singleShot(650, finish)
+            QTimer.singleShot(20, open_model_popup)
+            QTimer.singleShot(150, choose_second_model)
+            QTimer.singleShot(230, heartbeat)
+            QTimer.singleShot(700, finish)
             self.assertEqual(run_gui(config), 0)
 
         self.assertLess(observations["heartbeat"], 0.25)
+        self.assertEqual(
+            observations["reads_at_open"], observations["reads_during_popup"]
+        )
         self.assertNotEqual(observations["text"], observations["base"])
         self.assertTrue(observations["enabled"])
         self.assertEqual(observations["badge"], "READY")

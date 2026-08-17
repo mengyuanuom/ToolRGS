@@ -66,7 +66,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
     if qt_platforms is not None:
         print(f"[gui] PyQt5 platform plugins: {qt_platforms}")
     try:
-        from PyQt5.QtCore import Qt, QTimer
+        from PyQt5.QtCore import Qt, QTimer, pyqtSignal
         from PyQt5.QtGui import QImage, QPixmap
         from PyQt5.QtWidgets import (
             QApplication,
@@ -79,6 +79,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             QHBoxLayout,
             QLabel,
             QLineEdit,
+            QListView,
             QMainWindow,
             QMessageBox,
             QProgressBar,
@@ -93,6 +94,28 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         raise RuntimeError(
             "The deployment GUI requires PyQt5; install requirement-deploy.txt"
         ) from exc
+
+    class StableModelComboBox(QComboBox):
+        """A model selector that does not fight the live-preview refresh loop."""
+
+        popup_visibility_changed = pyqtSignal(bool)
+
+        def showPopup(self) -> None:
+            self.view().setMinimumWidth(max(300, self.width()))
+            self.popup_visibility_changed.emit(True)
+            super().showPopup()
+
+        def hidePopup(self) -> None:
+            super().hidePopup()
+            self.popup_visibility_changed.emit(False)
+
+        def wheelEvent(self, event) -> None:
+            # Prevent a scroll over the closed selector from silently changing
+            # the active model. The wheel still works inside the open list.
+            if self.view().isVisible():
+                super().wheelEvent(event)
+            else:
+                event.ignore()
 
     inference = ToolRGSInference(config)
     detector = (
@@ -135,6 +158,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.current_mode = 0
             self.frame_count = 0
             self.model_selector = None
+            self.model_popup_open = False
             self.settings_panel = None
             self.model_load_progress = None
             self.model_badge = None
@@ -398,8 +422,13 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             model_label = QLabel("GRASP MODEL")
             model_label.setObjectName("FieldLabel")
             row.addWidget(model_label)
-            self.model_selector = QComboBox()
+            self.model_selector = StableModelComboBox()
             self.model_selector.setObjectName("ModelSelector")
+            popup = QListView(self.model_selector)
+            popup.setObjectName("ModelPopup")
+            popup.setUniformItemSizes(True)
+            popup.setSpacing(1)
+            self.model_selector.setView(popup)
             profiles = config.get("_model_profiles", {})
             if not profiles:
                 profiles = {self.active_model: config["model"]}
@@ -419,8 +448,11 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.model_selector.setItemData(index, detail, Qt.ToolTipRole)
             active_index = self.model_selector.findData(self.active_model)
             self.model_selector.setCurrentIndex(max(0, active_index))
-            self.model_selector.currentIndexChanged.connect(
+            self.model_selector.activated[int].connect(
                 self._model_selection_changed
+            )
+            self.model_selector.popup_visibility_changed.connect(
+                self._set_model_popup_open
             )
             row.addWidget(self.model_selector)
             self.model_badge = QLabel("READY")
@@ -594,6 +626,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 return
             name = self.model_selector.itemData(index)
             self._change_model(str(name or self.model_selector.itemText(index)))
+
+        def _set_model_popup_open(self, visible: bool) -> None:
+            self.model_popup_open = bool(visible)
 
         def _select_active_model(self) -> None:
             if self.model_selector is None:
@@ -797,6 +832,23 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                     color: #06131b;
                     background: #55d6be;
                 }
+                QListView#ModelPopup {
+                    color: #eaf4ff;
+                    background: #111a25;
+                    selection-color: #06131b;
+                    selection-background-color: #55d6be;
+                    border: 1px solid #36516d;
+                    outline: 0;
+                    padding: 4px;
+                }
+                QListView#ModelPopup::item {
+                    min-height: 34px;
+                    padding: 5px 10px;
+                }
+                QListView#ModelPopup::item:selected {
+                    color: #06131b;
+                    background: #55d6be;
+                }
                 QLabel#ModelBadge {
                     color: #95f0d6;
                     background: #14332d;
@@ -940,6 +992,12 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.wire_preview.setText(command.to_wire().decode("ascii").strip())
 
         def _next_frame(self) -> None:
+            # Updating large preview pixmaps at camera frame-rate causes some
+            # Linux Qt styles to repeatedly repaint/reposition combo popups.
+            # Freeze preview work for the brief period in which the user is
+            # choosing a model; the camera/source itself remains open.
+            if self.model_popup_open:
+                return
             self._poll_model_load()
             self._poll_inference()
             self._poll_audio()
