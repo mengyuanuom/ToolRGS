@@ -127,6 +127,24 @@ python tools/check_deployment.py \
 DROG-OFF 与 aligned CROG。切换模型只重载抓取网络，不会重启相机、检测器或
 机械臂连接。
 
+推荐按以下顺序切换：
+
+1. 点击 **Model & Post-processing** 展开面板；
+2. 点击 **GRASP MODEL** 右侧的模型框；
+3. 在展开的深色列表中**单击一次**目标模型；
+4. 状态从绿色 **READY** 变为黄色 **LOADING**，等待进度条消失并恢复
+   **READY**；
+5. 修改语言指令，然后点击 **Predict now** 或等待连续推理。
+
+模型列表展开期间，GUI 会暂时停止大图和热力图重绘，避免 Linux/Qt 下列表闪烁、
+跳动或选不中；列表关闭后画面自动恢复，摄像头/GI 数据源不会被关闭。关闭状态下
+鼠标滚轮不会切换模型，只有真正点击列表条目才会触发加载。
+
+加载权重在后台线程执行，期间模型框和 **Predict now** 会暂时锁定，但窗口、相机
+与机械臂连接仍保持响应。不要连续重复点击；DINO/CLIP 大权重首次加载可能需要数秒。
+加载失败时 GUI 会显示错误并自动回到原模型。GUI 内的选择只在本次进程生效，不会
+改写 YAML；重启后仍使用 `active_model`。
+
 后处理控件的初始值全部来自当前模型 profile：
 
 - **Gripper height**：抓取框短边，默认原图 `20 px`；
@@ -213,6 +231,30 @@ robot:
 然后在 GUI 中依次点击 **Connect receiver**、勾选 **Arm robot output**，确认命令
 预览后点击 **Send current grasp**。
 
+### D. 没有相机时用单张图片验证 GUI
+
+使用仓库自带图片：
+
+```bash
+python deploy_gui.py \
+  --config config/deployment/lab.yaml \
+  --image \
+  --prompt "the screwdriver"
+```
+
+使用自己的图片：
+
+```bash
+python deploy_gui.py \
+  --config config/deployment/lab.yaml \
+  --image /absolute/path/to/test.jpg \
+  --prompt "the screwdriver"
+```
+
+单图模式自动关闭连续推理；进入 **Grasping Points Detection** 页面后点击
+**Predict now**。模型切换、分割 mask、抓取框和目标检测页面仍可正常验证，但不要
+添加 `--allow-robot`。
+
 ## 6. 发送的数据是什么
 
 TCP 每次发送一行 ASCII：
@@ -264,6 +306,28 @@ GI 正式 GUI 的 TCP 超时为 2 秒。接收端没启动时 GUI 会快速报�
 ToolRGS 会优先使用 PyQt5 自己的 platform plugins，避免 OpenCV 的
 `cv2/qt/plugins` 抢占。若仍失败，运行 `bash tools/gui_quickstart.sh check` 查看缺失
 的 Qt/xcb 依赖。
+
+### 模型列表闪烁、跳动或选不中
+
+先确认已经完全关闭旧 GUI，再更新并检查提交：
+
+```bash
+cd /home/raico-hri/projects/ToolRGS
+git pull --ff-only origin main
+git rev-parse --short HEAD
+pgrep -af "deploy_gui|realsense_object_grasp"
+```
+
+包含提交 `91caf20` 及之后的版本会在模型列表展开时暂停预览重绘，并且只响应真实
+点击。若仍在运行旧进程，即使代码已经更新，界面行为也不会变化；结束旧进程后重新
+启动 GUI。
+
+### 切换模型长时间停在 `LOADING`
+
+- 不要重复点击模型列表，先观察 `nvidia-smi` 是否仍在加载权重；
+- 运行 `bash tools/gui_quickstart.sh check` 检查两个 profile 的配置与权重；
+- 显存不足时会自动回退到原模型并弹出错误，关闭其他 GPU 任务后重试；
+- 如果整个窗口而非只有模型按钮失去响应，先确认当前提交不早于 `e5c7f4d`。
 
 ### Detector `weights_only` 错误
 
