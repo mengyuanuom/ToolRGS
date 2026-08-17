@@ -81,6 +81,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             QLineEdit,
             QMainWindow,
             QMessageBox,
+            QProgressBar,
             QPushButton,
             QSizePolicy,
             QSpinBox,
@@ -126,6 +127,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.active_model = str(config.get("_active_model", "model"))
             self.audio_results = queue.Queue()
             self.robot_connect_results = queue.Queue()
+            self.inference_results = queue.Queue()
+            self.model_load_results = queue.Queue()
             self.robot: Optional[LegacyTCPGraspClient] = None
             self.robot_connecting = False
             self.robot_connect_generation = 0
@@ -133,6 +136,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.frame_count = 0
             self.model_selector = None
             self.settings_panel = None
+            self.model_load_progress = None
+            self.model_badge = None
             self.setWindowTitle(str(gui_cfg["title"]))
             if legacy_layout:
                 self.setMinimumSize(1600, 1000)
@@ -257,7 +262,6 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.sentence_label.setAlignment(Qt.AlignCenter)
             self.sentence_label.setObjectName("TargetLabel")
             grasp_layout.addWidget(self.sentence_label)
-
             self.audio_button = QPushButton("Speak")
             self.audio_button.clicked.connect(self._record_instruction)
             self.audio_button.setEnabled(audio is not None)
@@ -396,14 +400,40 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             row.addWidget(model_label)
             self.model_selector = QComboBox()
             self.model_selector.setObjectName("ModelSelector")
-            profiles = list(config.get("_model_profiles", {}).keys())
+            profiles = config.get("_model_profiles", {})
             if not profiles:
-                profiles = [self.active_model]
-            self.model_selector.addItems(profiles)
-            self.model_selector.setCurrentText(self.active_model)
-            self.model_selector.setMinimumWidth(285)
-            self.model_selector.currentTextChanged.connect(self._change_model)
+                profiles = {self.active_model: config["model"]}
+            self.model_selector.setMinimumWidth(300)
+            self.model_selector.setMaxVisibleItems(12)
+            self.model_selector.setSizeAdjustPolicy(
+                QComboBox.AdjustToMinimumContentsLengthWithIcon
+            )
+            for name, profile in profiles.items():
+                index = self.model_selector.count()
+                self.model_selector.addItem(str(name), str(name))
+                detail = str(
+                    profile.get("architecture")
+                    or profile.get("config")
+                    or name
+                )
+                self.model_selector.setItemData(index, detail, Qt.ToolTipRole)
+            active_index = self.model_selector.findData(self.active_model)
+            self.model_selector.setCurrentIndex(max(0, active_index))
+            self.model_selector.currentIndexChanged.connect(
+                self._model_selection_changed
+            )
             row.addWidget(self.model_selector)
+            self.model_badge = QLabel("READY")
+            self.model_badge.setObjectName("ModelBadge")
+            self.model_badge.setProperty("loading", False)
+            row.addWidget(self.model_badge)
+            self.model_load_progress = QProgressBar()
+            self.model_load_progress.setObjectName("ModelLoadProgress")
+            self.model_load_progress.setRange(0, 0)
+            self.model_load_progress.setTextVisible(False)
+            self.model_load_progress.setFixedWidth(80)
+            self.model_load_progress.setVisible(False)
+            row.addWidget(self.model_load_progress)
 
             height_label = QLabel("Gripper height")
             height_label.setObjectName("FieldLabel")
@@ -559,29 +589,84 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             ):
                 button.setChecked(active)
 
-        def _change_model(self, name: str) -> None:
-            name = str(name)
-            if not name or name == self.active_model or self.inference_busy:
+        def _model_selection_changed(self, index: int) -> None:
+            if self.model_selector is None or index < 0:
                 return
-            self.inference_busy = True
+            name = self.model_selector.itemData(index)
+            self._change_model(str(name or self.model_selector.itemText(index)))
+
+        def _select_active_model(self) -> None:
+            if self.model_selector is None:
+                return
+            index = self.model_selector.findData(self.active_model)
+            self.model_selector.blockSignals(True)
+            self.model_selector.setCurrentIndex(max(0, index))
+            self.model_selector.blockSignals(False)
+
+        def _set_busy(self, busy: bool, loading_model: bool = False) -> None:
+            self.inference_busy = bool(busy)
+            if self.model_selector is not None:
+                self.model_selector.setEnabled(not busy)
+            if hasattr(self, "predict_button"):
+                self.predict_button.setEnabled(not busy)
+            if self.model_load_progress is not None:
+                self.model_load_progress.setVisible(bool(loading_model))
+            if self.model_badge is not None:
+                self.model_badge.setText("LOADING" if loading_model else "READY")
+                self.model_badge.setProperty("loading", bool(loading_model))
+                self.model_badge.style().unpolish(self.model_badge)
+                self.model_badge.style().polish(self.model_badge)
+
+        def _change_model(self, name: str) -> None:
+            name = str(name).strip()
+            if not name or name == self.active_model:
+                return
+            if self.inference_busy:
+                self._select_active_model()
+                self.status.setText("Please wait for the current operation to finish")
+                return
+            self._set_busy(True, loading_model=True)
             self.status.setText(f"Loading model profile: {name} ...")
-            QApplication.processEvents()
+            result_queue = self.model_load_results
+
+            def worker():
+                try:
+                    selected = activate_model_profile(config, name)
+                    loaded = ToolRGSInference(selected)
+                    result_queue.put((True, name, selected, loaded))
+                except Exception as exc:
+                    result_queue.put((False, name, None, exc))
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        def _poll_model_load(self) -> None:
             try:
-                selected = activate_model_profile(config, name)
-                self.inference = ToolRGSInference(selected)
+                ok, name, selected, value = self.model_load_results.get_nowait()
+            except queue.Empty:
+                return
+            if ok:
+                previous = self.inference
+                self.inference = value
                 self.active_model = name
                 self._load_postprocessing_controls(selected["model"])
                 self.prompt.setText(str(selected["model"].get("prompt", "")))
                 self.prediction = None
+                self._update_command_preview()
                 self.status.setText(f"Loaded model profile: {name}")
-            except Exception as exc:
-                if self.model_selector is not None:
-                    self.model_selector.blockSignals(True)
-                    self.model_selector.setCurrentText(self.active_model)
-                    self.model_selector.blockSignals(False)
-                self._error("Model loading error", exc)
-            finally:
-                self.inference_busy = False
+                # Let the old CUDA model release outside the Qt event thread.
+                def release_old_model(old):
+                    # Ensure the GUI callback has returned before dropping the
+                    # final reference and releasing a large CUDA allocation.
+                    time.sleep(0.05)
+                    del old
+
+                threading.Thread(
+                    target=release_old_model, args=(previous,), daemon=True
+                ).start()
+            else:
+                self._select_active_model()
+                self._error("Model loading error", value)
+            self._set_busy(False)
 
         @staticmethod
         def _image_label(text: str, minimum=(320, 240)):
@@ -675,6 +760,67 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 }
                 QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
                     border-color: #55d6be;
+                }
+                QComboBox#ModelSelector {
+                    min-height: 34px;
+                    padding: 3px 38px 3px 12px;
+                    color: #eaf4ff;
+                    background: #0c141e;
+                    border: 1px solid #36516d;
+                    border-radius: 7px;
+                    font-weight: 650;
+                }
+                QComboBox#ModelSelector:hover { border-color: #55d6be; background: #101d29; }
+                QComboBox#ModelSelector:focus { border: 1px solid #79ead5; }
+                QComboBox#ModelSelector:disabled { color: #718297; background: #101720; }
+                QComboBox#ModelSelector::drop-down {
+                    width: 32px;
+                    border: 0;
+                    border-left: 1px solid #2a3d55;
+                }
+                QComboBox#ModelSelector QAbstractItemView {
+                    color: #eaf4ff;
+                    background: #111a25;
+                    selection-color: #06131b;
+                    selection-background-color: #55d6be;
+                    show-decoration-selected: 1;
+                    border: 1px solid #36516d;
+                    border-radius: 6px;
+                    outline: 0;
+                    padding: 4px;
+                }
+                QComboBox#ModelSelector QAbstractItemView::item {
+                    min-height: 34px;
+                    padding: 5px 10px;
+                }
+                QComboBox#ModelSelector QAbstractItemView::item:selected {
+                    color: #06131b;
+                    background: #55d6be;
+                }
+                QLabel#ModelBadge {
+                    color: #95f0d6;
+                    background: #14332d;
+                    border: 1px solid #2e7566;
+                    border-radius: 7px;
+                    padding: 4px 9px;
+                    font-size: 10px;
+                    font-weight: 800;
+                }
+                QLabel#ModelBadge[loading="true"] {
+                    color: #ffe3a1;
+                    background: #3a3018;
+                    border-color: #7c6425;
+                }
+                QProgressBar#ModelLoadProgress {
+                    min-height: 7px;
+                    max-height: 7px;
+                    background: #0a1119;
+                    border: 1px solid #26394e;
+                    border-radius: 4px;
+                }
+                QProgressBar#ModelLoadProgress::chunk {
+                    background: #55d6be;
+                    border-radius: 3px;
                 }
                 QLabel#FieldLabel {
                     color: #8fa3b7;
@@ -794,6 +940,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.wire_preview.setText(command.to_wire().decode("ascii").strip())
 
         def _next_frame(self) -> None:
+            self._poll_model_load()
+            self._poll_inference()
             self._poll_audio()
             self._poll_robot_connection()
             try:
@@ -894,23 +1042,41 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         def _predict_now(self) -> None:
             if self.current_frame is None or self.inference_busy:
                 return
-            self.inference_busy = True
-            self.predict_button.setEnabled(False)
-            QApplication.processEvents()
+            self._set_busy(True)
+            frame = self.current_frame.copy()
+            prompt = self.prompt.text()
+            engine = self.inference
+            result_queue = self.inference_results
+
+            def worker():
+                try:
+                    prediction = engine.predict(frame, prompt)
+                    maps = engine.visualization_maps(prediction)
+                    result_queue.put((True, prompt, prediction, maps))
+                except Exception as exc:
+                    result_queue.put((False, prompt, exc, None))
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        def _poll_inference(self) -> None:
             try:
-                self.prediction = self.inference.predict(
-                    self.current_frame.copy(), self.prompt.text()
-                )
+                ok, prompt, value, maps = self.inference_results.get_nowait()
+            except queue.Empty:
+                return
+            if not ok:
+                self._error("Inference error", value)
+                self._set_busy(False)
+                return
+            try:
+                self.prediction = value
                 self.sentence_label.setText(
-                    f"Current target: {self.prompt.text()}"
+                    f"Current target: {prompt}"
                 )
                 self.last_inference_at = time.monotonic()
                 self.live_label.setPixmap(
                     self._pixmap(self.prediction.annotated_bgr, self.live_label)
                 )
-                for name, image in self.inference.visualization_maps(
-                    self.prediction
-                ).items():
+                for name, image in maps.items():
                     if name == "segmentation":
                         self.mask_label.setPixmap(
                             self._pixmap(image, self.mask_label)
@@ -941,8 +1107,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             except Exception as exc:
                 self._error("Inference error", exc)
             finally:
-                self.inference_busy = False
-                self.predict_button.setEnabled(True)
+                self._set_busy(False)
 
         def _connect_robot(self) -> None:
             if not (bool(robot_cfg.get("enabled")) and allow_robot):
