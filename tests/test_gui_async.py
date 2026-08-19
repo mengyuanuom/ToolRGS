@@ -26,6 +26,7 @@ class AsyncGuiTest(unittest.TestCase):
         construction_count = 0
         construction_lock = threading.Lock()
         source_reads = 0
+        detector_updates = []
 
         class FakeInference:
             def __init__(self, _config):
@@ -48,11 +49,22 @@ class AsyncGuiTest(unittest.TestCase):
         class FakeRobot:
             connected = False
 
+        class FakeDetector:
+            def predict(self, frame):
+                return frame
+
+            def update_postprocessing(
+                self, score_threshold, nms_threshold, max_detections
+            ):
+                detector_updates.append(
+                    (score_threshold, nms_threshold, max_detections)
+                )
+
         inference_module = types.ModuleType("deployment.inference")
         inference_module.GraspPrediction = object
         inference_module.ToolRGSInference = FakeInference
         detector_module = types.ModuleType("deployment.detector")
-        detector_module.build_detector = lambda *_args, **_kwargs: None
+        detector_module.build_detector = lambda *_args, **_kwargs: FakeDetector()
         audio_module = types.ModuleType("deployment.audio")
         audio_module.build_audio_input = lambda *_args, **_kwargs: None
         gelsight_module = types.ModuleType("deployment.gelsight")
@@ -85,7 +97,12 @@ class AsyncGuiTest(unittest.TestCase):
         }
         sys.modules.pop("deployment.gui", None)
         with mock.patch.dict(sys.modules, replacements):
-            from deployment.gui import run_gui
+            from deployment.gui import format_grasp_prompt, run_gui
+
+            self.assertEqual(
+                format_grasp_prompt("screwdriver", "Grasp {}"),
+                "Grasp screwdriver",
+            )
 
             config = {
                 "_repo_root": ".",
@@ -96,7 +113,13 @@ class AsyncGuiTest(unittest.TestCase):
                 },
                 "model": {"prompt": "the screwdriver"},
                 "camera": {},
-                "detector": {"enabled": False},
+                "detector": {
+                    "enabled": True,
+                    "score_threshold": 0.7,
+                    "nms_threshold": 0.5,
+                    "max_detections": 100,
+                    "inference_interval_ms": 400,
+                },
                 "audio": {"enabled": False},
                 "gelsight": {"enabled": False},
                 "robot": {
@@ -118,6 +141,16 @@ class AsyncGuiTest(unittest.TestCase):
 
             def open_model_popup():
                 window = next(widget for widget in app.topLevelWidgets() if widget.isVisible())
+                self.assertEqual(window.settings_pages.currentIndex(), 0)
+                self.assertIn("Detection Post-processing", window.settings_button.text())
+                window.detection_score_input.setValue(0.8)
+                window.detection_nms_input.setValue(0.35)
+                window.detection_max_input.setValue(7)
+                window._switch_mode(1)
+                self.assertEqual(window.settings_pages.currentIndex(), 1)
+                self.assertIn(
+                    "Grasp Model & Post-processing", window.settings_button.text()
+                )
                 combo = window.findChild(QComboBox, "ModelSelector")
                 self.assertIsNotNone(combo)
                 self.assertEqual([combo.itemText(i) for i in range(combo.count())], ["model-a", "model-b"])
@@ -164,6 +197,7 @@ class AsyncGuiTest(unittest.TestCase):
         self.assertTrue(observations["enabled"])
         self.assertEqual(observations["badge"], "READY")
         self.assertEqual(construction_count, 2)
+        self.assertEqual(detector_updates[-1], (0.8, 0.35, 7))
 
 
 if __name__ == "__main__":

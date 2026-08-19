@@ -14,11 +14,12 @@ import torch
 
 from deployment.config import activate_model_profile, load_deployment_config
 from deployment.detector import (
+    MMDetectionAdapter,
     _trusted_checkpoint_load_context,
     _trusted_mmengine_checkpoint_context,
 )
 from deployment.grasp_policy import command_theta, command_width, mask_span_width
-from deployment.gui import build_grasp_command
+from deployment.gui import build_grasp_command, format_grasp_prompt
 from deployment.inference import (
     GraspPrediction,
     expand_binary_mask,
@@ -310,6 +311,58 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(cfg["robot"]["width_policy"]["type"], "model")
         self.assertFalse(cfg["gelsight"]["enabled"])
         self.assertEqual(cfg["model"]["prompt"], "wrench")
+        self.assertEqual(cfg["model"]["prompt_template"], "Grasp {}")
+        self.assertEqual(cfg["detector"]["nms_threshold"], 0.5)
+
+    def test_grasp_prompt_template_expands_target_names(self):
+        self.assertEqual(format_grasp_prompt("screwdriver"), "Grasp screwdriver")
+        self.assertEqual(
+            format_grasp_prompt("the left wrench"), "Grasp the left wrench"
+        )
+        self.assertEqual(
+            format_grasp_prompt("Grasp the left wrench"),
+            "Grasp the left wrench",
+        )
+        with self.assertRaises(ValueError):
+            format_grasp_prompt("", "Grasp {}")
+
+    def test_detector_runtime_controls_update_mmdet_test_cfg(self):
+        adapter = MMDetectionAdapter.__new__(MMDetectionAdapter)
+        roi_test_cfg = {
+            "score_thr": 0.05,
+            "nms": {"type": "nms", "iou_threshold": 0.5},
+            "max_per_img": 100,
+        }
+        adapter.model = SimpleNamespace(
+            test_cfg={
+                "rcnn": {
+                    "score_thr": 0.05,
+                    "nms": {"type": "nms", "iou_threshold": 0.5},
+                    "max_per_img": 100,
+                }
+            },
+            roi_head=SimpleNamespace(test_cfg=roi_test_cfg),
+        )
+
+        adapter.update_postprocessing(0.8, 0.35, 7)
+
+        rcnn_cfg = adapter.model.test_cfg["rcnn"]
+        self.assertEqual(adapter.threshold, 0.8)
+        self.assertEqual(adapter.nms_threshold, 0.35)
+        self.assertEqual(adapter.max_detections, 7)
+        self.assertEqual(rcnn_cfg["score_thr"], 0.8)
+        self.assertEqual(rcnn_cfg["nms"]["iou_threshold"], 0.35)
+        self.assertEqual(rcnn_cfg["max_per_img"], 7)
+        self.assertEqual(roi_test_cfg["score_thr"], 0.8)
+        self.assertEqual(roi_test_cfg["nms"]["iou_threshold"], 0.35)
+        self.assertEqual(roi_test_cfg["max_per_img"], 7)
+
+    def test_detector_runtime_controls_validate_values(self):
+        adapter = MMDetectionAdapter.__new__(MMDetectionAdapter)
+        adapter.model = SimpleNamespace(test_cfg={})
+        for values in ((-0.1, 0.5, 10), (0.5, 1.1, 10), (0.5, 0.5, 0)):
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                adapter.update_postprocessing(*values)
 
     def test_lab_profile_uses_physical_realsense_resolution(self):
         repo_root = Path(__file__).resolve().parents[1]
@@ -333,6 +386,7 @@ class DeploymentContractTest(unittest.TestCase):
         )
         self.assertTrue(cfg["detector"]["enabled"])
         self.assertTrue(cfg["detector"]["trusted_checkpoint"])
+        self.assertEqual(cfg["detector"]["nms_threshold"], 0.5)
         self.assertTrue(cfg["robot"]["enabled"])
         self.assertTrue(cfg["robot"]["auto_connect"])
         self.assertTrue(cfg["robot"]["auto_arm"])
@@ -346,6 +400,8 @@ class DeploymentContractTest(unittest.TestCase):
         )
         self.assertTrue(cfg["model"]["use_mask_postprocessing"])
         self.assertTrue(cfg["model"]["filter_grasps_by_mask"])
+        self.assertEqual(cfg["model"]["prompt_template"], "Grasp {}")
+        self.assertEqual(cfg["model"]["prompt"], "Grasp screwdriver")
         self.assertEqual(cfg["model"]["mask_expand_px"], 0)
         crog = activate_model_profile(
             cfg, "crog-aligned-grasptools-v2-original300"

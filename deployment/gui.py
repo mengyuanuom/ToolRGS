@@ -20,6 +20,29 @@ from .robot import GraspCommand, LegacyTCPGraspClient, build_robot_client, seman
 from .sources import FrameSource, build_source
 
 
+def format_grasp_prompt(value: str, template: str = "Grasp {}") -> str:
+    """Turn a target name into the grasp instruction expected by the model."""
+    value = str(value).strip()
+    if not value:
+        raise ValueError("Enter a grasp target, for example: Grasp screwdriver")
+    lowered = value.casefold()
+    instruction_prefixes = (
+        "grasp ",
+        "pick ",
+        "select ",
+        "take ",
+        "reach ",
+        "find ",
+        "locate ",
+    )
+    if lowered.startswith(instruction_prefixes):
+        return value
+    template = str(template or "Grasp {}").strip()
+    if template.count("{}") != 1:
+        raise ValueError("model.prompt_template must contain exactly one {} placeholder")
+    return template.format(value)
+
+
 def build_grasp_command(
     prediction: GraspPrediction, robot_cfg: Dict[str, Any]
 ) -> Optional[GraspCommand]:
@@ -148,6 +171,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.inference_busy = False
             self.inference = inference
             self.active_model = str(config.get("_active_model", "model"))
+            self.prompt_template = str(
+                config.get("model", {}).get("prompt_template", "Grasp {}")
+            )
             self.audio_results = queue.Queue()
             self.robot_connect_results = queue.Queue()
             self.inference_results = queue.Queue()
@@ -214,7 +240,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.appearance_button.setObjectName("ModeButton")
                 self.appearance_button.clicked.connect(self._choose_accent)
                 mode_row.addWidget(self.appearance_button, 1)
-            self.settings_button = QPushButton("Model & Post-processing  ▾")
+            self.settings_button = QPushButton("Post-processing  ▾")
             self.settings_button.setMinimumHeight(40)
             self.settings_button.setCheckable(True)
             self.settings_button.setObjectName("SettingsButton")
@@ -290,7 +316,10 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.audio_button.clicked.connect(self._record_instruction)
             self.audio_button.setEnabled(audio is not None)
             self.prompt = QLineEdit(str(config["model"]["prompt"]))
-            self.prompt.setPlaceholderText("Type a language instruction and press Enter")
+            self.prompt.setPlaceholderText("Grasp {}")
+            self.prompt.setToolTip(
+                "Enter a target name or a full instruction; a bare name uses Grasp {}"
+            )
             self.prompt.returnPressed.connect(self._predict_now)
             self.predict_button = QPushButton("Predict now")
             self.predict_button.setObjectName("PrimaryButton")
@@ -415,8 +444,73 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         def _build_settings_panel(self):
             panel = QFrame()
             panel.setObjectName("SettingsPanel")
-            row = QHBoxLayout(panel)
-            row.setContentsMargins(14, 10, 14, 10)
+            layout = QVBoxLayout(panel)
+            layout.setContentsMargins(14, 10, 14, 10)
+            layout.setSpacing(0)
+            self.settings_pages = QStackedWidget()
+            self.settings_pages.setObjectName("PostprocessingPages")
+            layout.addWidget(self.settings_pages)
+
+            detection_page = QWidget()
+            detection_row = QHBoxLayout(detection_page)
+            detection_row.setContentsMargins(0, 0, 0, 0)
+            detection_row.setSpacing(14)
+            detector_cfg = config.get("detector", {})
+
+            score_label = QLabel("Score threshold")
+            score_label.setObjectName("FieldLabel")
+            detection_row.addWidget(score_label)
+            self.detection_score_input = QDoubleSpinBox()
+            self.detection_score_input.setObjectName("DetectionScoreThreshold")
+            self.detection_score_input.setRange(0.0, 1.0)
+            self.detection_score_input.setDecimals(2)
+            self.detection_score_input.setSingleStep(0.05)
+            self.detection_score_input.setValue(
+                float(detector_cfg.get("score_threshold", 0.7))
+            )
+            detection_row.addWidget(self.detection_score_input)
+
+            nms_label = QLabel("NMS IoU")
+            nms_label.setObjectName("FieldLabel")
+            detection_row.addWidget(nms_label)
+            self.detection_nms_input = QDoubleSpinBox()
+            self.detection_nms_input.setObjectName("DetectionNmsThreshold")
+            self.detection_nms_input.setRange(0.0, 1.0)
+            self.detection_nms_input.setDecimals(2)
+            self.detection_nms_input.setSingleStep(0.05)
+            self.detection_nms_input.setValue(
+                float(detector_cfg.get("nms_threshold", 0.5))
+            )
+            self.detection_nms_input.setToolTip(
+                "Suppress overlapping boxes whose IoU exceeds this value"
+            )
+            detection_row.addWidget(self.detection_nms_input)
+
+            max_label = QLabel("Max detections")
+            max_label.setObjectName("FieldLabel")
+            detection_row.addWidget(max_label)
+            self.detection_max_input = QSpinBox()
+            self.detection_max_input.setObjectName("DetectionMaxDetections")
+            self.detection_max_input.setRange(1, 1000)
+            self.detection_max_input.setValue(
+                int(detector_cfg.get("max_detections", 100))
+            )
+            detection_row.addWidget(self.detection_max_input)
+            detection_row.addStretch(1)
+            for control in (
+                self.detection_score_input,
+                self.detection_nms_input,
+                self.detection_max_input,
+            ):
+                control.setEnabled(detector is not None)
+                control.valueChanged.connect(
+                    self._apply_detection_postprocessing_controls
+                )
+            self.settings_pages.addWidget(detection_page)
+
+            grasp_page = QWidget()
+            row = QHBoxLayout(grasp_page)
+            row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(14)
 
             model_label = QLabel("GRASP MODEL")
@@ -528,15 +622,50 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self._apply_postprocessing_controls
             )
             self._sync_mask_control_state()
+            self.settings_pages.addWidget(grasp_page)
+
+            gelsight_page = QWidget()
+            gelsight_row = QHBoxLayout(gelsight_page)
+            gelsight_row.setContentsMargins(0, 0, 0, 0)
+            gelsight_message = QLabel(
+                "GelSight uses its configured classifier settings."
+            )
+            gelsight_message.setObjectName("FieldLabel")
+            gelsight_row.addWidget(gelsight_message)
+            gelsight_row.addStretch(1)
+            self.settings_pages.addWidget(gelsight_page)
             return panel
 
         def _toggle_settings(self, expanded: bool) -> None:
             self.settings_panel.setVisible(bool(expanded))
-            self.settings_button.setText(
-                "Model & Post-processing  ▴"
-                if expanded
-                else "Model & Post-processing  ▾"
+            self._refresh_settings_button()
+
+        def _refresh_settings_button(self) -> None:
+            titles = (
+                "Detection Post-processing",
+                "Grasp Model & Post-processing",
+                "GelSight Settings",
             )
+            suffix = "▴" if self.settings_button.isChecked() else "▾"
+            self.settings_button.setText(f"{titles[self.current_mode]}  {suffix}")
+
+        def _apply_detection_postprocessing_controls(self, *_args) -> None:
+            if detector is None:
+                return
+            detector.update_postprocessing(
+                score_threshold=self.detection_score_input.value(),
+                nms_threshold=self.detection_nms_input.value(),
+                max_detections=self.detection_max_input.value(),
+            )
+            detector_cfg = config.setdefault("detector", {})
+            detector_cfg["score_threshold"] = self.detection_score_input.value()
+            detector_cfg["nms_threshold"] = self.detection_nms_input.value()
+            detector_cfg["max_detections"] = self.detection_max_input.value()
+            self.last_detection_at = 0.0
+            if hasattr(self, "status"):
+                self.status.setText(
+                    "Detection post-processing updated; the next frame uses these settings"
+                )
 
         def _load_postprocessing_controls(self, model_cfg: Dict[str, Any]) -> None:
             postprocessor = dict(model_cfg.get("postprocessor", {}))
@@ -614,12 +743,14 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         def _switch_mode(self, index: int) -> None:
             self.current_mode = int(index)
             self.pages.setCurrentIndex(self.current_mode)
+            self.settings_pages.setCurrentIndex(self.current_mode)
             for button, active in (
                 (self.object_button, self.current_mode == 0),
                 (self.grasping_button, self.current_mode == 1),
                 (self.gelsight_button, self.current_mode == 2),
             ):
                 button.setChecked(active)
+            self._refresh_settings_button()
 
         def _model_selection_changed(self, index: int) -> None:
             if self.model_selector is None or index < 0:
@@ -684,6 +815,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self.inference = value
                 self.active_model = name
                 self._load_postprocessing_controls(selected["model"])
+                self.prompt_template = str(
+                    selected["model"].get("prompt_template", "Grasp {}")
+                )
                 self.prompt.setText(str(selected["model"].get("prompt", "")))
                 self.prediction = None
                 self._update_command_preview()
@@ -1100,9 +1234,16 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         def _predict_now(self) -> None:
             if self.current_frame is None or self.inference_busy:
                 return
+            try:
+                prompt = format_grasp_prompt(
+                    self.prompt.text(), self.prompt_template
+                )
+            except ValueError as exc:
+                self._error("Invalid grasp prompt", exc)
+                return
+            self.prompt.setText(prompt)
             self._set_busy(True)
             frame = self.current_frame.copy()
-            prompt = self.prompt.text()
             engine = self.inference
             result_queue = self.inference_results
 

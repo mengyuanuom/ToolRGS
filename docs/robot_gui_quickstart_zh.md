@@ -122,14 +122,16 @@ python tools/check_deployment.py \
 
 ### GUI 内切换模型和后处理
 
-点击顶部 **Model & Post-processing** 按钮展开控制区。模型下拉框默认选中
+顶部设置按钮会随页面变化。进入 **Object Detection** 时显示
+**Detection Post-processing**，进入 **Grasping Points Detection** 时显示
+**Grasp Model & Post-processing**。抓取模型下拉框默认选中
 `config/deployment/lab.yaml` 的 `active_model`，也可以直接切换已配置的
 DROG-OFF 与 aligned CROG。切换模型只重载抓取网络，不会重启相机、检测器或
 机械臂连接。
 
 推荐按以下顺序切换：
 
-1. 点击 **Model & Post-processing** 展开面板；
+1. 进入 **Grasping Points Detection**，点击 **Grasp Model & Post-processing** 展开面板；
 2. 点击 **GRASP MODEL** 右侧的模型框；
 3. 在展开的深色列表中**单击一次**目标模型；
 4. 状态从绿色 **READY** 变为黄色 **LOADING**，等待进度条消失并恢复
@@ -145,7 +147,14 @@ DROG-OFF 与 aligned CROG。切换模型只重载抓取网络，不会重启相�
 加载失败时 GUI 会显示错误并自动回到原模型。GUI 内的选择只在本次进程生效，不会
 改写 YAML；重启后仍使用 `active_model`。
 
-后处理控件的初始值全部来自当前模型 profile：
+Detection 和 Grasp 使用两套独立后处理。Detection 页的参数来自 `detector`：
+
+- **Score threshold**：检测框最低置信度；
+- **NMS IoU**：重叠框的 NMS IoU 阈值；
+- **Max detections**：单帧最多保留的检测框数量。
+
+这些值会直接更新 MMDetection 测试配置，并从下一帧检测开始生效。Grasp 页的
+控件初始值来自当前模型 profile：
 
 - **Gripper height**：抓取框短边，默认原图 `20 px`；
 - **Use mask**：是否在后处理和结果叠加中启用分割 mask；
@@ -157,12 +166,15 @@ DROG-OFF 与 aligned CROG。切换模型只重载抓取网络，不会重启相�
 保留二值分割结果，便于比较与调试。修改控件后下一次预测立即使用新参数，不会
 写回 YAML。
 
+抓取语言默认采用 `Grasp {}` 模板。输入 `screwdriver` 会自动展开为
+`Grasp screwdriver`；也可以直接输入完整指令，例如 `Grasp the left wrench`。
+
 ## 5. 一键启动
 
 ### A. 纯 RealSense 演示（无 GI、绝不发送坐标）
 
 ```bash
-bash tools/gui_quickstart.sh demo --prompt "the screwdriver"
+bash tools/gui_quickstart.sh demo --prompt "Grasp screwdriver"
 ```
 
 该入口会强制设置 `robot.enabled=false`，也不接受 `--allow-robot`，适合调模型、
@@ -171,7 +183,7 @@ bash tools/gui_quickstart.sh demo --prompt "the screwdriver"
 ### B. GI 画面安全预览（不发送坐标）
 
 ```bash
-bash tools/gui_quickstart.sh gi-preview --prompt "the screwdriver"
+bash tools/gui_quickstart.sh gi-preview --prompt "Grasp screwdriver"
 ```
 
 它读取 `fooA`，但没有 `--allow-robot`，因此不会连接机械臂 TCP。正式实验前先用
@@ -198,7 +210,7 @@ python test_socket_to_ros1.py
 
 ```bash
 cd /home/raico-hri/projects/ToolRGS
-bash tools/gui_quickstart.sh robot --prompt "the screwdriver"
+bash tools/gui_quickstart.sh robot --prompt "Grasp screwdriver"
 ```
 
 该命令等价于：
@@ -207,7 +219,7 @@ bash tools/gui_quickstart.sh robot --prompt "the screwdriver"
 python deploy_gui_gi.py \
   --config config/deployment/lab.yaml \
   --allow-robot \
-  --prompt "the screwdriver"
+  --prompt "Grasp screwdriver"
 ```
 
 实验室 Docker 使用 `network_mode=host`，所以正式配置连接的是：
@@ -239,7 +251,7 @@ robot:
 python deploy_gui.py \
   --config config/deployment/lab.yaml \
   --image \
-  --prompt "the screwdriver"
+  --prompt "Grasp screwdriver"
 ```
 
 使用自己的图片：
@@ -248,7 +260,7 @@ python deploy_gui.py \
 python deploy_gui.py \
   --config config/deployment/lab.yaml \
   --image /absolute/path/to/test.jpg \
-  --prompt "the screwdriver"
+  --prompt "Grasp screwdriver"
 ```
 
 单图模式自动关闭连续推理；进入 **Grasping Points Detection** 页面后点击

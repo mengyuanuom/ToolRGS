@@ -101,12 +101,11 @@ class MMDetectionAdapter:
                     "true. Do not enable it for downloaded or unverified files."
                 ) from exc
             raise
-        self.threshold = float(cfg.get("score_threshold", 0.7))
-        if not 0.0 <= self.threshold <= 1.0:
-            raise ValueError("detector.score_threshold must be between 0 and 1")
-        self.max_detections = int(cfg.get("max_detections", 100))
-        if self.max_detections < 1:
-            raise ValueError("detector.max_detections must be at least 1")
+        self.update_postprocessing(
+            score_threshold=cfg.get("score_threshold", 0.7),
+            nms_threshold=cfg.get("nms_threshold", 0.5),
+            max_detections=cfg.get("max_detections", 100),
+        )
         self.box_thickness = max(1, int(cfg.get("box_thickness", 2)))
         self.text_scale = float(cfg.get("text_scale", 0.55))
         dataset_meta = getattr(self.model, "dataset_meta", {}) or {}
@@ -128,6 +127,61 @@ class MMDetectionAdapter:
             "classes": tuple(self.classes),
             "palette": self.palette,
         }
+
+    @staticmethod
+    def _cfg_get(container, key: str, default=None):
+        if container is None:
+            return default
+        if isinstance(container, dict):
+            return container.get(key, default)
+        return getattr(container, key, default)
+
+    @staticmethod
+    def _cfg_set(container, key: str, value) -> None:
+        if isinstance(container, dict):
+            container[key] = value
+        else:
+            setattr(container, key, value)
+
+    def _apply_model_test_cfg(self) -> None:
+        """Update MMDetection's own filtering/NMS config before inference."""
+        test_cfg = getattr(self.model, "test_cfg", None)
+        rcnn_cfg = self._cfg_get(test_cfg, "rcnn")
+        if rcnn_cfg is None:
+            rcnn_cfg = test_cfg
+        roi_cfg = getattr(getattr(self.model, "roi_head", None), "test_cfg", None)
+        configs = [cfg for cfg in (rcnn_cfg, roi_cfg) if cfg is not None]
+        for index, current_cfg in enumerate(configs):
+            if any(current_cfg is earlier for earlier in configs[:index]):
+                continue
+            self._cfg_set(current_cfg, "score_thr", self.threshold)
+            self._cfg_set(current_cfg, "max_per_img", self.max_detections)
+            nms_cfg = self._cfg_get(current_cfg, "nms")
+            if nms_cfg is None:
+                nms_cfg = {"type": "nms"}
+                self._cfg_set(current_cfg, "nms", nms_cfg)
+            self._cfg_set(nms_cfg, "iou_threshold", self.nms_threshold)
+
+    def update_postprocessing(
+        self,
+        score_threshold: float,
+        nms_threshold: float,
+        max_detections: int,
+    ) -> None:
+        """Apply detection-only post-processing settings at runtime."""
+        score_threshold = float(score_threshold)
+        nms_threshold = float(nms_threshold)
+        max_detections = int(max_detections)
+        if not 0.0 <= score_threshold <= 1.0:
+            raise ValueError("detector.score_threshold must be between 0 and 1")
+        if not 0.0 <= nms_threshold <= 1.0:
+            raise ValueError("detector.nms_threshold must be between 0 and 1")
+        if max_detections < 1:
+            raise ValueError("detector.max_detections must be at least 1")
+        self.threshold = score_threshold
+        self.nms_threshold = nms_threshold
+        self.max_detections = max_detections
+        self._apply_model_test_cfg()
 
     def predict(self, frame_bgr: np.ndarray) -> np.ndarray:
         result = self.inference_detector(self.model, frame_bgr)
