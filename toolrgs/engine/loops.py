@@ -67,6 +67,10 @@ class GraspTrainLoop(BaseLoop):
             "width": AverageMeter("Loss_wid", ":2.4f"),
             "short": AverageMeter("Loss_short", ":2.4f"),
             "offset": AverageMeter("Loss_off", ":2.4f"),
+            "center": AverageMeter("Loss_ctr", ":2.4f"),
+            "ltrb": AverageMeter("Loss_ltrb", ":2.4f"),
+            "gwd": AverageMeter("Loss_gwd", ":2.4f"),
+            "kld": AverageMeter("Loss_kld", ":2.4f"),
             "iou": AverageMeter("IoU", ":2.2f"),
             "precision": AverageMeter("Prec@50", ":2.2f"),
         }
@@ -82,6 +86,12 @@ class GraspTrainLoop(BaseLoop):
         offset = masks.get("off")
         offset_weight = masks.get("off_w")
         short_side = masks.get("short")
+        asymmetric = tuple(
+            masks.get(name) for name in (
+                "ltrb", "centerness", "geometry_weight",
+                "geometry_sin", "geometry_cos",
+            )
+        )
         common = (
             data["img"].cuda(non_blocking=True),
             data["word_vec"].cuda(non_blocking=True),
@@ -94,6 +104,10 @@ class GraspTrainLoop(BaseLoop):
             offset_weight.cuda(non_blocking=True) if offset_weight is not None else None,
             short_side.cuda(non_blocking=True).unsqueeze(1)
             if short_side is not None else None,
+            *(
+                value.cuda(non_blocking=True) if value is not None else None
+                for value in asymmetric
+            ),
         )
         if not model_requires_depth(self.model):
             return common
@@ -138,6 +152,11 @@ class GraspTrainLoop(BaseLoop):
                     offset,
                     offset_weight,
                     short_side,
+                    ltrb,
+                    centerness,
+                    geometry_weight,
+                    geometry_sine,
+                    geometry_cosine,
                 ) = target_values
                 model_kwargs = dense_grasp_target_kwargs(
                     self.model,
@@ -149,6 +168,11 @@ class GraspTrainLoop(BaseLoop):
                     grasp_off_mask=offset,
                     grasp_off_weight=offset_weight,
                     grasp_short_mask=short_side,
+                    grasp_ltrb_mask=ltrb,
+                    grasp_centerness_mask=centerness,
+                    grasp_geometry_weight=geometry_weight,
+                    grasp_geometry_sin_mask=geometry_sine,
+                    grasp_geometry_cos_mask=geometry_cosine,
                 )
                 unwrapped = getattr(self.model, "module", self.model)
                 raw_result = self.model(*model_args, **model_kwargs)
@@ -199,6 +223,10 @@ class GraspTrainLoop(BaseLoop):
             meters["width"].update(_scalar(losses.get("m_wid", 0.0)), batch_size)
             meters["short"].update(_scalar(losses.get("m_short", 0.0)), batch_size)
             meters["offset"].update(_scalar(losses.get("m_off", 0.0)), batch_size)
+            meters["center"].update(_scalar(losses.get("m_center", 0.0)), batch_size)
+            meters["ltrb"].update(_scalar(losses.get("m_ltrb", 0.0)), batch_size)
+            meters["gwd"].update(_scalar(losses.get("m_gwd", 0.0)), batch_size)
+            meters["kld"].update(_scalar(losses.get("m_kld", 0.0)), batch_size)
             meters["iou"].update(iou.item(), batch_size)
             meters["precision"].update(precision.item(), batch_size)
             meters["lr"].update(self.scheduler.get_last_lr()[-1])

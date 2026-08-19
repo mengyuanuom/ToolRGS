@@ -7,6 +7,7 @@ import torch
 import yaml
 
 from model import MODEL_REGISTRY
+from model.darg import DARGProjector, decode_asymmetric_geometry, rotated_gwd_kld
 from model.graspmamba import HierarchicalFeatureFusion
 from model.layers import OffsetMultiTaskProjector
 from model.lgd import CosineDiffusion, LGDCore
@@ -15,6 +16,7 @@ from utils.dataset import GraspTransforms, make_dense_offset_with_radius_np
 from utils.data_builder import DATASET_REGISTRY
 from utils.ocid_vlg_dataset import parse_ocid_image_filename, resolve_ocid_vlg_split
 from utils.vcot_dataset import grasp_anything_to_quads, resolve_vcot_split
+from toolrgs.evaluation.asymmetric_geometry import generate_asymmetric_grasp_targets
 
 
 class ToolRGSContractsTest(unittest.TestCase):
@@ -59,6 +61,7 @@ class ToolRGSContractsTest(unittest.TestCase):
         expected = {
             "crog",
             "crogoff",
+            "darg",
             "drog",
             "drogoff",
             "ggcnnclip",
@@ -84,9 +87,23 @@ class ToolRGSContractsTest(unittest.TestCase):
             self.assertIn(dataset, DATASET_REGISTRY, path)
 
         for directory, dataset_name, expected_configs in (
-            ("grasp_tools", "grasptool", expected | {"drogoff_v2"}),
-            ("vcot", "vcot", expected),
-            ("ocid_vlg", "ocid_vlg", expected | {"etrg", "etrg_r101"}),
+            (
+                "grasp_tools",
+                "grasptool",
+                expected
+                | {
+                    "crog_aligned_v2_original_scale",
+                    "crog_v2_original_scale",
+                    "drogoff_v2",
+                    "drogoff_v2_original_scale",
+                },
+            ),
+            (
+                "vcot",
+                "vcot",
+                (expected - {"darg"}) | {"maplegrasp_stage1", "maplegrasp_stage2"},
+            ),
+            ("ocid_vlg", "ocid_vlg", (expected - {"darg"}) | {"etrg", "etrg_r101"}),
         ):
             configs = glob.glob(f"config/{directory}/*.yaml")
             self.assertEqual(
@@ -110,6 +127,47 @@ class ToolRGSContractsTest(unittest.TestCase):
             self.assertEqual(tuple(output.shape), (2, 1, 32, 32))
         self.assertEqual(tuple(outputs[5].shape), (2, 2, 32, 32))
         self.assertLessEqual(outputs[5].abs().max().item(), 1.0)
+
+    def test_darg_projector_and_asymmetric_decode(self):
+        projector = DARGProjector(word_dim=32, in_dim=8, hidden_dim=16)
+        output = projector(torch.randn(2, 16, 8, 8), torch.randn(2, 32))
+        self.assertEqual(tuple(output["segmentation"].shape), (2, 1, 32, 32))
+        self.assertEqual(tuple(output["ltrb"].shape), (2, 4, 32, 32))
+        self.assertTrue(torch.all(output["ltrb"] > 0))
+
+        ltrb = torch.tensor([[[[0.2]], [[0.6]], [[0.1]], [[0.1]]]])
+        sine = torch.zeros(1, 1, 1, 1)
+        cosine = torch.ones(1, 1, 1, 1)
+        width, short_side, offset = decode_asymmetric_geometry(
+            ltrb, sine, cosine, size_factor=10.0, offset_radius=5.0
+        )
+        torch.testing.assert_close(width, torch.tensor([[[[0.8]]]]))
+        torch.testing.assert_close(short_side, torch.tensor([[[[0.2]]]]))
+        torch.testing.assert_close(offset, torch.tensor([[[[0.4]], [[0.0]]]]))
+
+    def test_darg_rotated_box_losses_and_targets(self):
+        ltrb = torch.tensor([[[[0.4]], [[0.4]], [[0.2]], [[0.2]]]])
+        sine = torch.zeros(1, 1, 1, 1)
+        cosine = torch.ones(1, 1, 1, 1)
+        gwd, kld = rotated_gwd_kld(
+            ltrb, sine, cosine, ltrb, sine, cosine
+        )
+        self.assertLess(gwd.item(), 1e-4)
+        self.assertLess(kld.item(), 1e-4)
+        shifted = ltrb.clone()
+        shifted[:, 1] += 0.2
+        shifted_gwd, shifted_kld = rotated_gwd_kld(
+            shifted, sine, cosine, ltrb, sine, cosine
+        )
+        self.assertGreater(shifted_gwd.item(), gwd.item())
+        self.assertGreater(shifted_kld.item(), kld.item())
+
+        targets = generate_asymmetric_grasp_targets(
+            [[10.0, 10.0, 8.0, 4.0, 0.0]], (24, 24), size_factor=10.0
+        )
+        np.testing.assert_allclose(targets["ltrb"][:, 10, 10], [0.4, 0.4, 0.2, 0.2])
+        self.assertAlmostEqual(float(targets["centerness"][0, 10, 10]), 1.0)
+        self.assertEqual(float(targets["geometry_weight"][0, 10, 14]), 1.0)
 
     def test_maplegrasp_projector_output_contract(self):
         projector = MapleGraspProjector(

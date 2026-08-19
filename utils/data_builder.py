@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from toolrgs.registry import DATASETS, normalise_component_name
 
 from utils.grasp_tool_dataset import GraspToolDataset
+from utils.asymmetric_grasp_dataset import AsymmetricGraspDataset
 from utils.ocid_vlg_dataset import OCIDVLGDataset
 from utils.vcot_dataset import VCoTDataset
 
@@ -74,4 +75,17 @@ def build_dataset(cfg, split, with_offset=False):
             raise TypeError("DATA.dataset_args must be a mapping")
         candidates.update(dataset_args)
     kwargs = _supported_init_kwargs(dataset_class, candidates)
-    return DATASETS.build({"type": name, **kwargs})
+    dataset = DATASETS.build({"type": name, **kwargs})
+    architecture = normalise_component_name(
+        getattr(cfg, "architecture", getattr(cfg, "type", ""))
+    )
+    explicit_asymmetric = bool(
+        getattr(cfg, "with_asymmetric_grasp_targets", False)
+    )
+    is_training_split = str(split) == str(getattr(cfg, "train_split", "train"))
+    if explicit_asymmetric or (architecture == "darg" and is_training_split):
+        dataset = AsymmetricGraspDataset(
+            dataset,
+            size_factor=float(getattr(cfg, "grasp_size_factor", 100.0)),
+        )
+    return dataset

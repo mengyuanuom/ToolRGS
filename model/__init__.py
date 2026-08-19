@@ -6,6 +6,7 @@ from toolrgs.registry import MODELS
 
 from .crog import CROG
 from .crogoff import CROGOFF
+from .darg import DARG
 from .drog import DROG
 from .drogoff import DROGOFF
 from .etrg import ETRG
@@ -19,6 +20,7 @@ from .segmenter import DETRIS
 
 MODELS.register_module(CROG, name="crog")
 MODELS.register_module(CROGOFF, name="crogoff")
+MODELS.register_module(DARG, name="darg", aliases=("darg_grasp",))
 MODELS.register_module(DETRIS, name="detris")
 MODELS.register_module(DROG, name="drog")
 MODELS.register_module(DROGOFF, name="drogoff")
@@ -93,6 +95,11 @@ def build_drog(cfg):
 
 def build_drogoff(cfg):
     cfg.architecture = "drogoff"
+    return build_model(cfg)
+
+
+def build_darg(cfg):
+    cfg.architecture = "darg"
     return build_model(cfg)
 
 

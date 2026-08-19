@@ -147,6 +147,22 @@ class GraspValLoop(BaseLoop):
             target_offset = data["grasp_masks"].get("off")
             if target_offset is not None:
                 target_offset = target_offset.cuda(non_blocking=True)
+            target_ltrb = data["grasp_masks"].get("ltrb")
+            target_centerness = data["grasp_masks"].get("centerness")
+            target_geometry_weight = data["grasp_masks"].get("geometry_weight")
+            target_geometry_sine = data["grasp_masks"].get("geometry_sin")
+            target_geometry_cosine = data["grasp_masks"].get("geometry_cos")
+            asymmetric_targets = (
+                target_ltrb,
+                target_centerness,
+                target_geometry_weight,
+                target_geometry_sine,
+                target_geometry_cosine,
+            )
+            asymmetric_targets = tuple(
+                value.cuda(non_blocking=True) if value is not None else None
+                for value in asymmetric_targets
+            )
 
             depth_tensor = None
             if model_requires_depth(self.model):
@@ -169,6 +185,11 @@ class GraspValLoop(BaseLoop):
                 grasp_wid_mask=target_width,
                 grasp_off_mask=target_offset,
                 grasp_short_mask=target_short,
+                grasp_ltrb_mask=asymmetric_targets[0],
+                grasp_centerness_mask=asymmetric_targets[1],
+                grasp_geometry_weight=asymmetric_targets[2],
+                grasp_geometry_sin_mask=asymmetric_targets[3],
+                grasp_geometry_cos_mask=asymmetric_targets[4],
             )
             unwrapped = getattr(self.model, "module", self.model)
             result = GraspModelResult.from_legacy(

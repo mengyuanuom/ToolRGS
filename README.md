@@ -1,7 +1,7 @@
 # ToolRGS
 
 Tool-oriented Referring Grasp Synthesis with a single configuration-driven
-codebase for CROG, CROG-OFF, DROG, DROG-OFF, ETRG-A, MapleGrasp, GraspMamba, LGD,
+codebase for CROG, CROG-OFF, DROG, DROG-OFF, DARG, ETRG-A, MapleGrasp, GraspMamba, LGD,
 GGCNN-CLIP, GR-ConvNet-CLIP, and DETRIS backbones. Grasp-Tools, VCoT/Grasp-Anything,
 and OCID-VLG data use the same model-facing batch contract.
 
@@ -18,6 +18,7 @@ ToolRGS/
 │   ├── crogoff.py
 │   ├── drog.py
 │   ├── drogoff.py
+│   ├── darg.py
 │   ├── ggcnnclip.py
 │   ├── grconvnetclip.py
 │   ├── graspmamba.py
@@ -34,6 +35,12 @@ ToolRGS/
 `DROGOFF` combines DROG's DINOv2 + CLIP-adapter fusion with a two-channel
 normalized center-offset head. Offset supervision is generated from transformed
 Grasp-Tools rectangle centers and weighted by a Gaussian `off_w` map.
+
+`DARG` (DETRIS-based Asymmetric Rotated Grasping) combines a language-mask
+gate, CenterNet quality heatmap, FCOS centerness, asymmetric `left/right/top/bottom`
+regression, doubled-angle prediction, and GWD/KLD rotated-box losses. Its
+derived width, short side, and center offset retain compatibility with the
+shared evaluator. See [docs/darg.md](docs/darg.md).
 
 ## Configuration
 
@@ -76,7 +83,7 @@ for OCID-VLG because it requires real aligned depth:
 
 | Dataset config directory | Models |
 | --- | --- |
-| `config/grasp_tools/` | `crog`, `crogoff`, `drog`, `drogoff`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
+| `config/grasp_tools/` | `crog`, `crogoff`, `drog`, `drogoff`, `darg`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
 | `config/vcot/` | `crog`, `crogoff`, `drog`, `drogoff`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
 | `config/ocid_vlg/` | `crog`, `crogoff`, `drog`, `drogoff`, `etrg`, `maplegrasp`, `ggcnnclip`, `grconvnetclip`, `graspmamba`, `lgd` |
 
@@ -357,6 +364,12 @@ Single GPU:
 python train.py --config config/grasp_tools/drogoff.yaml
 ```
 
+DARG on Grasp-Tools v2:
+
+```bash
+python train.py --config config/grasp_tools/darg.yaml
+```
+
 Distributed:
 
 ```bash
@@ -376,6 +389,8 @@ python evaluate.py \
 
 Grasp-aware models return segmentation, quality, sine, cosine, and width maps.
 Offset variants append a `(dx, dy)` map normalized by `DATA.offset_r`.
+DARG predicts asymmetric four-side geometry internally and derives its public
+width, short-side, and offset maps from one consistent rotated box.
 GGCNN-CLIP and GR-ConvNet-CLIP are grasp-only baselines, so their quality map
 also occupies the segmentation slot required by the shared engine.
 
