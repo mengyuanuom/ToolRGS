@@ -20,6 +20,65 @@ from .robot import GraspCommand, LegacyTCPGraspClient, build_robot_client, seman
 from .sources import FrameSource, build_source
 
 
+GUI_THEMES = {
+    "Midnight Teal": {},
+    "Ocean Blue": {
+        "#0b1017": "#071426",
+        "#111a25": "#0d2038",
+        "#0e1721": "#0a1a2e",
+        "#172333": "#132b48",
+        "#203249": "#1b416c",
+        "#122033": "#10243b",
+        "#0c141e": "#09182a",
+        "#2a3d55": "#2b527d",
+        "#101823": "#0b1b30",
+        "#05090e": "#030b16",
+        "#203148": "#23476e",
+        "#1b2a3d": "#1d3d61",
+        "#55d6be": "#5ba8ff",
+        "#79ead5": "#8ac3ff",
+        "#71e4ce": "#79b8ff",
+        "#347e78": "#326fa9",
+    },
+    "Violet Night": {
+        "#0b1017": "#100e18",
+        "#111a25": "#1b1728",
+        "#0e1721": "#171321",
+        "#172333": "#261f38",
+        "#203249": "#382d51",
+        "#122033": "#1d172b",
+        "#0c141e": "#15111f",
+        "#2a3d55": "#493a63",
+        "#101823": "#191523",
+        "#05090e": "#09070d",
+        "#203148": "#3b3151",
+        "#1b2a3d": "#302740",
+        "#55d6be": "#b794f6",
+        "#79ead5": "#d0b8ff",
+        "#71e4ce": "#c6a8ff",
+        "#347e78": "#7656a5",
+    },
+    "Graphite Amber": {
+        "#0b1017": "#111111",
+        "#111a25": "#1b1b1b",
+        "#0e1721": "#181818",
+        "#172333": "#292929",
+        "#203249": "#393939",
+        "#122033": "#202020",
+        "#0c141e": "#161616",
+        "#2a3d55": "#484848",
+        "#101823": "#1a1a1a",
+        "#05090e": "#080808",
+        "#203148": "#3c3c3c",
+        "#1b2a3d": "#303030",
+        "#55d6be": "#f2b84b",
+        "#79ead5": "#ffd176",
+        "#71e4ce": "#ffc963",
+        "#347e78": "#946b21",
+    },
+}
+
+
 def format_grasp_prompt(value: str, template: str = "Grasp {}") -> str:
     """Turn a target name into the grasp instruction expected by the model."""
     value = str(value).strip()
@@ -94,7 +153,6 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         from PyQt5.QtWidgets import (
             QApplication,
             QCheckBox,
-            QColorDialog,
             QComboBox,
             QDoubleSpinBox,
             QFrame,
@@ -188,6 +246,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.settings_panel = None
             self.model_load_progress = None
             self.model_badge = None
+            self.theme_selector = None
             self.setWindowTitle(str(gui_cfg["title"]))
             if legacy_layout:
                 self.setMinimumSize(1600, 1000)
@@ -234,12 +293,17 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 button.setCheckable(True)
                 button.setObjectName("ModeButton")
                 mode_row.addWidget(button, 1)
-            if legacy_layout:
-                self.appearance_button = QPushButton("Appearance")
-                self.appearance_button.setMinimumHeight(40)
-                self.appearance_button.setObjectName("ModeButton")
-                self.appearance_button.clicked.connect(self._choose_accent)
-                mode_row.addWidget(self.appearance_button, 1)
+            self.theme_selector = QComboBox()
+            self.theme_selector.setObjectName("ThemeSelector")
+            self.theme_selector.setMinimumWidth(150)
+            self.theme_selector.setToolTip("Choose the GUI colour theme")
+            self.theme_selector.addItems(list(GUI_THEMES))
+            configured_theme = str(gui_cfg.get("theme", "Midnight Teal"))
+            if configured_theme not in GUI_THEMES:
+                configured_theme = "Midnight Teal"
+            self.theme_selector.setCurrentText(configured_theme)
+            self.theme_selector.currentTextChanged.connect(self._change_theme)
+            mode_row.addWidget(self.theme_selector)
             self.settings_button = QPushButton("Post-processing  ▾")
             self.settings_button.setMinimumHeight(40)
             self.settings_button.setCheckable(True)
@@ -859,9 +923,8 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             )
 
         def _apply_theme(self) -> None:
-            """Apply a restrained dark laboratory theme without changing layout."""
-            self.setStyleSheet(
-                """
+            """Apply the selected colour palette without changing layout."""
+            stylesheet = """
                 QWidget#AppRoot {
                     background: #0b1017;
                     color: #dce7f3;
@@ -1073,25 +1136,22 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 QLabel#StatusText { color: #90a3b7; padding-left: 6px; }
                 QCheckBox { color: #b7c5d4; spacing: 7px; }
                 """
+            theme_name = (
+                self.theme_selector.currentText()
+                if self.theme_selector is not None
+                else "Midnight Teal"
             )
+            for source, target in GUI_THEMES.get(theme_name, {}).items():
+                stylesheet = stylesheet.replace(source, target)
+            self.setStyleSheet(stylesheet)
 
-        def _choose_accent(self) -> None:
-            """Keep the legacy Appearance control without changing its layout."""
-            color = QColorDialog.getColor(parent=self, title="Choose accent color")
-            if not color.isValid():
+        def _change_theme(self, theme_name: str) -> None:
+            if theme_name not in GUI_THEMES:
                 return
-            accent = color.name()
-            self.setStyleSheet(
-                self.styleSheet()
-                + f"""
-                QPushButton#ModeButton:checked,
-                QPushButton#PrimaryButton,
-                QPushButton#SendButton {{
-                    background: {accent};
-                    border-color: {accent};
-                }}
-                """
-            )
+            gui_cfg["theme"] = theme_name
+            self._apply_theme()
+            if hasattr(self, "status"):
+                self.status.setText(f"GUI theme: {theme_name}")
 
         def _set_connection_badge(self, connected: bool) -> None:
             self.connection_badge.setText("CONNECTED" if connected else "OFFLINE")

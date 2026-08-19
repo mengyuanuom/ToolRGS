@@ -183,6 +183,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     },
     "gui": {
         "title": "ToolRGS Real-world Grasp Demo",
+        "theme": "Midnight Teal",
         "window_width": 1500,
         "window_height": 900,
         "camera_interval_ms": 33,

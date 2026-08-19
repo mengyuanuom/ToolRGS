@@ -313,6 +313,7 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(cfg["model"]["prompt"], "wrench")
         self.assertEqual(cfg["model"]["prompt_template"], "Grasp {}")
         self.assertEqual(cfg["detector"]["nms_threshold"], 0.5)
+        self.assertEqual(cfg["gui"]["theme"], "Midnight Teal")
 
     def test_grasp_prompt_template_expands_target_names(self):
         self.assertEqual(format_grasp_prompt("screwdriver"), "Grasp screwdriver")

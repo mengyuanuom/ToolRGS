@@ -169,6 +169,10 @@ Detection 和 Grasp 使用两套独立后处理。Detection 页的参数来自 `
 抓取语言默认采用 `Grasp {}` 模板。输入 `screwdriver` 会自动展开为
 `Grasp screwdriver`；也可以直接输入完整指令，例如 `Grasp the left wrench`。
 
+顶部主题下拉框提供四套即时生效的配色：`Midnight Teal`、`Ocean Blue`、
+`Violet Night` 和 `Graphite Amber`。本次选择只影响当前 GUI；若要指定启动默认值，
+修改 `gui.theme`。
+
 ## 5. 一键启动
 
 ### A. 纯 RealSense 演示（无 GI、绝不发送坐标）

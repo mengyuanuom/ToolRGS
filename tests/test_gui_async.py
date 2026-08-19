@@ -141,6 +141,23 @@ class AsyncGuiTest(unittest.TestCase):
 
             def open_model_popup():
                 window = next(widget for widget in app.topLevelWidgets() if widget.isVisible())
+                theme_selector = window.theme_selector
+                self.assertEqual(
+                    [
+                        theme_selector.itemText(i)
+                        for i in range(theme_selector.count())
+                    ],
+                    [
+                        "Midnight Teal",
+                        "Ocean Blue",
+                        "Violet Night",
+                        "Graphite Amber",
+                    ],
+                )
+                original_stylesheet = window.styleSheet()
+                theme_selector.setCurrentText("Ocean Blue")
+                self.assertNotEqual(window.styleSheet(), original_stylesheet)
+                self.assertIn("#5ba8ff", window.styleSheet())
                 self.assertEqual(window.settings_pages.currentIndex(), 0)
                 self.assertIn("Detection Post-processing", window.settings_button.text())
                 window.detection_score_input.setValue(0.8)
