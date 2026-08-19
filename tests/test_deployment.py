@@ -18,7 +18,7 @@ from deployment.detector import (
     _trusted_mmengine_checkpoint_context,
 )
 from deployment.grasp_policy import command_theta, command_width, mask_span_width
-from deployment.gui import build_grasp_command
+from deployment.gui import build_grasp_command, normalize_prompt_text
 from deployment.inference import (
     GraspPrediction,
     expand_binary_mask,
@@ -48,6 +48,11 @@ class DeploymentContractTest(unittest.TestCase):
     def test_image_cli_uses_bundled_sample_by_default(self):
         args = parse_args(["--image"])
         self.assertEqual(args.image, DEFAULT_SAMPLE_IMAGE)
+
+    def test_gui_prompt_normalization_rejects_whitespace(self):
+        self.assertEqual(normalize_prompt_text("  the screwdriver  "), "the screwdriver")
+        self.assertEqual(normalize_prompt_text(" \t\n "), "")
+        self.assertEqual(normalize_prompt_text(None), "")
 
     def test_deployment_check_downloads_missing_weights_by_default(self):
         self.assertTrue(parse_check_args([]).download_weights)

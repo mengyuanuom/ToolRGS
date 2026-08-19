@@ -20,6 +20,11 @@ from .robot import GraspCommand, LegacyTCPGraspClient, build_robot_client, seman
 from .sources import FrameSource, build_source
 
 
+def normalize_prompt_text(value: Any) -> str:
+    """Normalize GUI prompt input without accepting whitespace-only text."""
+    return str(value or "").strip()
+
+
 def build_grasp_command(
     prediction: GraspPrediction, robot_cfg: Dict[str, Any]
 ) -> Optional[GraspCommand]:
@@ -148,6 +153,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.inference_busy = False
             self.inference = inference
             self.active_model = str(config.get("_active_model", "model"))
+            self.prompt_missing = not bool(
+                normalize_prompt_text(config["model"].get("prompt", ""))
+            )
             self.audio_results = queue.Queue()
             self.robot_connect_results = queue.Queue()
             self.inference_results = queue.Queue()
@@ -291,6 +299,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             self.audio_button.setEnabled(audio is not None)
             self.prompt = QLineEdit(str(config["model"]["prompt"]))
             self.prompt.setPlaceholderText("Type a language instruction and press Enter")
+            self.prompt.textChanged.connect(self._prompt_changed)
             self.prompt.returnPressed.connect(self._predict_now)
             self.predict_button = QPushButton("Predict now")
             self.predict_button.setObjectName("PrimaryButton")
@@ -1056,6 +1065,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             elif (
                 self.current_mode == 1
                 and bool(gui_cfg["continuous_inference"])
+                and not self.prompt_missing
                 and now - self.last_inference_at >= interval_s
             ):
                 self._predict_now()
@@ -1100,9 +1110,21 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         def _predict_now(self) -> None:
             if self.current_frame is None or self.inference_busy:
                 return
+            prompt = normalize_prompt_text(self.prompt.text())
+            if not prompt:
+                # A modal QMessageBox here is immediately reopened by the
+                # continuous-inference timer and effectively traps the user.
+                # Keep the editor usable and wait for valid text instead.
+                self.prompt_missing = True
+                self.last_inference_at = time.monotonic()
+                self.status.setText(
+                    "Language prompt is empty — enter a target to resume inference"
+                )
+                self.statusBar().showMessage(self.status.text())
+                self.prompt.setFocus(Qt.OtherFocusReason)
+                return
             self._set_busy(True)
             frame = self.current_frame.copy()
-            prompt = self.prompt.text()
             engine = self.inference
             result_queue = self.inference_results
 
@@ -1116,10 +1138,35 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
 
             threading.Thread(target=worker, daemon=True).start()
 
+        def _prompt_changed(self, value: str) -> None:
+            has_prompt = bool(normalize_prompt_text(value))
+            was_missing = self.prompt_missing
+            self.prompt_missing = not has_prompt
+            if has_prompt and was_missing and hasattr(self, "status"):
+                self.last_inference_at = 0.0
+                self.status.setText(
+                    "Language prompt ready — inference will resume automatically"
+                )
+                self.statusBar().showMessage(self.status.text())
+            elif not has_prompt and hasattr(self, "status"):
+                self.last_inference_at = time.monotonic()
+                self.status.setText(
+                    "Language prompt is empty — enter a target to resume inference"
+                )
+                self.statusBar().showMessage(self.status.text())
+
         def _poll_inference(self) -> None:
             try:
                 ok, prompt, value, maps = self.inference_results.get_nowait()
             except queue.Empty:
+                return
+            current_prompt = normalize_prompt_text(self.prompt.text())
+            if prompt != current_prompt:
+                # The user edited/cleared the prompt while the worker was
+                # running. Never display or auto-send a stale grasp result.
+                self._set_busy(False)
+                if current_prompt:
+                    self.last_inference_at = 0.0
                 return
             if not ok:
                 self._error("Inference error", value)
