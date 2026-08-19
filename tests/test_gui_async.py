@@ -15,7 +15,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PyQt5.QtCore import QTimer
     from PyQt5.QtGui import QPalette
-    from PyQt5.QtWidgets import QApplication, QComboBox, QLabel
+    from PyQt5.QtWidgets import (
+        QApplication,
+        QComboBox,
+        QLabel,
+        QLineEdit,
+        QMessageBox,
+        QPushButton,
+    )
 except ImportError:  # pragma: no cover - PyQt is an optional deployment extra.
     QApplication = None
 
@@ -27,6 +34,7 @@ class AsyncGuiTest(unittest.TestCase):
         construction_lock = threading.Lock()
         source_reads = 0
         detector_updates = []
+        prediction_calls = 0
 
         class FakeInference:
             def __init__(self, _config):
@@ -36,6 +44,11 @@ class AsyncGuiTest(unittest.TestCase):
                     current = construction_count
                 if current > 1:
                     time.sleep(0.4)
+
+            def predict(self, _frame, _prompt):
+                nonlocal prediction_calls
+                prediction_calls += 1
+                raise AssertionError("empty prompt must not reach inference")
 
         class FakeSource:
             def read(self):
@@ -138,9 +151,34 @@ class AsyncGuiTest(unittest.TestCase):
             }
             app = QApplication.instance() or QApplication([])
             observations = {}
+            qt_errors = []
+            original_excepthook = sys.excepthook
+
+            def capture_qt_error(_error_type, value, _traceback):
+                qt_errors.append(value)
+                app.quit()
+
+            sys.excepthook = capture_qt_error
+
+            def main_window():
+                return next(
+                    widget
+                    for widget in app.topLevelWidgets()
+                    if hasattr(widget, "settings_pages")
+                )
+
+            def submit_empty_prompt():
+                window = main_window()
+                prompt = window.findChild(QLineEdit, "GraspPrompt")
+                button = window.findChild(QPushButton, "PrimaryButton")
+                prompt.setText("   ")
+                button.click()
+                observations["prompt_enabled"] = prompt.isEnabled()
+                observations["prompt_focused"] = prompt.hasFocus()
+                observations["empty_status"] = window.status.text()
 
             def open_model_popup():
-                window = next(widget for widget in app.topLevelWidgets() if widget.isVisible())
+                window = main_window()
                 theme_selector = window.theme_selector
                 self.assertEqual(
                     [
@@ -178,7 +216,7 @@ class AsyncGuiTest(unittest.TestCase):
                 observations["reads_at_open"] = source_reads
 
             def choose_second_model():
-                window = next(widget for widget in app.topLevelWidgets() if widget.isVisible())
+                window = main_window()
                 combo = window.findChild(QComboBox, "ModelSelector")
                 observations["reads_during_popup"] = source_reads
                 observations["switch_started"] = time.monotonic()
@@ -192,7 +230,7 @@ class AsyncGuiTest(unittest.TestCase):
                 )
 
             def finish():
-                window = next(widget for widget in app.topLevelWidgets() if widget.isVisible())
+                window = main_window()
                 combo = window.findChild(QComboBox, "ModelSelector")
                 badge = window.findChild(QLabel, "ModelBadge")
                 observations["enabled"] = combo.isEnabled()
@@ -200,11 +238,19 @@ class AsyncGuiTest(unittest.TestCase):
                 window.close()
                 app.quit()
 
-            QTimer.singleShot(20, open_model_popup)
-            QTimer.singleShot(150, choose_second_model)
-            QTimer.singleShot(230, heartbeat)
-            QTimer.singleShot(700, finish)
-            self.assertEqual(run_gui(config), 0)
+            QTimer.singleShot(60, submit_empty_prompt)
+            QTimer.singleShot(120, open_model_popup)
+            QTimer.singleShot(250, choose_second_model)
+            QTimer.singleShot(330, heartbeat)
+            QTimer.singleShot(800, finish)
+            try:
+                with mock.patch.object(QMessageBox, "critical") as critical:
+                    self.assertEqual(run_gui(config), 0)
+                    critical.assert_not_called()
+            finally:
+                sys.excepthook = original_excepthook
+            if qt_errors:
+                raise qt_errors[0]
 
         self.assertLess(observations["heartbeat"], 0.25)
         self.assertEqual(
@@ -215,6 +261,10 @@ class AsyncGuiTest(unittest.TestCase):
         self.assertEqual(observations["badge"], "READY")
         self.assertEqual(construction_count, 2)
         self.assertEqual(detector_updates[-1], (0.8, 0.35, 7))
+        self.assertEqual(prediction_calls, 0)
+        self.assertTrue(observations["prompt_enabled"])
+        self.assertTrue(observations["prompt_focused"])
+        self.assertIn("prompt is empty", observations["empty_status"])
 
 
 if __name__ == "__main__":
