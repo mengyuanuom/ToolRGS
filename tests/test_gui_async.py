@@ -13,15 +13,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
 try:
-    from PyQt5.QtCore import QTimer
+    from PyQt5.QtCore import Qt, QTimer
     from PyQt5.QtGui import QPalette
+    from PyQt5.QtTest import QTest
     from PyQt5.QtWidgets import (
         QApplication,
         QComboBox,
         QLabel,
         QLineEdit,
         QMessageBox,
-        QPushButton,
     )
 except ImportError:  # pragma: no cover - PyQt is an optional deployment extra.
     QApplication = None
@@ -35,6 +35,11 @@ class AsyncGuiTest(unittest.TestCase):
         source_reads = 0
         detector_updates = []
         prediction_calls = 0
+        prediction_prompts = []
+
+        class FakePrediction:
+            annotated_bgr = np.zeros((48, 64, 3), dtype=np.uint8)
+            grasps = []
 
         class FakeInference:
             def __init__(self, _config):
@@ -45,10 +50,15 @@ class AsyncGuiTest(unittest.TestCase):
                 if current > 1:
                     time.sleep(0.4)
 
-            def predict(self, _frame, _prompt):
+            def predict(self, _frame, prompt):
                 nonlocal prediction_calls
                 prediction_calls += 1
-                raise AssertionError("empty prompt must not reach inference")
+                prediction_prompts.append(prompt)
+                return FakePrediction()
+
+            @staticmethod
+            def visualization_maps(_prediction):
+                return {}
 
         class FakeSource:
             def read(self):
@@ -114,8 +124,10 @@ class AsyncGuiTest(unittest.TestCase):
 
             self.assertEqual(
                 format_grasp_prompt("screwdriver", "Grasp {}"),
-                "Grasp screwdriver",
+                "screwdriver",
             )
+            self.assertEqual(format_grasp_prompt(""), "")
+            self.assertEqual(format_grasp_prompt("Grasp Grasp"), "Grasp Grasp")
 
             config = {
                 "_repo_root": ".",
@@ -145,8 +157,8 @@ class AsyncGuiTest(unittest.TestCase):
                     "window_width": 1200,
                     "window_height": 760,
                     "camera_interval_ms": 20,
-                    "inference_interval_ms": 1000,
-                    "continuous_inference": False,
+                    "inference_interval_ms": 40,
+                    "continuous_inference": True,
                 },
             }
             app = QApplication.instance() or QApplication([])
@@ -170,12 +182,14 @@ class AsyncGuiTest(unittest.TestCase):
             def submit_empty_prompt():
                 window = main_window()
                 prompt = window.findChild(QLineEdit, "GraspPrompt")
-                button = window.findChild(QPushButton, "PrimaryButton")
-                prompt.setText("   ")
-                button.click()
+                prompt.setText("Grasp Grasp")
+                prompt.selectAll()
+                QTest.keyClick(prompt, Qt.Key_Delete)
+                QTest.keyClick(prompt, Qt.Key_Return)
                 observations["prompt_enabled"] = prompt.isEnabled()
-                observations["prompt_focused"] = prompt.hasFocus()
+                observations["prompt_deleted_to_empty"] = prompt.text()
                 observations["empty_status"] = window.status.text()
+                observations["calls_after_empty"] = prediction_calls
 
             def open_model_popup():
                 window = main_window()
@@ -215,6 +229,22 @@ class AsyncGuiTest(unittest.TestCase):
                 combo.showPopup()
                 observations["reads_at_open"] = source_reads
 
+            def edit_prompt_with_keyboard():
+                window = main_window()
+                prompt = window.findChild(QLineEdit, "GraspPrompt")
+                prompt.setText("screwdriver")
+                prompt.setFocus(Qt.OtherFocusReason)
+                prompt.setCursorPosition(len(prompt.text()))
+                QTest.keyClick(prompt, Qt.Key_Backspace)
+                prompt.setSelection(0, 1)
+                QTest.keyClick(prompt, Qt.Key_Delete)
+                observations["prompt_after_delete"] = prompt.text()
+
+            def capture_stable_prompt():
+                window = main_window()
+                prompt = window.findChild(QLineEdit, "GraspPrompt")
+                observations["stable_prompt"] = prompt.text()
+
             def choose_second_model():
                 window = main_window()
                 combo = window.findChild(QComboBox, "ModelSelector")
@@ -240,6 +270,8 @@ class AsyncGuiTest(unittest.TestCase):
 
             QTimer.singleShot(60, submit_empty_prompt)
             QTimer.singleShot(120, open_model_popup)
+            QTimer.singleShot(155, edit_prompt_with_keyboard)
+            QTimer.singleShot(225, capture_stable_prompt)
             QTimer.singleShot(250, choose_second_model)
             QTimer.singleShot(330, heartbeat)
             QTimer.singleShot(800, finish)
@@ -261,9 +293,13 @@ class AsyncGuiTest(unittest.TestCase):
         self.assertEqual(observations["badge"], "READY")
         self.assertEqual(construction_count, 2)
         self.assertEqual(detector_updates[-1], (0.8, 0.35, 7))
-        self.assertEqual(prediction_calls, 0)
+        self.assertEqual(observations["calls_after_empty"], 0)
+        self.assertEqual(observations["prompt_deleted_to_empty"], "")
+        self.assertGreater(prediction_calls, 0)
+        self.assertNotIn("Grasp Grasp", prediction_prompts)
+        self.assertEqual(observations["prompt_after_delete"], "crewdrive")
+        self.assertEqual(observations["stable_prompt"], "crewdrive")
         self.assertTrue(observations["prompt_enabled"])
-        self.assertTrue(observations["prompt_focused"])
         self.assertIn("prompt is empty", observations["empty_status"])
 
 

@@ -3,8 +3,7 @@ model:
   config: config/grasp_tools/drogoff.yaml
   checkpoint: exp/grasp_tools/drogoff_grasp_tools/best_jindex_model.pth
   device: cuda:0
-  prompt: Grasp screwdriver
-  prompt_template: "Grasp {}"
+  prompt: screwdriver
 
 camera:
   type: gstreamer

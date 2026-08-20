@@ -54,6 +54,8 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(normalize_prompt_text("  the screwdriver  "), "the screwdriver")
         self.assertEqual(normalize_prompt_text(" \t\n "), "")
         self.assertEqual(normalize_prompt_text(None), "")
+        self.assertEqual(format_grasp_prompt("Grasp"), "Grasp")
+        self.assertEqual(format_grasp_prompt(""), "")
 
     def test_deployment_check_downloads_missing_weights_by_default(self):
         self.assertTrue(parse_check_args([]).download_weights)
@@ -316,21 +318,20 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(cfg["robot"]["width_policy"]["type"], "model")
         self.assertFalse(cfg["gelsight"]["enabled"])
         self.assertEqual(cfg["model"]["prompt"], "wrench")
-        self.assertEqual(cfg["model"]["prompt_template"], "Grasp {}")
+        self.assertNotIn("prompt_template", cfg["model"])
         self.assertEqual(cfg["detector"]["nms_threshold"], 0.5)
         self.assertEqual(cfg["gui"]["theme"], "Midnight Teal")
 
-    def test_grasp_prompt_template_expands_target_names(self):
-        self.assertEqual(format_grasp_prompt("screwdriver"), "Grasp screwdriver")
+    def test_grasp_prompt_is_free_form(self):
+        self.assertEqual(format_grasp_prompt("screwdriver"), "screwdriver")
         self.assertEqual(
-            format_grasp_prompt("the left wrench"), "Grasp the left wrench"
+            format_grasp_prompt("the left wrench"), "the left wrench"
         )
         self.assertEqual(
             format_grasp_prompt("Grasp the left wrench"),
             "Grasp the left wrench",
         )
-        with self.assertRaises(ValueError):
-            format_grasp_prompt("", "Grasp {}")
+        self.assertEqual(format_grasp_prompt("", "Grasp {}"), "")
 
     def test_detector_runtime_controls_update_mmdet_test_cfg(self):
         adapter = MMDetectionAdapter.__new__(MMDetectionAdapter)
@@ -406,8 +407,8 @@ class DeploymentContractTest(unittest.TestCase):
         )
         self.assertTrue(cfg["model"]["use_mask_postprocessing"])
         self.assertTrue(cfg["model"]["filter_grasps_by_mask"])
-        self.assertEqual(cfg["model"]["prompt_template"], "Grasp {}")
-        self.assertEqual(cfg["model"]["prompt"], "Grasp screwdriver")
+        self.assertNotIn("prompt_template", cfg["model"])
+        self.assertEqual(cfg["model"]["prompt"], "screwdriver")
         self.assertEqual(cfg["model"]["mask_expand_px"], 0)
         crog = activate_model_profile(
             cfg, "crog-aligned-grasptools-v2-original300"

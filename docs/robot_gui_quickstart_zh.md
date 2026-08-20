@@ -166,8 +166,8 @@ Detection 和 Grasp 使用两套独立后处理。Detection 页的参数来自 `
 保留二值分割结果，便于比较与调试。修改控件后下一次预测立即使用新参数，不会
 写回 YAML。
 
-抓取语言默认采用 `Grasp {}` 模板。输入 `screwdriver` 会自动展开为
-`Grasp screwdriver`；也可以直接输入完整指令，例如 `Grasp the left wrench`。
+抓取语言框采用自由输入：输入内容只去除首尾空格，然后原样交给模型，不会自动
+添加 `Grasp` 或其他模板。空输入按回车不会报错，只会暂停连续推理。
 
 顶部主题下拉框提供四套即时生效的配色：`Midnight Teal`、`Ocean Blue`、
 `Violet Night` 和 `Graphite Amber`。本次选择只影响当前 GUI；若要指定启动默认值，
@@ -178,7 +178,7 @@ Detection 和 Grasp 使用两套独立后处理。Detection 页的参数来自 `
 ### A. 纯 RealSense 演示（无 GI、绝不发送坐标）
 
 ```bash
-bash tools/gui_quickstart.sh demo --prompt "Grasp screwdriver"
+bash tools/gui_quickstart.sh demo --prompt "screwdriver"
 ```
 
 该入口会强制设置 `robot.enabled=false`，也不接受 `--allow-robot`，适合调模型、
@@ -187,7 +187,7 @@ bash tools/gui_quickstart.sh demo --prompt "Grasp screwdriver"
 ### B. GI 画面安全预览（不发送坐标）
 
 ```bash
-bash tools/gui_quickstart.sh gi-preview --prompt "Grasp screwdriver"
+bash tools/gui_quickstart.sh gi-preview --prompt "screwdriver"
 ```
 
 它读取 `fooA`，但没有 `--allow-robot`，因此不会连接机械臂 TCP。正式实验前先用
@@ -214,7 +214,7 @@ python test_socket_to_ros1.py
 
 ```bash
 cd /home/raico-hri/projects/ToolRGS
-bash tools/gui_quickstart.sh robot --prompt "Grasp screwdriver"
+bash tools/gui_quickstart.sh robot --prompt "screwdriver"
 ```
 
 该命令等价于：
@@ -223,7 +223,7 @@ bash tools/gui_quickstart.sh robot --prompt "Grasp screwdriver"
 python deploy_gui_gi.py \
   --config config/deployment/lab.yaml \
   --allow-robot \
-  --prompt "Grasp screwdriver"
+  --prompt "screwdriver"
 ```
 
 实验室 Docker 使用 `network_mode=host`，所以正式配置连接的是：
@@ -255,7 +255,7 @@ robot:
 python deploy_gui.py \
   --config config/deployment/lab.yaml \
   --image \
-  --prompt "Grasp screwdriver"
+  --prompt "screwdriver"
 ```
 
 使用自己的图片：
@@ -264,7 +264,7 @@ python deploy_gui.py \
 python deploy_gui.py \
   --config config/deployment/lab.yaml \
   --image /absolute/path/to/test.jpg \
-  --prompt "Grasp screwdriver"
+  --prompt "screwdriver"
 ```
 
 单图模式自动关闭连续推理；进入 **Grasping Points Detection** 页面后点击
