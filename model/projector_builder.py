@@ -22,8 +22,12 @@ def build_projector(cfg, with_offset=False) -> nn.Module:
             "kernel_size": 3,
         }
         if with_offset:
-            projector_kwargs["with_short_side"] = bool(
-                getattr(cfg, "predict_grasp_short_side", False)
+            projector_kwargs.update(
+                with_short_side=bool(
+                    getattr(cfg, "predict_grasp_short_side", False)
+                ),
+                offset_head=getattr(cfg, "offset_head", "legacy"),
+                offset_hidden_dim=int(getattr(cfg, "offset_hidden_dim", 64)),
             )
         projector = projector_cls(**projector_kwargs)
     elif proj_type == "film" and not with_offset:

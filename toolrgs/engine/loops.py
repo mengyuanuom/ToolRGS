@@ -71,6 +71,7 @@ class GraspTrainLoop(BaseLoop):
             "ltrb": AverageMeter("Loss_ltrb", ":2.4f"),
             "gwd": AverageMeter("Loss_gwd", ":2.4f"),
             "kld": AverageMeter("Loss_kld", ":2.4f"),
+            "alignment": AverageMeter("Loss_align", ":2.4f"),
             "iou": AverageMeter("IoU", ":2.2f"),
             "precision": AverageMeter("Prec@50", ":2.2f"),
         }
@@ -227,6 +228,9 @@ class GraspTrainLoop(BaseLoop):
             meters["ltrb"].update(_scalar(losses.get("m_ltrb", 0.0)), batch_size)
             meters["gwd"].update(_scalar(losses.get("m_gwd", 0.0)), batch_size)
             meters["kld"].update(_scalar(losses.get("m_kld", 0.0)), batch_size)
+            meters["alignment"].update(
+                _scalar(losses.get("m_align", 0.0)), batch_size
+            )
             meters["iou"].update(iou.item(), batch_size)
             meters["precision"].update(precision.item(), batch_size)
             meters["lr"].update(self.scheduler.get_last_lr()[-1])

@@ -1,0 +1,120 @@
+# CUDA profile matching the NPU Native V3 LoRA rank-24 ablation.
+# batch_size is explicitly global in this file: 128 / 8 GPUs = 16 per GPU.
+DATA:
+  dataset: realvlg
+  root_path: ./datasets/GraspNet_VLG
+  with_depth: False
+  train_split: train
+  val_split: seen
+  offset_r: 20
+  offset_sigma:
+  offset_version: v2
+  offset_target_stride: 4
+  offset_weight_floor: 0.25
+  dataset_args:
+    camera_mode: kinect
+    train_fraction: 1.0
+    train_seed: 0
+    train_manifest:
+    eval_frame: "0000"
+    width_factor: 100.0
+
+MODEL:
+  architecture: drogoff
+  native_variant: v3
+  offset_head: lightweight
+  offset_hidden_dim: 64
+
+TRAIN:
+  version: multiple
+  visual_adapter_dim: 128
+  visual_adapter_layer: []
+  txt_adapter_dim: 64
+  txtual_adapter_layer: []
+  clip_pretrain: pretrain/ViT-B-16.pt
+  dino_pretrain: pretrain/dinov2_vitb14_reg4_pretrain.pth
+  dino_layers: 12
+  output_dinov2: [4, 8]
+  dino_name: dino-base
+  model_name: CLIP-b-16
+  input_size: 448
+  word_len: 77
+  word_dim: 512
+  ladder_dim: 128
+  nhead: 8
+  multi_stage: 3
+  stride: [1, 1, 1]
+  vis_dim: 512
+  fpn_in: [768, 768, 768]
+  fpn_out: [256, 512, 1024]
+
+  # Four fusion stages; LoRA is injected into all 12 transformer blocks.
+  native_visual_layers: [2, 5, 8, 11]
+  native_text_layers: [2, 5, 8, 11]
+  native_visual_lora_layers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  native_text_lora_layers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  native_visual_dim: 768
+  native_text_adapter_dim: 64
+  native_cross_dim: 256
+  native_cross_heads: 8
+  native_adapter_dropout: 0.05
+  native_lora_rank: 24
+  native_lora_alpha: 48.0
+  native_lora_dropout: 0.05
+  native_pyramid_dim: 192
+  native_alignment_dim: 256
+  native_alignment_loss_weight: 0.2
+  native_input_is_clip_normalized: True
+
+  sync_bn: False
+  amp: False
+  optimizer: adam
+  optimizer_foreach: False
+  pin_memory: True
+  projector: dynamic
+  num_layers: 3
+  num_head: 8
+  dim_ffn: 512
+  dropout: 0.1
+  intermediate: False
+  workers: 4
+  workers_val: 2
+  epochs: 24
+  milestones: [20]
+  start_epoch: 0
+  batch_size: 128
+  batch_size_val: 32
+  batch_size_is_global: True
+  base_lr: 0.0001
+  lr_decay: 0.1
+  lr_multi: 1
+  weight_decay: 0.0
+  max_norm: 1.0
+  manual_seed: 0
+  print_freq: 100
+  exp_name: drogoff_native_v3_lora_r24_12l_v2cap_realvlg_full_e24_8gpu_bs128
+  offset_loss_weight: 0.1
+  output_folder: exp/realvlg
+  save_freq: 0
+  weight:
+  resume:
+  evaluate: True
+  use_grasp_masks: True
+
+Distributed:
+  dist_url: env://
+  dist_backend: nccl
+  multiprocessing_distributed: True
+  world_size: 1
+  rank: 0
+
+TEST:
+  test_split: seen
+  val_loop: realvlg_val
+  evaluation_protocol: realvlg_official
+  grasp_topk: [1]
+  mask_threshold: 0.35
+  realvlg_width_factor: 100.0
+  offset_decode_mode: grasp_relative
+  offset_resample_geometry: False
+  visualize: False

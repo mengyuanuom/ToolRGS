@@ -20,6 +20,8 @@ from toolrgs.datasets import build_dataset
 from toolrgs.engine.hooks import HookList, LoopState
 from toolrgs.engine.loops import GraspTrainLoop  # noqa: F401 - registers loop
 from toolrgs.engine.optim import build_optim_wrapper, build_param_scheduler
+from toolrgs.engine.realvlg_val_loop import RealVLGValLoop  # noqa: F401 - registers loop
+from toolrgs.engine.samplers import DistributedEvalSampler
 from toolrgs.engine.val_loop import GraspValLoop  # noqa: F401 - registers loop
 from toolrgs.models.base import model_requires_depth
 from toolrgs.registry import LOOPS, RUNNERS
@@ -116,6 +118,25 @@ class CUDAGraspRunner:
         cfg.distributed = self.distributed
         self.is_main = cfg.rank == 0
 
+    def _configure_batch_sizes(self):
+        """Keep legacy per-GPU configs while allowing explicit global batches."""
+        cfg = self.cfg
+        if not bool(getattr(cfg, "batch_size_is_global", False)):
+            self.train_batch_size_per_process = int(cfg.batch_size)
+            self.val_batch_size_per_process = int(cfg.batch_size_val)
+            return
+        for field in ("batch_size", "batch_size_val"):
+            value = int(getattr(cfg, field))
+            if value <= 0 or value % int(cfg.world_size):
+                raise ValueError(
+                    f"Global {field}={value} must be positive and divisible by "
+                    f"world_size={cfg.world_size}"
+                )
+        self.train_batch_size_per_process = int(cfg.batch_size) // int(cfg.world_size)
+        self.val_batch_size_per_process = int(cfg.batch_size_val) // int(cfg.world_size)
+        cfg.global_batch_size = int(cfg.batch_size)
+        cfg.global_batch_size_val = int(cfg.batch_size_val)
+
     def _load_initial_weight(self, filename):
         checkpoint = torch.load(filename, map_location="cpu")
         state = (
@@ -153,7 +174,14 @@ class CUDAGraspRunner:
         cfg = self.cfg
         sampler = None
         if self.distributed:
-            sampler = DistributedSampler(dataset, shuffle=bool(train))
+            if train:
+                sampler = DistributedSampler(dataset, shuffle=True)
+            else:
+                sampler = DistributedEvalSampler(
+                    dataset,
+                    num_replicas=cfg.world_size,
+                    rank=cfg.rank,
+                )
         workers = int(cfg.workers if train else cfg.workers_val)
         init_fn = None
         if train and workers:
@@ -165,7 +193,11 @@ class CUDAGraspRunner:
             )
         loader = DataLoader(
             dataset,
-            batch_size=int(cfg.batch_size if train else cfg.batch_size_val),
+            batch_size=(
+                self.train_batch_size_per_process
+                if train
+                else self.val_batch_size_per_process
+            ),
             shuffle=bool(train and sampler is None),
             sampler=sampler,
             num_workers=workers,
@@ -184,6 +216,7 @@ class CUDAGraspRunner:
             raise RuntimeError("ToolRGS training requires a CUDA GPU")
         cv2.setNumThreads(0)
         self._setup_distributed()
+        self._configure_batch_sizes()
         cfg.manual_seed = init_random_seed(
             cfg.manual_seed,
             device=self.device,
@@ -235,11 +268,13 @@ class CUDAGraspRunner:
         optimizer_name = str(getattr(cfg, "optimizer", "adam")).lower()
         if optimizer_name != "adam":
             raise ValueError(f"Unsupported optimizer {optimizer_name!r}; expected 'adam'")
-        self.optimizer = torch.optim.Adam(
-            parameter_groups,
-            lr=cfg.base_lr,
-            weight_decay=cfg.weight_decay,
-        )
+        optimizer_kwargs = {
+            "lr": cfg.base_lr,
+            "weight_decay": cfg.weight_decay,
+        }
+        if hasattr(cfg, "optimizer_foreach"):
+            optimizer_kwargs["foreach"] = bool(cfg.optimizer_foreach)
+        self.optimizer = torch.optim.Adam(parameter_groups, **optimizer_kwargs)
         self.scaler = torch.cuda.amp.GradScaler(
             enabled=bool(getattr(cfg, "amp", True))
         )

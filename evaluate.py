@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 import utils.config as config
 from model import build_model
-from toolrgs.engine import GraspValLoop  # imports and registers the default loop
+from toolrgs.engine import GraspValLoop, RealVLGValLoop  # register validation loops
 from toolrgs.registry import LOOPS
 from utils.data_builder import build_dataset
 from utils.misc import setup_logger
@@ -20,12 +20,18 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate ToolRGS")
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--split", help="Evaluation split override")
     parser.add_argument("--opts", nargs=argparse.REMAINDER)
     cli = parser.parse_args()
     cfg = config.load_cfg_from_cfg_file(cli.config)
     if cli.opts:
         cfg = config.merge_cfg_from_list(cfg, cli.opts)
     cfg.resume = cli.checkpoint
+    cfg.eval_split = cli.split or getattr(
+        cfg, "test_split", getattr(cfg, "val_split", None)
+    )
+    if cfg.eval_split is None:
+        raise ValueError("TEST.test_split or DATA.val_split must be configured")
     return cfg
 
 
@@ -58,7 +64,7 @@ def main():
     load_state(model, checkpoint.get("state_dict", checkpoint))
 
     needs_offset = args.architecture.lower() in {"crogoff", "drogoff"}
-    dataset = build_dataset(args, args.val_split, with_offset=needs_offset)
+    dataset = build_dataset(args, args.eval_split, with_offset=needs_offset)
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size_val,
@@ -75,7 +81,16 @@ def main():
         hooks=getattr(args, "val_hooks", None),
     )
     iou, precision, j_index = val_loop.run_epoch(getattr(args, "start_epoch", 0))
-    logger.info("Final IoU={}, precision={}, J={}", iou, precision, j_index)
+    protocol = str(getattr(args, "evaluation_protocol", "")).lower()
+    if protocol in {"realvlg", "realvlg_source", "realvlg_official"}:
+        logger.info(
+            "Final RealVLG F_beta={}, metrics={}, gAcc={}",
+            iou,
+            precision,
+            j_index[0] if j_index else 0.0,
+        )
+    else:
+        logger.info("Final IoU={}, precision={}, J={}", iou, precision, j_index)
 
 
 if __name__ == "__main__":

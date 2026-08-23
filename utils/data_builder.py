@@ -8,6 +8,7 @@ from toolrgs.registry import DATASETS, normalise_component_name
 from utils.grasp_tool_dataset import GraspToolDataset
 from utils.asymmetric_grasp_dataset import AsymmetricGraspDataset
 from utils.ocid_vlg_dataset import OCIDVLGDataset
+from utils.realvlg_dataset import RealVLGDataset
 from utils.vcot_dataset import VCoTDataset
 
 
@@ -20,6 +21,11 @@ DATASETS.register_module(
     OCIDVLGDataset,
     name="ocid_vlg",
     aliases=("ocidvlg",),
+)
+DATASETS.register_module(
+    RealVLGDataset,
+    name="realvlg",
+    aliases=("realvlg_11b", "graspnet_vlg"),
 )
 DATASETS.register_module(VCoTDataset, name="vcot", aliases=("vcot_grasp",))
 
@@ -61,6 +67,11 @@ def build_dataset(cfg, split, with_offset=False):
         ),
         offset_radius=getattr(cfg, "offset_r", 20.0),
         offset_sigma=getattr(cfg, "offset_sigma", None),
+        offset_version=getattr(cfg, "offset_version", "v1"),
+        offset_target_stride=int(getattr(cfg, "offset_target_stride", 4)),
+        offset_weight_floor=float(
+            getattr(cfg, "offset_weight_floor", 0.25)
+        ),
         dynamic_train_prompts=getattr(cfg, "dynamic_train_prompts", True),
         dynamic_prompt_seed=getattr(cfg, "dynamic_prompt_seed", 2025),
         split_root=getattr(cfg, "split_root", None),

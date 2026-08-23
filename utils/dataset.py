@@ -331,6 +331,142 @@ def make_dense_offset_with_radius_np(
         off_w[0, y0:y1, x0:x1][take] = w_loc[take]
 
     return off, off_w
+
+
+def grasp_quality_owner_map_np(
+    grasp_rectangles: np.ndarray,
+    img_size_hw,
+):
+    """Assign every dense quality-region pixel to one grasp instance.
+
+    The region matches GraspTransforms.generate_masks: half of the grasp long
+    side and the full short side. Overlaps use the nearest normalized center,
+    so quality/angle/size/offset targets have one deterministic owner.
+    """
+    height, width = (int(value) for value in img_size_hw)
+    rectangles = np.asarray(grasp_rectangles, dtype=np.float32).reshape(-1, 6)
+    owner = np.full((height, width), -1, dtype=np.int32)
+    owner_distance = np.full((height, width), np.inf, dtype=np.float32)
+    for index, rectangle in enumerate(rectangles):
+        center_x, center_y, long_side, short_side, theta = rectangle[:5]
+        quality_rectangle = (
+            (float(center_x), float(center_y)),
+            (float(long_side) / 2.0, float(short_side)),
+            -(float(theta) + 180.0),
+        )
+        box = np.intp(cv2.boxPoints(quality_rectangle))
+        columns, rows = polygon(box[:, 0], box[:, 1])
+        valid = (
+            (columns >= 0)
+            & (columns < width)
+            & (rows >= 0)
+            & (rows < height)
+        )
+        columns, rows = columns[valid], rows[valid]
+        if not len(columns):
+            continue
+        scale2 = max(
+            1.0,
+            (float(long_side) * 0.25) ** 2
+            + (float(short_side) * 0.5) ** 2,
+        )
+        normalized_distance = (
+            (columns.astype(np.float32) - float(center_x)) ** 2
+            + (rows.astype(np.float32) - float(center_y)) ** 2
+        ) / scale2
+        take = normalized_distance < owner_distance[rows, columns]
+        if not np.any(take):
+            continue
+        selected_rows, selected_columns = rows[take], columns[take]
+        owner_distance[selected_rows, selected_columns] = normalized_distance[take]
+        owner[selected_rows, selected_columns] = index
+    return owner, owner_distance
+
+
+def make_dense_grasp_region_offset_np(
+    grasp_rectangles: np.ndarray,
+    owner_map: np.ndarray,
+    weight_floor: float = 0.25,
+):
+    """Build Offset V2 targets over the complete dense quality region."""
+    rectangles = np.asarray(grasp_rectangles, dtype=np.float32).reshape(-1, 6)
+    owner = np.asarray(owner_map, dtype=np.int32)
+    if owner.ndim != 2:
+        raise ValueError(f"owner_map must be 2-D, got {owner.shape}")
+    if not 0.0 <= float(weight_floor) <= 1.0:
+        raise ValueError("weight_floor must be between 0 and 1")
+    height, width = owner.shape
+    offset = np.zeros((2, height, width), dtype=np.float32)
+    weight = np.zeros((1, height, width), dtype=np.float32)
+    rows, columns = np.nonzero(owner >= 0)
+    if not len(rows):
+        return offset, weight
+    indices = owner[rows, columns]
+    assigned = rectangles[indices]
+    scale = np.sqrt(
+        np.square(assigned[:, 2] * 0.25)
+        + np.square(assigned[:, 3] * 0.5)
+    ).clip(min=1.0)
+    delta_x = (assigned[:, 0] - columns.astype(np.float32)) / scale
+    delta_y = (assigned[:, 1] - rows.astype(np.float32)) / scale
+    offset[0, rows, columns] = np.clip(delta_x, -1.0, 1.0)
+    offset[1, rows, columns] = np.clip(delta_y, -1.0, 1.0)
+    normalized_distance2 = np.square(delta_x) + np.square(delta_y)
+    gaussian_weight = np.exp(-2.0 * normalized_distance2)
+    weight[0, rows, columns] = (
+        float(weight_floor)
+        + (1.0 - float(weight_floor)) * gaussian_weight
+    ).astype(np.float32)
+    return offset, weight
+
+
+def make_grasp_offset_targets_np(
+    grasp_rectangles: np.ndarray,
+    img_size_hw,
+    offset_version="v1",
+    offset_radius=20.0,
+    offset_sigma=None,
+    target_stride=4,
+    weight_floor=0.25,
+):
+    """Build the selected DROG-OFF target contract for any grasp dataset.
+
+    Offset V1 uses a fixed-radius disk at input resolution. Offset V2 uses the
+    complete dense quality region at ``input / target_stride`` and normalizes
+    displacement by the assigned grasp's quality-region half diagonal.
+    """
+    rectangles = np.asarray(grasp_rectangles, dtype=np.float32).reshape(-1, 6)
+    height, width = (int(value) for value in img_size_hw)
+    version = str(offset_version).strip().lower()
+    if version == "v1":
+        return make_dense_offset_with_radius_np(
+            centers_xy=rectangles[:, :2],
+            img_size_hw=(height, width),
+            r_pix=offset_radius,
+            use_gaussian=True,
+            sigma=offset_sigma,
+        )
+    if version != "v2":
+        raise ValueError(
+            f"offset_version must be 'v1' or 'v2', got {offset_version!r}"
+        )
+    stride = int(target_stride)
+    if stride <= 0:
+        raise ValueError("offset_target_stride must be positive")
+    target_h = max(1, height // stride)
+    target_w = max(1, width // stride)
+    scaled = rectangles.copy()
+    scaled[:, 0] *= target_w / float(width)
+    scaled[:, 1] *= target_h / float(height)
+    scaled[:, 2] *= target_w / float(width)
+    scaled[:, 3] *= target_h / float(height)
+    owner_map, _ = grasp_quality_owner_map_np(scaled, (target_h, target_w))
+    return make_dense_grasp_region_offset_np(
+        scaled,
+        owner_map,
+        weight_floor=weight_floor,
+    )
+
     
 info = {
     'refcoco': {
@@ -565,10 +701,11 @@ class RefDataset(Dataset):
 class GraspTransforms:
     # Class for converting cv2-like rectangle formats and generate grasp-quality-angle-width masks
 
-    def __init__(self, width_factor=400, width=416, height=416):
+    def __init__(self, width_factor=400, width=416, height=416, predict_short_side=False):
         self.width_factor = width_factor
         self.width = width 
         self.height = height
+        self.predict_short_side = bool(predict_short_side)
 
     def __call__(self, grasp_rectangles, target):
         # grasp_rectangles: (M, 4, 2)
@@ -598,13 +735,37 @@ class GraspTransforms:
             boxes.append(box)
         return boxes
 
-    def generate_masks(self, grasp_rectangles):
+    def generate_masks(
+        self,
+        grasp_rectangles,
+        size_rectangles=None,
+        consistent_owner=False,
+    ):
+        grasp_rectangles = np.asarray(grasp_rectangles, dtype=np.float32).reshape(-1, 6)
+        if size_rectangles is None:
+            size_rectangles = grasp_rectangles
+        size_rectangles = np.asarray(size_rectangles, dtype=np.float32).reshape(-1, 6)
+        if len(size_rectangles) != len(grasp_rectangles):
+            raise ValueError(
+                "size_rectangles must contain one entry per grasp rectangle: "
+                f"{len(size_rectangles)} vs {len(grasp_rectangles)}"
+            )
         pos_out = np.zeros((self.height, self.width))
         ang_out = np.zeros((self.height, self.width))
         wid_out = np.zeros((self.height, self.width))
-        short_out = np.zeros((self.height, self.width))
-        for rect in grasp_rectangles:
+        short_out = (
+            np.zeros((self.height, self.width))
+            if self.predict_short_side else None
+        )
+        owner_map = None
+        if consistent_owner:
+            owner_map, _ = grasp_quality_owner_map_np(
+                grasp_rectangles, (self.height, self.width)
+            )
+        for index, (rect, size_rect) in enumerate(zip(grasp_rectangles, size_rectangles)):
             center_x, center_y, w_rect, h_rect, theta = rect[:5]
+            target_width = size_rect[2]
+            target_short = size_rect[3]
             
             # Get 4 corners of rotated rect
             # Convert from our angle represent to opencv's
@@ -617,27 +778,40 @@ class GraspTransforms:
                 (cc >= 0) & (cc < self.height)
             )
             rr, cc = rr[valid], cc[valid]
+            if owner_map is not None:
+                owned = owner_map[cc, rr] == index
+                rr, cc = rr[owned], cc[owned]
             pos_out[cc, rr] = 1.0
             if theta < 0:
                 ang_out[cc, rr] = int(theta + 180)
             else:
                 ang_out[cc, rr] = int(theta)
             # Adopt width normalize accoding to class 
-            wid_out[cc, rr] = np.clip(w_rect, 0.0, self.width_factor) / self.width_factor
-            short_out[cc, rr] = np.clip(h_rect, 0.0, self.width_factor) / self.width_factor
+            wid_out[cc, rr] = np.clip(
+                target_width, 0.0, self.width_factor
+            ) / self.width_factor
+            if short_out is not None:
+                short_out[cc, rr] = np.clip(
+                    target_short, 0.0, self.width_factor
+                ) / self.width_factor
         
         qua_out = (gaussian(pos_out, 3, preserve_range=True) * 255).astype(np.uint8)
         pos_out = (pos_out * 255).astype(np.uint8)
         ang_out = ang_out.astype(np.uint8)
         wid_out = (gaussian(wid_out, 3, preserve_range=True) * 255).astype(np.uint8)
-        short_out = (gaussian(short_out, 3, preserve_range=True) * 255).astype(np.uint8)
+        if short_out is not None:
+            short_out = (
+                gaussian(short_out, 3, preserve_range=True) * 255
+            ).astype(np.uint8)
         
         
-        return {'pos': pos_out, 
-                'qua': qua_out, 
-                'ang': ang_out, 
-                'wid': wid_out,
-                'short': short_out}
+        masks = {'pos': pos_out,
+                 'qua': qua_out,
+                 'ang': ang_out,
+                 'wid': wid_out}
+        if short_out is not None:
+            masks['short'] = short_out
+        return masks
 
 
 class OCIDVLGDataset(Dataset):

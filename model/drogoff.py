@@ -4,11 +4,18 @@ import torch
 import torch.nn.functional as F
 
 from .drog import DROG
+from .native_adapter import (
+    NativeDinoClipFusion,
+    NativeFeaturePyramid,
+    inject_clip_lora,
+    inject_dino_lora,
+    patch_text_alignment_loss,
+)
 from .projector_builder import build_projector
 
 
 class DROGOFF(DROG):
-    """Combine DROG's DINOv2/CLIP fusion with CROG-OFF-style offsets."""
+    """DINOv2/CLIP grasp model with optional Native V3 LoRA adaptation."""
 
     supports_offset = True
     grasp_size_loss_activation = "sigmoid"
@@ -25,18 +32,103 @@ class DROGOFF(DROG):
         self.short_side_loss_weight = float(
             getattr(cfg, "short_side_loss_weight", 1.0)
         )
+        self.native_variant = str(getattr(cfg, "native_variant", "")).strip().lower()
+        self.alignment_loss_weight = 0.0
+        if self.native_variant:
+            if self.native_variant != "v3":
+                raise ValueError(
+                    "The CUDA ToolRGS port currently supports native_variant='v3'; "
+                    f"got {self.native_variant!r}"
+                )
+            self._enable_native_v3(cfg)
+
+    def _enable_native_v3(self, cfg):
+        if list(getattr(cfg, "visual_adapter_layer", [])):
+            raise ValueError("Native V3 requires visual_adapter_layer: []")
+        if list(getattr(cfg, "txtual_adapter_layer", [])):
+            raise ValueError("Native V3 requires txtual_adapter_layer: []")
+
+        visual_layers = tuple(int(value) for value in cfg.native_visual_layers)
+        text_layers = tuple(int(value) for value in cfg.native_text_layers)
+        visual_lora_layers = tuple(
+            int(value)
+            for value in getattr(cfg, "native_visual_lora_layers", visual_layers)
+        )
+        text_lora_layers = tuple(
+            int(value)
+            for value in getattr(cfg, "native_text_lora_layers", text_layers)
+        )
+        for name, layers in (
+            ("native_visual_layers", visual_layers),
+            ("native_text_layers", text_layers),
+            ("native_visual_lora_layers", visual_lora_layers),
+            ("native_text_lora_layers", text_lora_layers),
+        ):
+            if layers != tuple(sorted(set(layers))):
+                raise ValueError(f"{name} must be sorted and unique")
+
+        rank = int(getattr(cfg, "native_lora_rank", 8))
+        alpha = float(getattr(cfg, "native_lora_alpha", rank * 2))
+        dropout = float(getattr(cfg, "native_lora_dropout", 0.05))
+        inject_dino_lora(
+            self.dinov2,
+            visual_lora_layers,
+            rank=rank,
+            alpha=alpha,
+            dropout=dropout,
+        )
+        inject_clip_lora(
+            self.txt_backbone,
+            text_lora_layers,
+            rank=rank,
+            alpha=alpha,
+            dropout=dropout,
+        )
+        self.fusion = NativeDinoClipFusion(cfg)
+        self.neck = NativeFeaturePyramid(
+            in_dim=int(getattr(cfg, "native_visual_dim", 768)),
+            pyramid_dim=int(getattr(cfg, "native_pyramid_dim", 192)),
+            out_dim=int(cfg.vis_dim),
+            stages=len(visual_layers),
+        )
+        self.alignment_loss_weight = float(
+            getattr(cfg, "native_alignment_loss_weight", 0.2)
+        )
+
+    def _encode_features(self, img, word, pad_mask):
+        if self.native_variant == "v3":
+            vis, text_tokens, state, alignment = self.fusion(
+                img, word, self.txt_backbone, self.dinov2
+            )
+            auxiliary = {"alignment": alignment}
+        else:
+            vis, text_tokens, state = self.fusion(
+                img, word, self.txt_backbone, self.dinov2
+            )
+            auxiliary = {}
+        features = self.neck(vis, state)
+        batch, channels, height, width = features.shape
+        features = self.decoder(features, text_tokens, pad_mask).reshape(
+            batch, channels, height, width
+        )
+        return features, state, auxiliary
+
+    def _extra_training_losses(self, auxiliary, mask):
+        alignment = auxiliary.get("alignment")
+        if alignment is None or self.alignment_loss_weight <= 0.0:
+            return mask.new_zeros(()), {}
+        alignment_loss = patch_text_alignment_loss(alignment, mask)
+        return (
+            self.alignment_loss_weight * alignment_loss,
+            {"m_align": alignment_loss.detach()},
+        )
 
     def forward(self, img, word, mask=None, grasp_qua_mask=None,
                 grasp_sin_mask=None, grasp_cos_mask=None,
                 grasp_wid_mask=None, grasp_off_mask=None,
                 grasp_off_weight=None, grasp_short_mask=None):
         pad_mask = torch.zeros_like(word).masked_fill_(word == 0, 1).bool()
-        vis, word, state = self.fusion(
-            img, word, self.txt_backbone, self.dinov2
-        )
-        features = self.neck(vis, state)
-        b, c, h, w = features.shape
-        features = self.decoder(features, word, pad_mask).reshape(b, c, h, w)
+        features, state, auxiliary = self._encode_features(img, word, pad_mask)
 
         outputs = self.proj(features, state)
         if self.predicts_grasp_short_side:
@@ -116,12 +208,20 @@ class DROGOFF(DROG):
 
         if grasp_off_mask is None or grasp_off_weight is None:
             raise ValueError("DROGOFF training requires offset and offset-weight maps")
-        grasp_off_mask = F.interpolate(
-            grasp_off_mask, target_size, mode="bilinear", align_corners=False
-        ).detach()
-        grasp_off_weight = F.interpolate(
-            grasp_off_weight, target_size, mode="nearest"
-        ).detach()
+        if grasp_off_mask.shape[-2:] != tuple(target_size):
+            resized_weight = F.interpolate(
+                grasp_off_weight, target_size, mode="bilinear", align_corners=False
+            )
+            resized_numerator = F.interpolate(
+                grasp_off_mask * grasp_off_weight,
+                target_size,
+                mode="bilinear",
+                align_corners=False,
+            )
+            grasp_off_mask = resized_numerator / resized_weight.clamp_min(1e-6)
+            grasp_off_weight = resized_weight
+        grasp_off_mask = grasp_off_mask.detach()
+        grasp_off_weight = grasp_off_weight.detach()
         targets = (*targets[:-1], grasp_off_mask)
 
         seg_weight = mask * 0.5 + 1.0
@@ -148,6 +248,8 @@ class DROGOFF(DROG):
             seg_loss + qua_loss + sin_loss + cos_loss + width_loss
             + self.offset_loss_weight * offset_loss
         )
+        extra_loss, extra_loss_dict = self._extra_training_losses(auxiliary, mask)
+        total_loss = total_loss + extra_loss
         if short_side_loss is not None:
             total_loss = total_loss + self.short_side_loss_weight * short_side_loss
         loss_dict = {
@@ -160,4 +262,5 @@ class DROGOFF(DROG):
         }
         if short_side_loss is not None:
             loss_dict["m_short"] = short_side_loss.detach()
+        loss_dict.update(extra_loss_dict)
         return tuple(x.detach() for x in outputs), targets, total_loss, loss_dict
