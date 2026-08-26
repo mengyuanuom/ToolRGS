@@ -37,7 +37,7 @@ case "$ACTION" in
       '  bash tools/gui_quickstart.sh robot       # GI shared video + real robot TCP output' \
       '' \
       'Extra GUI arguments may follow the action, for example:' \
-      '  bash tools/gui_quickstart.sh demo --prompt "the screwdriver"' \
+      '  bash tools/gui_quickstart.sh demo --prompt "Grasp the screwdriver"' \
       '' \
       'Override the deployment YAML when needed:' \
       '  TOOLRGS_GUI_CONFIG=config/deployment/lab.yaml bash tools/gui_quickstart.sh check'

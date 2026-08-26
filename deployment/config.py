@@ -65,7 +65,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "checkpoint_url": "",
         "checkpoint_sha256": "",
         "device": "cuda:0",
-        "prompt": "tool",
+        "prompt": "Grasp the screwdriver",
         "use_mask_postprocessing": True,
         "mask_threshold": 0.35,
         "mask_expand_px": 0,

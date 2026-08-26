@@ -185,7 +185,7 @@ Detection 和 Grasp 使用两套独立后处理。Detection 页的参数来自 `
 ### A. 纯 RealSense 演示（无 GI、绝不发送坐标）
 
 ```bash
-bash tools/gui_quickstart.sh demo --prompt "screwdriver"
+bash tools/gui_quickstart.sh demo --prompt "Grasp the screwdriver"
 ```
 
 该入口会强制设置 `robot.enabled=false`，也不接受 `--allow-robot`，适合调模型、
@@ -194,7 +194,7 @@ bash tools/gui_quickstart.sh demo --prompt "screwdriver"
 ### B. GI 画面安全预览（不发送坐标）
 
 ```bash
-bash tools/gui_quickstart.sh gi-preview --prompt "screwdriver"
+bash tools/gui_quickstart.sh gi-preview --prompt "Grasp the screwdriver"
 ```
 
 它读取 `fooA`，但没有 `--allow-robot`，因此不会连接机械臂 TCP。正式实验前先用
@@ -221,7 +221,7 @@ python test_socket_to_ros1.py
 
 ```bash
 cd /home/raico-hri/projects/ToolRGS
-bash tools/gui_quickstart.sh robot --prompt "screwdriver"
+bash tools/gui_quickstart.sh robot --prompt "Grasp the screwdriver"
 ```
 
 该命令等价于：
@@ -230,7 +230,7 @@ bash tools/gui_quickstart.sh robot --prompt "screwdriver"
 python deploy_gui_gi.py \
   --config config/deployment/lab.yaml \
   --allow-robot \
-  --prompt "screwdriver"
+  --prompt "Grasp the screwdriver"
 ```
 
 实验室 Docker 使用 `network_mode=host`，所以正式配置连接的是：
@@ -262,7 +262,7 @@ robot:
 python deploy_gui.py \
   --config config/deployment/lab.yaml \
   --image \
-  --prompt "screwdriver"
+  --prompt "Grasp the screwdriver"
 ```
 
 使用自己的图片：
@@ -271,7 +271,7 @@ python deploy_gui.py \
 python deploy_gui.py \
   --config config/deployment/lab.yaml \
   --image /absolute/path/to/test.jpg \
-  --prompt "screwdriver"
+  --prompt "Grasp the screwdriver"
 ```
 
 单图模式自动关闭连续推理；进入 **Grasping Points Detection** 页面后点击

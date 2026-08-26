@@ -10,7 +10,7 @@ model_profiles:
     checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_drogoff_v1_grasp_tools_15k_original300_20260825_epoch24_best_msr_inference.pth
     checkpoint_sha256: 5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340
     device: cuda:0
-    prompt: screwdriver
+    prompt: Grasp the screwdriver
     grasp_size_activation: sigmoid
     use_mask_postprocessing: true
     mask_threshold: 0.35
@@ -34,7 +34,7 @@ model_profiles:
     checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_crog_grasp_tools_15k_original300_20260823_epoch36_best_msr_clamp_inference.pth
     checkpoint_sha256: 2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f
     device: cuda:0
-    prompt: screwdriver
+    prompt: Grasp the screwdriver
     grasp_size_activation: clamp
     use_mask_postprocessing: true
     mask_threshold: 0.35
@@ -58,7 +58,7 @@ model_profiles:
     checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/drogoff_grasp_tools_v2_original300_20260814_epoch32_best_j1.pth
     checkpoint_sha256: 38b2824b385a293b883bfe03682fec0e2f30c83457e3f86ba08e14d884fd7ecf
     device: cuda:0
-    prompt: screwdriver
+    prompt: Grasp the screwdriver
     grasp_size_activation: auto
     use_mask_postprocessing: true
     mask_threshold: 0.35
@@ -84,7 +84,7 @@ model_profiles:
     checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v2-weights/crog_aligned_grasp_tools_v2_original300_20260815_epoch25_best_j1.pth
     checkpoint_sha256: 6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2
     device: cuda:0
-    prompt: screwdriver
+    prompt: Grasp the screwdriver
     grasp_size_activation: auto
     use_mask_postprocessing: true
     mask_threshold: 0.35

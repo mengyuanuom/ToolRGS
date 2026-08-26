@@ -423,7 +423,7 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertTrue(cfg["model"]["use_mask_postprocessing"])
         self.assertTrue(cfg["model"]["filter_grasps_by_mask"])
         self.assertNotIn("prompt_template", cfg["model"])
-        self.assertEqual(cfg["model"]["prompt"], "screwdriver")
+        self.assertEqual(cfg["model"]["prompt"], "Grasp the screwdriver")
         self.assertEqual(cfg["model"]["mask_expand_px"], 0)
         crog = activate_model_profile(
             cfg, "crog-aligned-grasptools-v2-original300"
