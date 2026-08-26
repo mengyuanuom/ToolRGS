@@ -1,0 +1,20 @@
+_base_: crog_v2_original_scale.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+
+TRAIN:
+  epochs: 36
+  milestones: [30]
+  batch_size: 32
+  batch_size_val: 32
+  base_lr: 0.0001
+  max_norm: 1.0
+  exp_name: crog_grasp_tools_v3_15k_original300_maxnorm_resume20
+  val_start_epoch: 11
+  val_freq: 1
+
+TEST:
+  evaluation_protocol: crog_legacy
+  grasp_iou_thresholds: [0.25, 0.50, 0.75]
+  grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]

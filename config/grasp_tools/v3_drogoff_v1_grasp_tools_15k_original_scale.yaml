@@ -2,7 +2,6 @@ _base_: drogoff_v2_original_scale.yaml
 
 DATA:
   root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
-  # V1 supervises center offsets inside a fixed-radius Gaussian region.
   offset_version: v1
 
 MODEL:

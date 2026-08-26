@@ -88,7 +88,7 @@ python tools/check_deployment.py \
 该命令不会打开相机、不会连接 TCP、不会发送机械臂指令。它会：
 
 1. 检查 Python/Qt/MMDetection 环境；
-2. 从配置的 GitHub Release 下载全部可选抓取权重（DROG-OFF V2、aligned CROG V2 与 DROG-OFF V1 V3）；
+2. 从配置的 GitHub Release 下载全部可选抓取权重（`V3-DROG-OFF-V1`、`V3-CROG`、DROG-OFF V2 与 aligned CROG V2）；
 3. 下载缺失的 CLIP ViT-B/16、CLIP RN50 和 DINOv2 预训练权重；
 4. 对配置了 Release URL 的权重做 SHA-256 校验；
 5. 下载并校验 22 类 Grasp-Tools Faster R-CNN 目标检测权重。
@@ -98,7 +98,8 @@ python tools/check_deployment.py \
 ```text
 weights/drogoff_grasp_tools_v2_original300_best_j1.pth
 weights/crog_aligned_grasp_tools_v2_original300_best_j1.pth
-weights/drogoff_v1_grasp_tools_v3_15k_original300_best_msr.pth
+weights/v3_drogoff_v1_grasp_tools_15k_original300_best_msr.pth
+weights/v3_crog_grasp_tools_15k_original300_best_msr.pth
 weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth
 pretrain/ViT-B-16.pt
 pretrain/RN50.pt
@@ -127,7 +128,8 @@ python tools/check_deployment.py \
 **Detection Post-processing**，进入 **Grasping Points Detection** 时显示
 **Grasp Model & Post-processing**。抓取模型下拉框默认选中
 `config/deployment/lab.yaml` 的 `active_model`，也可以直接切换已配置的
-DROG-OFF V2、aligned CROG V2 与 DROG-OFF V1 V3。切换模型只重载抓取网络，不会重启相机、检测器或
+`V3-DROG-OFF-V1`、`V3-CROG`、DROG-OFF V2 与 aligned CROG V2。两个
+V3 名称均以前缀 `V3-` 开头并排在列表前面。切换模型只重载抓取网络，不会重启相机、检测器或
 机械臂连接。
 
 推荐按以下顺序切换：

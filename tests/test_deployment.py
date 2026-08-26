@@ -401,9 +401,10 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(
             list(cfg["_model_profiles"]),
             [
+                "V3-DROG-OFF-V1",
+                "V3-CROG",
                 "drogoff-grasptools-v2-original300",
                 "crog-aligned-grasptools-v2-original300",
-                "drogoff-v1-grasptools-v3-15k-original300",
             ],
         )
         self.assertTrue(cfg["model"]["use_mask_postprocessing"])
@@ -425,16 +426,26 @@ class DeploymentContractTest(unittest.TestCase):
             "6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2",
         )
         v3_v1 = activate_model_profile(
-            cfg, "drogoff-v1-grasptools-v3-15k-original300"
+            cfg, "V3-DROG-OFF-V1"
         )
         self.assertEqual(
             v3_v1["model"]["config"],
-            "config/grasp_tools/drogoff_v1_grasp_tools_v3_15k_original_scale.yaml",
+            "config/grasp_tools/v3_drogoff_v1_grasp_tools_15k_original_scale.yaml",
         )
         self.assertEqual(
             v3_v1["model"]["checkpoint_sha256"],
-            "548cb26a61b8806d3c243e6fb55b7c51e172e0bd2e7fc7951c17ab32baaad317",
+            "5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340",
         )
+        v3_crog = activate_model_profile(cfg, "V3-CROG")
+        self.assertEqual(
+            v3_crog["model"]["config"],
+            "config/grasp_tools/v3_crog_grasp_tools_15k_original_scale.yaml",
+        )
+        self.assertEqual(
+            v3_crog["model"]["checkpoint_sha256"],
+            "6516059de5f8cd0180438017c86a2ec6bccbd374fed74cbc2532705582e36a79",
+        )
+        self.assertEqual(v3_crog["model"]["grasp_size_activation"], "sigmoid")
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]

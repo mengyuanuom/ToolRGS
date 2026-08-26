@@ -111,15 +111,26 @@ SHA-256
 `38b2824b385a293b883bfe03682fec0e2f30c83457e3f86ba08e14d884fd7ecf`.
 ToolRGS validates that digest before loading the checkpoint.
 
-The selectable `drogoff-v1-grasptools-v3-15k-original300` profile provides the
-Grasp-Tools V3 DROG-OFF V1 best-mSR checkpoint from epoch 24. Its validation
-result is segmentation IoU `83.78`, multi-IoU/multi-angle mSR `89.14`, legacy
-SR@IoU0.25/30deg `99.51`, and SR@IoU0.50/10deg `96.52`. The Release asset is
-`drogoff_v1_grasp_tools_v3_15k_original300_20260825_epoch24_best_msr.pth`
-(`952763142` bytes), with SHA-256
-`548cb26a61b8806d3c243e6fb55b7c51e172e0bd2e7fc7951c17ab32baaad317`.
-Selecting the profile in the GUI downloads and verifies it on demand; running
-the preflight downloads it in advance with the other selectable profiles.
+The two Grasp-Tools V3 profiles are deliberately named and ordered first in the
+GUI as `V3-DROG-OFF-V1` and `V3-CROG`. `V3-DROG-OFF-V1` provides the epoch-24
+best-mSR checkpoint: segmentation IoU `83.78`, multi-IoU/multi-angle mSR
+`89.14`, legacy SR@IoU0.25/30deg `99.51`, and SR@IoU0.50/10deg `96.52`. Its
+Release asset is
+`v3_drogoff_v1_grasp_tools_15k_original300_20260825_epoch24_best_msr_inference.pth`
+(`717897106` bytes), with SHA-256
+`5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340`.
+
+`V3-CROG` provides the max-norm-fixed epoch-36 best-mSR checkpoint resumed from
+epoch 20: segmentation IoU `81.72`, multi-IoU/multi-angle mSR `42.05`, legacy
+SR@IoU0.25/30deg `91.34`, and SR@IoU0.50/10deg `33.93`. Its Release asset is
+`v3_crog_grasp_tools_15k_original300_20260823_epoch36_best_msr_inference.pth`
+(`589062150` bytes), with SHA-256
+`6516059de5f8cd0180438017c86a2ec6bccbd374fed74cbc2532705582e36a79`.
+Both assets contain only inference state plus geometry metadata; optimizer and
+scheduler state are deliberately omitted. CROG width decoding is explicitly
+fixed to `sigmoid`, matching the validation protocol that produced mSR `42.05`.
+Selecting either profile downloads and verifies it on demand; running the
+preflight downloads both in advance with the other selectable profiles.
 
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
 command can be run from any working directory.
@@ -143,7 +154,7 @@ extended reference. A normal deployment no longer needs a YAML copy/edit step.
 The preflight never connects to the robot and never sends a command. It downloads
 and verifies every selectable `model_profiles` checkpoint, not only the active
 one. In the GUI, expand **Model & Post-processing** to switch among the published
-DROG-OFF V2, Grasp-Tools V3 DROG-OFF V1, and aligned CROG profiles without
+`V3-DROG-OFF-V1`, `V3-CROG`, DROG-OFF V2, and aligned CROG V2 profiles without
 restarting the camera, detector, or robot-control layer. The same panel exposes
 source-pixel grasp height, mask threshold, mask expansion radius, and independent
 mask-based grasp point filtering; every initial value comes from the selected

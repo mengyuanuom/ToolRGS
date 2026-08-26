@@ -469,9 +469,10 @@ On Linux the launcher automatically selects the active PyQt5 platform plugins,
 preventing the incompatible `cv2/qt/plugins` xcb path from taking over.
 
 Install `requirement-detector.txt`. The preflight downloads every selectable
-DROG-OFF checkpoint (including the Grasp-Tools V3 DROG-OFF V1 best-mSR model),
-plus the published CLIP, DINO, and 22-class Grasp-Tools Faster R-CNN weights,
-to their configured paths and validates Release SHA-256 values automatically.
+grasp checkpoint (including the `V3-DROG-OFF-V1` and `V3-CROG` best-mSR
+models), plus the published CLIP, DINO, and 22-class Grasp-Tools Faster R-CNN
+weights, to their configured paths and validates Release SHA-256 values
+automatically.
 
 ```bash
 python tools/check_deployment.py --build-detector
