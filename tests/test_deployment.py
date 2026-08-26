@@ -29,6 +29,7 @@ from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
 from model.crog import grasp_width_for_loss
+from utils.config import resolve_grasp_size_activation
 from deploy_gui import (
     DEFAULT_SAMPLE_IMAGE,
     apply_camera_preset,
@@ -46,6 +47,18 @@ experiment_values = check_deployment_symbols["_experiment_values"]
 
 
 class DeploymentContractTest(unittest.TestCase):
+    def test_explicit_grasp_activation_must_match_checkpoint_metadata(self):
+        self.assertEqual(
+            resolve_grasp_size_activation(
+                "clamp", checkpoint={"grasp_size_activation": "clamp"}
+            ),
+            "clamp",
+        )
+        with self.assertRaisesRegex(ValueError, "conflicts with checkpoint metadata"):
+            resolve_grasp_size_activation(
+                "sigmoid", checkpoint={"grasp_size_activation": "clamp"}
+            )
+
     def test_image_cli_uses_bundled_sample_by_default(self):
         args = parse_args(["--image"])
         self.assertEqual(args.image, DEFAULT_SAMPLE_IMAGE)
@@ -436,6 +449,7 @@ class DeploymentContractTest(unittest.TestCase):
             v3_v1["model"]["checkpoint_sha256"],
             "5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340",
         )
+        self.assertEqual(v3_v1["model"]["grasp_size_activation"], "sigmoid")
         v3_crog = activate_model_profile(cfg, "V3-CROG")
         self.assertEqual(
             v3_crog["model"]["config"],
@@ -443,9 +457,9 @@ class DeploymentContractTest(unittest.TestCase):
         )
         self.assertEqual(
             v3_crog["model"]["checkpoint_sha256"],
-            "6516059de5f8cd0180438017c86a2ec6bccbd374fed74cbc2532705582e36a79",
+            "2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f",
         )
-        self.assertEqual(v3_crog["model"]["grasp_size_activation"], "sigmoid")
+        self.assertEqual(v3_crog["model"]["grasp_size_activation"], "clamp")
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]

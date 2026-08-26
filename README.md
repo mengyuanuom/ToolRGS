@@ -472,7 +472,8 @@ Install `requirement-detector.txt`. The preflight downloads every selectable
 grasp checkpoint (including the `V3-DROG-OFF-V1` and `V3-CROG` best-mSR
 models), plus the published CLIP, DINO, and 22-class Grasp-Tools Faster R-CNN
 weights, to their configured paths and validates Release SHA-256 values
-automatically.
+automatically. The V3 profiles also pin the training-matched size decoder:
+`V3-DROG-OFF-V1` uses `sigmoid`, while `V3-CROG` uses `clamp`.
 
 ```bash
 python tools/check_deployment.py --build-detector

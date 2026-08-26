@@ -132,6 +132,10 @@ python tools/check_deployment.py \
 V3 名称均以前缀 `V3-` 开头并排在列表前面。切换模型只重载抓取网络，不会重启相机、检测器或
 机械臂连接。
 
+V3 模型的抓取尺寸激活方式随 profile 固定绑定，不能混用：
+`V3-DROG-OFF-V1` 使用 `sigmoid`，`V3-CROG` 使用 `clamp`。权重包元数据和
+GUI 配置会进行同样的绑定，避免推理时采用与训练不一致的解码方式。
+
 推荐按以下顺序切换：
 
 1. 进入 **Grasping Points Detection**，点击 **Grasp Model & Post-processing** 展开面板；

@@ -13,6 +13,7 @@ TRAIN:
 
 TEST:
   evaluation_protocol: crog_legacy
+  grasp_size_activation: sigmoid
   grasp_iou_thresholds: [0.25, 0.50, 0.75]
   grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]
   offset_decode_mode: radius

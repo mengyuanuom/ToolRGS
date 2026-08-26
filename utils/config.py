@@ -272,11 +272,22 @@ def resolve_grasp_size_activation(requested="auto", checkpoint=None, model=None)
             "grasp_size_activation must be auto, sigmoid, clamp, or raw_clamp"
         )
     value = aliases[value]
-    if value != "auto":
-        return value
-
     metadata = checkpoint.get("grasp_size_activation") \
         if isinstance(checkpoint, dict) else None
+    if value != "auto":
+        if metadata is not None:
+            metadata_value = aliases.get(str(metadata).strip().lower())
+            if metadata_value not in {"sigmoid", "clamp"}:
+                raise ValueError(
+                    f"Unsupported grasp_size_activation metadata: {metadata!r}"
+                )
+            if metadata_value != value:
+                raise ValueError(
+                    "Configured grasp_size_activation conflicts with checkpoint "
+                    f"metadata: {value!r} vs {metadata_value!r}"
+                )
+        return value
+
     if metadata is None and model is not None:
         unwrapped = getattr(model, "module", model)
         metadata = getattr(unwrapped, "grasp_size_loss_activation", None)

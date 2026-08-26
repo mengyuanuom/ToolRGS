@@ -120,15 +120,17 @@ Release asset is
 (`717897106` bytes), with SHA-256
 `5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340`.
 
-`V3-CROG` provides the max-norm-fixed epoch-36 best-mSR checkpoint resumed from
-epoch 20: segmentation IoU `81.72`, multi-IoU/multi-angle mSR `42.05`, legacy
-SR@IoU0.25/30deg `91.34`, and SR@IoU0.50/10deg `33.93`. Its Release asset is
-`v3_crog_grasp_tools_15k_original300_20260823_epoch36_best_msr_inference.pth`
-(`589062150` bytes), with SHA-256
-`6516059de5f8cd0180438017c86a2ec6bccbd374fed74cbc2532705582e36a79`.
+`V3-CROG` provides the max-norm-fixed epoch-36 checkpoint resumed from epoch 20.
+With the training-matched `clamp` size decoder it reaches segmentation IoU
+`81.72`, multi-IoU/multi-angle mSR `75.28`, legacy SR@IoU0.25/30deg `99.15`,
+and SR@IoU0.50/10deg `90.81`. Its Release asset is
+`v3_crog_grasp_tools_15k_original300_20260823_epoch36_best_msr_clamp_inference.pth`
+(`589066850` bytes), with SHA-256
+`2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f`.
 Both assets contain only inference state plus geometry metadata; optimizer and
-scheduler state are deliberately omitted. CROG width decoding is explicitly
-fixed to `sigmoid`, matching the validation protocol that produced mSR `42.05`.
+scheduler state are deliberately omitted. The activation contract is explicit
+at every layer: `V3-DROG-OFF-V1` uses `sigmoid`, while `V3-CROG` uses `clamp`,
+matching how each size head was trained.
 Selecting either profile downloads and verifies it on demand; running the
 preflight downloads both in advance with the other selectable profiles.
 
