@@ -1,0 +1,20 @@
+_base_: drogoff_v2_original_scale.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+  # V1 supervises center offsets inside a fixed-radius Gaussian region.
+  offset_version: v1
+
+MODEL:
+  offset_head: legacy
+
+TRAIN:
+  max_norm: 1.0
+  exp_name: drogoff_v1_grasp_tools_v3_15k_original300
+
+TEST:
+  evaluation_protocol: crog_legacy
+  grasp_iou_thresholds: [0.25, 0.50, 0.75]
+  grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]
+  offset_decode_mode: radius
+  offset_resample_geometry: True

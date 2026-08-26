@@ -403,6 +403,7 @@ class DeploymentContractTest(unittest.TestCase):
             [
                 "drogoff-grasptools-v2-original300",
                 "crog-aligned-grasptools-v2-original300",
+                "drogoff-v1-grasptools-v3-15k-original300",
             ],
         )
         self.assertTrue(cfg["model"]["use_mask_postprocessing"])
@@ -422,6 +423,17 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(
             crog["model"]["checkpoint_sha256"],
             "6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2",
+        )
+        v3_v1 = activate_model_profile(
+            cfg, "drogoff-v1-grasptools-v3-15k-original300"
+        )
+        self.assertEqual(
+            v3_v1["model"]["config"],
+            "config/grasp_tools/drogoff_v1_grasp_tools_v3_15k_original_scale.yaml",
+        )
+        self.assertEqual(
+            v3_v1["model"]["checkpoint_sha256"],
+            "548cb26a61b8806d3c243e6fb55b7c51e172e0bd2e7fc7951c17ab32baaad317",
         )
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):

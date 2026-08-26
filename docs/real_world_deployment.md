@@ -111,6 +111,16 @@ SHA-256
 `38b2824b385a293b883bfe03682fec0e2f30c83457e3f86ba08e14d884fd7ecf`.
 ToolRGS validates that digest before loading the checkpoint.
 
+The selectable `drogoff-v1-grasptools-v3-15k-original300` profile provides the
+Grasp-Tools V3 DROG-OFF V1 best-mSR checkpoint from epoch 24. Its validation
+result is segmentation IoU `83.78`, multi-IoU/multi-angle mSR `89.14`, legacy
+SR@IoU0.25/30deg `99.51`, and SR@IoU0.50/10deg `96.52`. The Release asset is
+`drogoff_v1_grasp_tools_v3_15k_original300_20260825_epoch24_best_msr.pth`
+(`952763142` bytes), with SHA-256
+`548cb26a61b8806d3c243e6fb55b7c51e172e0bd2e7fc7951c17ab32baaad317`.
+Selecting the profile in the GUI downloads and verifies it on demand; running
+the preflight downloads it in advance with the other selectable profiles.
+
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
 command can be run from any working directory.
 
@@ -132,11 +142,12 @@ extended reference. A normal deployment no longer needs a YAML copy/edit step.
 
 The preflight never connects to the robot and never sends a command. It downloads
 and verifies every selectable `model_profiles` checkpoint, not only the active
-one. In the GUI, expand **Model & Post-processing** to switch between the
-published DROG-OFF and aligned CROG profiles without restarting the camera,
-detector, or robot-control layer. The same panel exposes source-pixel grasp
-height, mask threshold, mask expansion radius, and independent mask-based grasp
-point filtering; every initial value comes from the selected YAML profile.
+one. In the GUI, expand **Model & Post-processing** to switch among the published
+DROG-OFF V2, Grasp-Tools V3 DROG-OFF V1, and aligned CROG profiles without
+restarting the camera, detector, or robot-control layer. The same panel exposes
+source-pixel grasp height, mask threshold, mask expansion radius, and independent
+mask-based grasp point filtering; every initial value comes from the selected
+YAML profile.
 
 To enable detection, set `detector.enabled: true`. The GUI then creates a
 separate **Object detection** tab. `score_threshold` controls displayed boxes,

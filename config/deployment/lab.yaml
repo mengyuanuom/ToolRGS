@@ -54,6 +54,30 @@ model_profiles:
     scale_grasp_to_source: true
     overrides: {}
 
+  drogoff-v1-grasptools-v3-15k-original300:
+    config: config/grasp_tools/drogoff_v1_grasp_tools_v3_15k_original_scale.yaml
+    checkpoint: weights/drogoff_v1_grasp_tools_v3_15k_original300_best_msr.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/drogoff_v1_grasp_tools_v3_15k_original300_20260825_epoch24_best_msr.pth
+    checkpoint_sha256: 548cb26a61b8806d3c243e6fb55b7c51e172e0bd2e7fc7951c17ab32baaad317
+    device: cuda:0
+    prompt: screwdriver
+    grasp_size_activation: auto
+    use_mask_postprocessing: true
+    mask_threshold: 0.35
+    mask_expand_px: 0
+    quality_threshold: 0.40
+    num_grasps: 1
+    postprocessor:
+      type: dense_grasp
+      min_distance: 2
+      width_factor: 300.0
+      grasp_height: 20.0
+      size_coordinate: original
+    filter_grasps_by_mask: true
+    gate_quality_by_mask: true
+    scale_grasp_to_source: true
+    overrides: {}
+
 camera:
   type: realsense
   device: 0
