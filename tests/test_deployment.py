@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import io
 import tempfile
 from pathlib import Path
@@ -29,7 +30,7 @@ from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
 from model.crog import grasp_width_for_loss
-from model.etrg.model import grasp_width_for_loss as etrg_grasp_width_for_loss
+from model.etrg.model import ETRG, grasp_width_for_loss as etrg_grasp_width_for_loss
 from utils.config import resolve_grasp_size_activation
 from deploy_gui import (
     DEFAULT_SAMPLE_IMAGE,
@@ -52,6 +53,10 @@ class DeploymentContractTest(unittest.TestCase):
         raw = torch.tensor([-2.0, 0.0, 2.0])
         expected = torch.sigmoid(raw)
         self.assertTrue(torch.equal(etrg_grasp_width_for_loss(raw), expected))
+
+    def test_etrg_rgb_forward_accepts_common_two_argument_contract(self):
+        signature = inspect.signature(ETRG.forward)
+        self.assertIsNone(signature.parameters["word"].default)
 
     def test_explicit_grasp_activation_must_match_checkpoint_metadata(self):
         self.assertEqual(

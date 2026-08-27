@@ -204,7 +204,7 @@ class ETRG(BaseGraspModel):
         self,
         image,
         depth,
-        word,
+        word=None,
         mask=None,
         grasp_qua_mask=None,
         grasp_sin_mask=None,
@@ -214,27 +214,13 @@ class ETRG(BaseGraspModel):
         grasp_off_weight=None,
     ):
         if self.input_mode == "rgb":
-            # RGB-only calls omit depth, so the legacy positional signature is
-            # shifted one place by the common ToolRGS batch contract.
-            (
-                word,
-                mask,
-                grasp_qua_mask,
-                grasp_sin_mask,
-                grasp_cos_mask,
-                grasp_wid_mask,
-                grasp_off_mask,
-                grasp_off_weight,
-            ) = (
-                depth,
-                word,
-                mask,
-                grasp_qua_mask,
-                grasp_sin_mask,
-                grasp_cos_mask,
-                grasp_wid_mask,
-                grasp_off_mask,
-            )
+            # The common RGB runner calls model(image, words, **targets).
+            # Dense targets already arrive by keyword and must not be shifted.
+            if word is not None:
+                raise ValueError(
+                    "ETRG RGB mode expects model(image, words, **targets)"
+                )
+            word = depth
             auxiliary = image.float()
         else:
             if depth is None:
