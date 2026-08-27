@@ -31,7 +31,11 @@ from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
 from model.crog import grasp_width_for_loss
 from model.etrg.model import ETRG, grasp_width_for_loss as etrg_grasp_width_for_loss
-from utils.config import resolve_grasp_size_activation
+from model.ggcnnclip import balanced_quality_bce_with_logits
+from utils.config import (
+    resolve_grasp_quality_activation,
+    resolve_grasp_size_activation,
+)
 from deploy_gui import (
     DEFAULT_SAMPLE_IMAGE,
     apply_camera_preset,
@@ -49,6 +53,28 @@ experiment_values = check_deployment_symbols["_experiment_values"]
 
 
 class DeploymentContractTest(unittest.TestCase):
+    def test_ggcnn_quality_loss_uses_balanced_logits_contract(self):
+        prediction = torch.zeros((1, 1, 4, 4), requires_grad=True)
+        target = torch.zeros_like(prediction)
+        target[..., 1, 2] = 1.0
+        loss = balanced_quality_bce_with_logits(prediction, target)
+        loss.backward()
+        self.assertTrue(torch.isfinite(loss))
+        self.assertLess(prediction.grad[..., 1, 2].item(), 0.0)
+        self.assertGreater(prediction.grad[..., 0, 0].item(), 0.0)
+
+    def test_quality_activation_must_match_checkpoint_metadata(self):
+        self.assertEqual(
+            resolve_grasp_quality_activation(
+                "sigmoid", checkpoint={"grasp_quality_activation": "sigmoid"}
+            ),
+            "sigmoid",
+        )
+        with self.assertRaisesRegex(ValueError, "conflicts with checkpoint metadata"):
+            resolve_grasp_quality_activation(
+                "clamp", checkpoint={"grasp_quality_activation": "sigmoid"}
+            )
+
     def test_etrg_width_training_contract_is_sigmoid(self):
         raw = torch.tensor([-2.0, 0.0, 2.0])
         expected = torch.sigmoid(raw)

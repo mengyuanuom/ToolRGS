@@ -11,7 +11,10 @@ import torch.nn.functional as F
 
 from model import build_model
 from utils.config import load_cfg_from_cfg_file
-from utils.config import resolve_grasp_size_activation
+from utils.config import (
+    resolve_grasp_quality_activation,
+    resolve_grasp_size_activation,
+)
 from utils.pretrained import ensure_pretrained
 from utils.dataset import CLIP_MEAN, CLIP_STD, tokenize
 from toolrgs.structures import GraspModelResult
@@ -147,6 +150,14 @@ class ToolRGSInference:
             checkpoint=checkpoint,
             model=self.model,
         )
+        self.grasp_quality_activation = resolve_grasp_quality_activation(
+            self.model_cfg.get(
+                "grasp_quality_activation",
+                getattr(self.cfg, "grasp_quality_activation", "auto"),
+            ),
+            checkpoint=checkpoint,
+            model=self.model,
+        )
         if isinstance(checkpoint, dict):
             state = checkpoint.get("state_dict", checkpoint.get("model", checkpoint))
         else:
@@ -252,6 +263,12 @@ class ToolRGSInference:
         )
         if activation == "sigmoid":
             resized = torch.sigmoid(resized)
+        elif activation == "quality":
+            resized = (
+                torch.sigmoid(resized)
+                if self.grasp_quality_activation == "sigmoid"
+                else resized.clamp(0.0, 1.0)
+            )
         elif activation == "size":
             resized = (
                 torch.sigmoid(resized)
@@ -287,7 +304,7 @@ class ToolRGSInference:
             predictions.segmentation, inverse, frame_bgr.shape[:2], "sigmoid"
         )
         quality = self._map_to_original(
-            predictions.quality, inverse, frame_bgr.shape[:2], "sigmoid"
+            predictions.quality, inverse, frame_bgr.shape[:2], "quality"
         )
         sine = self._map_to_original(
             predictions.sine, inverse, frame_bgr.shape[:2]

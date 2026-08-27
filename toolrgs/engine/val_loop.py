@@ -24,7 +24,10 @@ from toolrgs.evaluation import (
 from toolrgs.registry import LOOPS, METRICS, POSTPROCESSORS
 from toolrgs.structures import GraspModelResult
 from utils.grasp_eval import calculate_jacquard_index
-from utils.config import resolve_grasp_size_activation
+from utils.config import (
+    resolve_grasp_quality_activation,
+    resolve_grasp_size_activation,
+)
 
 
 def _resize_prediction(tensor, output_hw, mode="bicubic"):
@@ -85,6 +88,9 @@ class GraspValLoop(BaseLoop):
         self.grasp_size_activation = resolve_grasp_size_activation(
             getattr(cfg, "grasp_size_activation", "auto"), model=model
         )
+        self.grasp_quality_activation = resolve_grasp_quality_activation(
+            getattr(cfg, "grasp_quality_activation", "auto"), model=model
+        )
         self.offset_decode_mode = str(
             getattr(cfg, "offset_decode_mode", "radius")
         ).strip().lower()
@@ -96,6 +102,11 @@ class GraspValLoop(BaseLoop):
 
     def _decode_size(self, prediction):
         if self.grasp_size_activation == "sigmoid":
+            return torch.sigmoid(prediction)
+        return prediction.clamp(0.0, 1.0)
+
+    def _decode_quality(self, prediction):
+        if self.grasp_quality_activation == "sigmoid":
             return torch.sigmoid(prediction)
         return prediction.clamp(0.0, 1.0)
 
@@ -236,7 +247,9 @@ class GraspValLoop(BaseLoop):
                 self.state.result = result
                 self.hooks.call("after_iter", self, self.state)
                 continue
-            quality = _resize_prediction(torch.sigmoid(predictions.quality), input_hw)
+            quality = _resize_prediction(
+                self._decode_quality(predictions.quality), input_hw
+            )
             sine = _resize_prediction(predictions.sine, input_hw)
             cosine = _resize_prediction(predictions.cosine, input_hw)
             width = _resize_prediction(self._decode_size(predictions.width), input_hw)

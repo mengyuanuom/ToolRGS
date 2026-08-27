@@ -3,6 +3,26 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .crog_clip import build_model
 
+
+def balanced_quality_bce_with_logits(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    max_pos_weight: float = 32.0,
+) -> torch.Tensor:
+    """Train a sparse grasp-quality map as logits without background collapse."""
+    target = target.to(dtype=prediction.dtype).clamp(0.0, 1.0)
+    with torch.no_grad():
+        positive_mass = target.sum().clamp_min(1.0)
+        negative_mass = (1.0 - target).sum()
+        pos_weight = (negative_mass / positive_mass).clamp(
+            min=1.0, max=float(max_pos_weight)
+        )
+    return F.binary_cross_entropy_with_logits(
+        prediction,
+        target,
+        pos_weight=pos_weight,
+    )
+
 class TextVisualFusionFiLM(nn.Module):
 
     def __init__(self, vis_dim: int, text_dim: int, hidden_dim: int = 128):
@@ -65,7 +85,8 @@ class GGCNNWithText(nn.Module):
     """
 
     def __init__(self, input_channels: int = 4, text_dim: int = 512,
-                 dropout: bool = False, prob: float = 0.0):
+                 dropout: bool = False, prob: float = 0.0,
+                 max_quality_pos_weight: float = 32.0):
         """
         Args:
             input_channels: Number of input channels (e.g. 4 for RGB-D).
@@ -74,6 +95,7 @@ class GGCNNWithText(nn.Module):
             prob:           Unused here, kept for API compatibility.
         """
         super().__init__()
+        self.max_quality_pos_weight = float(max_quality_pos_weight)
 
         # Encoder
         self.conv1 = nn.Conv2d(
@@ -172,7 +194,9 @@ class GGCNNWithText(nn.Module):
         y_pos, y_cos, y_sin, y_width = yc
         pos_pred, cos_pred, sin_pred, width_pred = self(xc, e_txt)
 
-        p_loss = F.smooth_l1_loss(pos_pred, y_pos)
+        p_loss = balanced_quality_bce_with_logits(
+            pos_pred, y_pos, self.max_quality_pos_weight
+        )
         cos_loss = F.smooth_l1_loss(cos_pred, y_cos)
         sin_loss = F.smooth_l1_loss(sin_pred, y_sin)
         width_loss = F.smooth_l1_loss(width_pred, y_width)
@@ -230,6 +254,7 @@ class GGCNN_CLIP(nn.Module):
     """
 
     grasp_size_loss_activation = "clamp"
+    grasp_quality_loss_activation = "sigmoid"
 
     def __init__(self, cfg):
         """
@@ -262,7 +287,10 @@ class GGCNN_CLIP(nn.Module):
         # GG-CNN grasp head with text conditioning
         self.grasp_head = GGCNNWithText(
             input_channels=in_ch,
-            text_dim=text_dim
+            text_dim=text_dim,
+            max_quality_pos_weight=float(
+                getattr(cfg, "ggcnn_quality_pos_weight", 32.0)
+            ),
         )
 
     def forward(
@@ -326,7 +354,11 @@ class GGCNN_CLIP(nn.Module):
 
             # Compute regression losses for grasp maps.
             # Note: we treat pos_pred as quality prediction for training.
-            p_loss = F.smooth_l1_loss(pos_pred, grasp_qua_mask)
+            p_loss = balanced_quality_bce_with_logits(
+                pos_pred,
+                grasp_qua_mask,
+                self.grasp_head.max_quality_pos_weight,
+            )
             cos_loss = F.smooth_l1_loss(cos_pred, grasp_cos_mask)
             sin_loss = F.smooth_l1_loss(sin_pred, grasp_sin_mask)
             wid_loss = F.smooth_l1_loss(wid_pred, grasp_wid_mask)

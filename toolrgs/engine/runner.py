@@ -346,6 +346,9 @@ class CUDAGraspRunner:
         size_activation = getattr(
             unwrapped, "grasp_size_loss_activation", None
         )
+        quality_activation = getattr(
+            unwrapped, "grasp_quality_loss_activation", "sigmoid"
+        )
 
         Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
         last_path = Path(cfg.output_dir) / "last_model.pth"
@@ -356,6 +359,7 @@ class CUDAGraspRunner:
                 "best_j_index": self.best_j,
                 "best_j5_index": self.best_j5,
                 "grasp_size_activation": size_activation,
+                "grasp_quality_activation": quality_activation,
                 "state_dict": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "scheduler": self.scheduler.state_dict(),
