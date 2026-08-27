@@ -110,80 +110,56 @@ only disables offset-geometry resampling and inverse image-scale restoration;
 it is recorded separately because this is checkpoint-specific inference
 calibration, not a retrained model.
 
-## Grasp-Tools V3
+## Grasp-Tools
 
-### Multi-threshold mean Success Rate (mSR)
+### Current Grasp-Tools V2 strict-IoU results
 
-Grasp-Tools V3 reports one top-1 grasp success surface instead of relying on a
-single permissive threshold. For validation sample `i`, let `p_i` be the
-highest-quality predicted rotated grasp rectangle and let `G_i` be all valid
-ground-truth grasps for the referred tool. The parallel-jaw angle error is
-180-degree periodic:
+All rows below are formal evaluations on the complete Grasp-Tools V2 `test`
+split (8,000 language-conditioned samples). A grasp is successful when its
+rotated rectangle has IoU at least `0.50` with a ground-truth rectangle. The
+headline `J@1`/`J@5` columns use the conventional angle-error limit of `30`
+degrees; the stricter `15`-degree results are shown separately where available.
+Image-mask IoU and `Pr@50`--`Pr@90` measure segmentation rather than grasp
+rectangle success.
 
-```text
-delta_theta(p, g) = abs(((theta_p - theta_g + 90) mod 180) - 90)
-```
+| Model | Config | Checkpoint | Seg. IoU | J@1 (30 deg) | J@5 (30 deg) | J@1 (15 deg) | J@5 (15 deg) | Eval commit |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| **DROG-OFF** | `config/grasp_tools/drogoff.yaml` | legacy checkpoint (archived) | **83.75** | **86.14** | **89.29** | - | - | `499fcba` |
+| DROG | `config/grasp_tools/drog.yaml` | `best_epoch_036_J1_81.12_J5_84.47.pth` | 83.10 | 79.60 | 84.82 | 79.50 | 84.70 | `499fcba` + dual-angle evaluator |
+| CROG | `config/grasp_tools/crog.yaml` | `best_epoch_024_J1_80.67_J5_83.95.pth` | 81.47 | 80.20 | 83.75 | 79.84 | 83.39 | `499fcba` + dual-angle evaluator |
 
-For an IoU threshold `t` and an angle threshold `a`, the sample is a binary
-success when at least one ground-truth grasp satisfies both tests:
+The DROG-OFF V2 strict Test log explicitly loads the original checkpoint
+`best_epoch_011_J1_29.45_J5_34.67.pth` and reports IoU `83.75`, J@1
+`86.14`, and J@5 `89.29`. The `29.45/34.67` values embedded in that
+original filename are historical training-time validation values from the older
+evaluation path; they are not the strict Test scores. This legacy-scale
+checkpoint was removed from the public Release on 2026-08-16 to prevent it
+from being mixed with the current original-coordinate factor-300 deployment
+protocol. The table retains the measured historical result for reproducibility;
+the server-side experiment record is unchanged.
+DROG-OFF has not yet been re-evaluated with the additional `15`-degree
+counter, so those two cells remain intentionally blank.
 
-```text
-s_i(t, a) = 1 if any g in G_i has rotated_IoU(p_i, g) > t
-                              and delta_theta(p_i, g) <= a
-              0 otherwise
+| Model | Pr@50 | Pr@60 | Pr@70 | Pr@80 | Pr@90 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| **DROG-OFF** | **99.70** | **98.62** | **92.20** | **72.95** | **25.08** |
+| DROG | 99.60 | 97.95 | 91.15 | 69.88 | 24.24 |
+| CROG | 99.00 | 96.14 | 88.09 | 63.32 | 21.07 |
 
-SR(t, a) = 100 / N * sum_i s_i(t, a)
-```
+Under the common 30-degree protocol, DROG-OFF leads CROG by `5.94` J@1 and
+`5.54` J@5 points. DROG is `0.60` points below CROG at J@1 but `1.07` points
+above it at J@5. Tightening the angle threshold from 30 to 15 degrees changes
+DROG by only `-0.10` J@1 / `-0.12` J@5 and CROG by `-0.36` / `-0.36`.
 
-The V3 surface uses three IoU thresholds and four angle thresholds:
+### Imported ToolRGS legacy records
 
-```text
-T_iou   = {0.25, 0.50, 0.75}
-T_angle = {5, 10, 20, 30} degrees
-```
+The following values are preserved from ToolRGS `558efb9`. That source did not
+record the checkpoint, evaluation commit or exact grasp-IoU protocol, so they
+are retained for provenance but are not the current headline V2 results.
 
-Its headline metric is the unweighted mean of all 12 success-rate cells:
-
-```text
-mSR = 1 / 12 * sum over t in T_iou and a in T_angle of SR(t, a)
-```
-
-Every validation sample and every threshold pair therefore has equal weight.
-`SR(0.25, 30 deg)` remains the familiar permissive grasp criterion, while mSR
-also measures precise overlap and orientation. This prevents a model with good
-coarse localization but inaccurate grasp geometry from looking artificially
-strong. Segmentation IoU is reported separately and is not part of mSR.
-
-The decoder must match the training contract before the rectangles are scored.
-In particular, DROG-OFF V1 uses sigmoid grasp-size decoding and CROG uses clamp
-decoding. The evaluator compares continuous rotated rectangles and uses the
-top-1 prediction only.
-
-### Current Grasp-Tools V3 results
-
-The table contains the same model families as the reproduced OCID-VLG table
-above. Values are percentages from the common Grasp-Tools V3 validation set and
-the best available mSR checkpoint. A dash means that no formal V3 result is
-recorded yet; training-only or incompatible legacy metrics are not inserted as
-substitutes.
-
-| Model | Config | Checkpoint | Size decoder | Seg. IoU | mSR | SR(0.25, 30 deg) | SR(0.25, 10 deg) | SR(0.50, 10 deg) | SR(0.75, 30 deg) |
-| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| **DROG-OFF V1** | `config/grasp_tools/v3_drogoff_v1_grasp_tools_15k_original_scale.yaml` | `best_msr_model.pth` (epoch 24) | sigmoid | **83.78** | **89.14** | **99.51** | **97.45** | **96.52** | **75.67** |
-| DROG | — | — | — | — | — | — | — | — | — |
-| **CROG** | `config/grasp_tools/v3_crog_grasp_tools_15k_original_scale.yaml` | `best_msr_model.pth` (epoch 36) | clamp | 81.72 | 75.28 | 99.15 | 95.75 | 90.81 | 43.77 |
-| LGD | — | — | — | — | — | — | — | — | — |
-| GRConvNet-CLIP | — | — | — | — | — | — | — | — | — |
-| GGCNN-CLIP | — | — | — | — | — | — | — | — | — |
-| ETRG | — | — | — | — | — | — | — | — | — |
-
-DROG-OFF V1 leads CROG by `13.86` mSR points. Their permissive
-`SR(0.25, 30 deg)` scores are nearly tied (`99.51` versus `99.15`), but the gap
-widens at high overlap: `SR(0.75, 30 deg)` is `75.67` for DROG-OFF V1 and
-`43.77` for CROG. This is the main reason mSR is more informative than quoting
-only the traditional loose success rate.
-
-The CROG checkpoint previously produced `42.05` mSR when it was decoded with
-the wrong sigmoid size activation. Re-evaluating the same trained model with
-its matching clamp decoder gives the `75.28` headline value above; the
-mismatched score is retained only as a decoder-compatibility diagnostic.
+| Profile | Model | Config | Split | Checkpoint | J@1 | J@5 | Eval commit | Notes |
+| --- | --- | --- | --- | --- | ---: | ---: | --- | --- |
+| Standard | CROG | `config/grasp_tools/crog.yaml` | test | - | 58.63 | 59.35 | - | Historical ToolRGS record; protocol unknown. |
+| Standard | DROG-OFF | `config/grasp_tools/drogoff.yaml` | test | - | 62.10 | 62.34 | - | Historical ToolRGS record; protocol unknown. |
+| Hard | CROG | `config/grasp_tools/crog.yaml` | test-hard | - | 25.23 | 25.76 | - | Historical ToolRGS record; protocol unknown. |
+| Hard | DROG-OFF | `config/grasp_tools/drogoff.yaml` | test-hard | - | 27.35 | 27.73 | - | Historical ToolRGS record; protocol unknown. |
