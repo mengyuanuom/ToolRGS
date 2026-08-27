@@ -10,6 +10,7 @@ from toolrgs.evaluation import (
     corners_to_five,
     five_to_corners,
     inverse_warp,
+    refine_with_grasp_relative_offset,
     refine_with_offset,
     resample_grasp_geometry,
     targets_to_six,
@@ -57,6 +58,19 @@ class EvaluationComponentTest(unittest.TestCase):
         self.assertAlmostEqual(refined[0][2], 50.0, places=5)
         self.assertAlmostEqual(refined[0][3], 4.0, places=5)
         self.assertAlmostEqual(refined[0][4], 45.0, places=5)
+
+    def test_grasp_relative_offset_uses_predicted_rectangle_scale(self):
+        identity = np.array([[1, 0, 0], [0, 1, 0]], dtype=np.float32)
+        offset = np.zeros((2, 16, 16), dtype=np.float32)
+        offset[0] = 1.0
+        refined = refine_with_grasp_relative_offset(
+            [[5.0, 5.0, 8.0, 6.0, 0.0]], offset, identity
+        )
+        expected_x = 5.0 + np.hypot(8.0 * 0.25, 6.0 * 0.5)
+        np.testing.assert_allclose(
+            refined[0][:2], [expected_x, 5.0], atol=1e-4
+        )
+        np.testing.assert_allclose(refined[0][2:4], [8.0, 6.0], atol=1e-4)
 
     def test_target_adapter_keeps_six_values_and_expands_other_formats(self):
         six = np.array([10, 20, 30, 40, 50, 7], dtype=np.float32)

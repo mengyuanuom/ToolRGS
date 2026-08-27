@@ -16,6 +16,7 @@ from toolrgs.evaluation import (
     GraspSuccessMetric,
     inverse_warp,
     rectangles_to_five,
+    refine_with_grasp_relative_offset,
     refine_with_offset,
     resample_grasp_geometry,
     targets_to_six,
@@ -75,11 +76,23 @@ class GraspValLoop(BaseLoop):
                 "width_factor": float(
                     getattr(cfg, "grasp_size_factor", 100.0)
                 ),
+                "grasp_height": float(getattr(cfg, "grasp_height", 20.0)),
+                "size_coordinate": str(
+                    getattr(cfg, "grasp_size_coordinate", "canvas")
+                ),
             }
         )
         self.grasp_size_activation = resolve_grasp_size_activation(
             getattr(cfg, "grasp_size_activation", "auto"), model=model
         )
+        self.offset_decode_mode = str(
+            getattr(cfg, "offset_decode_mode", "radius")
+        ).strip().lower()
+        if self.offset_decode_mode not in {"radius", "grasp_relative"}:
+            raise ValueError(
+                "offset_decode_mode must be 'radius' or 'grasp_relative', got "
+                f"{self.offset_decode_mode!r}"
+            )
 
     def _decode_size(self, prediction):
         if self.grasp_size_activation == "sigmoid":
@@ -307,7 +320,10 @@ class GraspValLoop(BaseLoop):
                 target_six = targets_to_six(grasp_targets)
 
                 size_scale = 1.0
-                if bool(getattr(self.cfg, "restore_grasp_size_scale", False)):
+                if (
+                    self.postprocessor.size_coordinate == "canvas"
+                    and bool(getattr(self.cfg, "restore_grasp_size_scale", False))
+                ):
                     linear = np.asarray(inverse_matrix, dtype=np.float32)[:, :2]
                     size_scale = float(
                         0.5
@@ -328,12 +344,19 @@ class GraspValLoop(BaseLoop):
                 )
                 rectangles = [detection.as_rectangle() for detection in detections]
                 if offset_maps is not None and rectangles:
-                    rectangles = refine_with_offset(
-                        rectangles,
-                        offset_maps[index : index + 1],
-                        inverse_matrix,
-                        self._offset_radius(input_hw),
-                    )
+                    if self.offset_decode_mode == "grasp_relative":
+                        rectangles = refine_with_grasp_relative_offset(
+                            rectangles,
+                            offset_maps[index : index + 1],
+                            inverse_matrix,
+                        )
+                    else:
+                        rectangles = refine_with_offset(
+                            rectangles,
+                            offset_maps[index : index + 1],
+                            inverse_matrix,
+                            self._offset_radius(input_hw),
+                        )
                     if bool(
                         getattr(self.cfg, "offset_resample_geometry", False)
                     ):

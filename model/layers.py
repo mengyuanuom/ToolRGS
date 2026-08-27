@@ -437,13 +437,14 @@ class MultiTaskProjector(nn.Module):
         super().__init__()
         self.in_dim = in_dim
         self.kernel_size = kernel_size
+        self.num_outputs = 5
         # visual projector
         self.vis = nn.Sequential(  # os16 -> os4
             nn.Upsample(scale_factor=2, mode='bilinear'),
             conv_layer(in_dim * 2, in_dim * 2, 3, padding=1),
             nn.Upsample(scale_factor=2, mode='bilinear'),
             conv_layer(in_dim * 2, in_dim, 3, padding=1),
-            nn.Conv2d(in_dim, in_dim*5, 1))
+            nn.Conv2d(in_dim, in_dim * self.num_outputs, 1))
 
         # textual projector
         out_dim = 1 * in_dim * kernel_size * kernel_size + 1
@@ -575,5 +576,4 @@ class OffsetMultiTaskProjector(nn.Module):
         if self.with_short_side:
             return (*outputs, self.short_side(x), self.offset(x))
         return (*outputs, self.offset(x))
-
 

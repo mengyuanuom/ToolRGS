@@ -77,6 +77,9 @@ def build_dataset(cfg, split, with_offset=False):
         split_root=getattr(cfg, "split_root", None),
         prompt_template=getattr(cfg, "prompt_template", "Grasp the {object_name}"),
         grasp_size_factor=float(getattr(cfg, "grasp_size_factor", 100.0)),
+        grasp_size_coordinate=str(
+            getattr(cfg, "grasp_size_coordinate", "canvas")
+        ),
         version=getattr(cfg, "version", "multiple"),
         with_depth=getattr(cfg, "with_depth", True),
     )
