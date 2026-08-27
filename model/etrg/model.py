@@ -15,6 +15,11 @@ from .clip import build_model as build_clip_model
 from .layers import FPN, MultiTaskProjector, TransformerDecoder
 
 
+def grasp_width_for_loss(width):
+    """Bound ETRG width predictions to the normalized training target."""
+    return torch.sigmoid(width)
+
+
 class BCEDiceLoss(nn.Module):
     """Official ETRG instance loss: BCE plus a small soft Dice term."""
 
@@ -113,7 +118,7 @@ def _build_depth_backbone(cfg):
 
 
 class ETRG(BaseGraspModel):
-    grasp_size_loss_activation = "clamp"
+    grasp_size_loss_activation = "sigmoid"
     """Parameter-efficient CLIP adapter with RGB or RGB-D auxiliary fusion."""
 
     requires_depth = True
@@ -280,7 +285,7 @@ class ETRG(BaseGraspModel):
         quality = F.smooth_l1_loss(outputs[1], grasp_qua_mask)
         sine = F.smooth_l1_loss(outputs[2], grasp_sin_mask)
         cosine = F.smooth_l1_loss(outputs[3], grasp_cos_mask)
-        width = F.smooth_l1_loss(outputs[4], grasp_wid_mask)
+        width = F.smooth_l1_loss(grasp_width_for_loss(outputs[4]), grasp_wid_mask)
         total = instance + quality + sine + cosine + width
         detached = GraspOutput(*(output.detach() for output in outputs))
         return GraspModelResult(

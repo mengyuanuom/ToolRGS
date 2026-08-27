@@ -29,6 +29,7 @@ from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
 from model.crog import grasp_width_for_loss
+from model.etrg.model import grasp_width_for_loss as etrg_grasp_width_for_loss
 from utils.config import resolve_grasp_size_activation
 from deploy_gui import (
     DEFAULT_SAMPLE_IMAGE,
@@ -47,6 +48,11 @@ experiment_values = check_deployment_symbols["_experiment_values"]
 
 
 class DeploymentContractTest(unittest.TestCase):
+    def test_etrg_width_training_contract_is_sigmoid(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        expected = torch.sigmoid(raw)
+        self.assertTrue(torch.equal(etrg_grasp_width_for_loss(raw), expected))
+
     def test_explicit_grasp_activation_must_match_checkpoint_metadata(self):
         self.assertEqual(
             resolve_grasp_size_activation(

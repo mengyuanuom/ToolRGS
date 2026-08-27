@@ -1,0 +1,6 @@
+_base_: etrg_r50_rgb_grasp_tools_v3_15k_original_scale.yaml
+
+TRAIN:
+  batch_size: 12
+  batch_size_val: 12
+  exp_name: etrg_r50_rgb_grasp_tools_v3_15k_original300_bs12_sigmoid

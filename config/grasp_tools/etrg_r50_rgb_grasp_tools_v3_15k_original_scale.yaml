@@ -1,0 +1,45 @@
+_base_: crog_v2_original_scale.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+
+MODEL:
+  architecture: etrg
+
+TRAIN:
+  # Grasp-Tools V3 contains RGB images but no aligned depth maps.
+  etrg_input_mode: rgb
+  clip_pretrain: pretrain/RN50.pt
+  depth_pretrain:
+  depth_backbone_pretrained: True
+  depth_normalization: inverse_max
+  ladder_dim: 64
+  nhead: 4
+  multi_stage: 3
+  num_layers: 3
+  num_head: 8
+  dim_ffn: 512
+  dropout: 0.1
+  intermediate: False
+  workers: 4
+  workers_val: 2
+  epochs: 36
+  milestones: [30]
+  batch_size: 8
+  batch_size_val: 8
+  base_lr: 0.0001
+  weight_decay: 0.01
+  max_norm: 1.0
+  exp_name: etrg_r50_rgb_grasp_tools_v3_15k_original300_sigmoid
+  save_freq: 5
+  val_start_epoch: 11
+  val_freq: 1
+
+TEST:
+  evaluation_protocol: crog_legacy
+  grasp_size_activation: sigmoid
+  grasp_iou_thresholds: [0.25, 0.50, 0.75]
+  grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]
+  restore_grasp_size_scale: True
+  filter_grasps_by_segmentation: False
+  visualize: False
