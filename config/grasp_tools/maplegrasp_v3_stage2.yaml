@@ -1,0 +1,17 @@
+_base_: maplegrasp_v3_stage1.yaml
+
+TRAIN:
+  # Paper-style Stage 2: initialize the shared mask path from Stage 1 and
+  # train the four-map grasp head. Width is optimized and decoded as sigmoid.
+  stage1: False
+  stage2: True
+  use_gt_obj_masks: False
+  use_grasp_masks: True
+  predict_grasp_short_side: False
+  align_grasp_size_loss: True
+  weight: exp/grasp_tools/maplegrasp_stage1_grasp_tools_v3_15k_original300/best_iou_model.pth
+  exp_name: maplegrasp_stage2_grasp_tools_v3_15k_original300
+
+TEST:
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid

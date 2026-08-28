@@ -1,0 +1,40 @@
+_base_: maplegrasp.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+  grasp_size_factor: 300.0
+  grasp_height: 20.0
+  grasp_size_coordinate: original
+
+TRAIN:
+  # Paper-style Stage 1: learn only the language-conditioned object mask.
+  stage1: True
+  stage2: False
+  use_gt_obj_masks: False
+  use_grasp_masks: False
+  predict_grasp_short_side: False
+  align_grasp_size_loss: False
+  workers: 4
+  workers_val: 2
+  epochs: 24
+  milestones: [20]
+  batch_size: 8
+  batch_size_val: 4
+  max_norm: 1.0
+  exp_name: maplegrasp_stage1_grasp_tools_v3_15k_original300
+  save_freq: 0
+  val_start_epoch: 11
+  val_freq: 1
+  save_epochs: [5, 10]
+
+TEST:
+  evaluation_protocol: crog_legacy
+  test_batch_size: 16
+  test_workers: 2
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+  grasp_iou_thresholds: [0.25, 0.50, 0.75]
+  grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]
+  restore_grasp_size_scale: True
+  filter_grasps_by_segmentation: False
+  visualize: False
