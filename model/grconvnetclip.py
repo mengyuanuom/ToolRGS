@@ -131,10 +131,10 @@ class GenerativeResnetWithText(nn.Module):
         y_pos, y_cos, y_sin, y_width = yc
         pos_pred, cos_pred, sin_pred, width_pred = self(xc, e_txt)
 
-        p_loss = F.smooth_l1_loss(pos_pred, y_pos)
+        p_loss = F.smooth_l1_loss(torch.sigmoid(pos_pred), y_pos)
         cos_loss = F.smooth_l1_loss(cos_pred, y_cos)
         sin_loss = F.smooth_l1_loss(sin_pred, y_sin)
-        width_loss = F.smooth_l1_loss(width_pred, y_width)
+        width_loss = F.smooth_l1_loss(torch.sigmoid(width_pred), y_width)
 
         return {
             "loss": p_loss + cos_loss + sin_loss + width_loss,
@@ -163,7 +163,8 @@ class GenerativeResnetWithText(nn.Module):
 
 
 class GenerativeResnet_CLIP(nn.Module):
-    grasp_size_loss_activation = "clamp"
+    grasp_quality_loss_activation = "sigmoid"
+    grasp_size_loss_activation = "sigmoid"
 
     def __init__(self, cfg):
         super().__init__()
@@ -223,10 +224,13 @@ class GenerativeResnet_CLIP(nn.Module):
                 grasp_cos_mask = F.interpolate(grasp_cos_mask, pos_pred.shape[-2:], mode='nearest').detach()
                 grasp_wid_mask = F.interpolate(grasp_wid_mask, pos_pred.shape[-2:], mode='nearest').detach()
 
-            p_loss   = F.smooth_l1_loss(qua_pred, grasp_qua_mask)
+            # Quality and width are bounded identically in training and
+            # inference: losses see sigmoid-decoded values, while validation
+            # applies the configured sigmoid once to the returned logits.
+            p_loss   = F.smooth_l1_loss(torch.sigmoid(qua_pred), grasp_qua_mask)
             cos_loss = F.smooth_l1_loss(cos_pred, grasp_cos_mask)
             sin_loss = F.smooth_l1_loss(sin_pred, grasp_sin_mask)
-            wid_loss = F.smooth_l1_loss(wid_pred, grasp_wid_mask)
+            wid_loss = F.smooth_l1_loss(torch.sigmoid(wid_pred), grasp_wid_mask)
 
             total_loss = p_loss + cos_loss + sin_loss + wid_loss
 

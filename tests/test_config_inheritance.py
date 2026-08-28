@@ -42,7 +42,7 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.batch_size, 32)
         self.assertEqual(cfg.epochs, 36)
 
-    def test_grasp_tools_v3_grconvnetclip_profile_uses_clamp_contract(self):
+    def test_grasp_tools_v3_grconvnetclip_profile_uses_sigmoid_contract(self):
         cfg = load_cfg_from_cfg_file(
             ROOT
             / "config"
@@ -50,8 +50,8 @@ class ConfigInheritanceTest(unittest.TestCase):
             / "grconvnetclip_grasp_tools_v3_15k_original_scale.yaml"
         )
         self.assertEqual(cfg.architecture, "grconvnetclip")
-        self.assertEqual(cfg.grasp_quality_activation, "clamp")
-        self.assertEqual(cfg.grasp_size_activation, "clamp")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
         self.assertEqual(cfg.grasp_size_coordinate, "original")
         self.assertEqual(cfg.grasp_size_factor, 300.0)
         self.assertEqual(cfg.word_len, 32)
