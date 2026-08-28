@@ -30,8 +30,10 @@ from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
 from model.crog import grasp_width_for_loss
+from model.clip_grasp_fusion import TextVisualFusionFiLM
 from model.etrg.model import ETRG, grasp_width_for_loss as etrg_grasp_width_for_loss
-from model.ggcnnclip import balanced_quality_bce_with_logits
+from model.ggcnnclip import GGCNNWithText, balanced_quality_bce_with_logits
+from model.grconvnetclip import GenerativeResnetWithText
 from utils.config import (
     resolve_grasp_quality_activation,
     resolve_grasp_size_activation,
@@ -53,6 +55,27 @@ experiment_values = check_deployment_symbols["_experiment_values"]
 
 
 class DeploymentContractTest(unittest.TestCase):
+    def test_ggcnn_keeps_original_layers_and_uses_shared_bottleneck_film(self):
+        model = GGCNNWithText(input_channels=3, text_dim=16)
+        self.assertEqual(model.conv1.kernel_size, (9, 9))
+        self.assertEqual(model.conv1.stride, (3, 3))
+        self.assertEqual(model.conv2.kernel_size, (5, 5))
+        self.assertEqual(model.conv2.stride, (2, 2))
+        self.assertEqual(model.conv3.kernel_size, (3, 3))
+        self.assertEqual(model.conv3.stride, (2, 2))
+        self.assertIsInstance(model.fusion, TextVisualFusionFiLM)
+        self.assertEqual(model.fusion.gamma.out_features, 8)
+
+        outputs = model(torch.randn(2, 3, 416, 416), torch.randn(2, 16))
+        self.assertEqual(len(outputs), 4)
+        for output in outputs:
+            self.assertEqual(tuple(output.shape), (2, 1, 416, 416))
+
+    def test_clip_grasp_heads_share_the_same_film_implementation(self):
+        ggcnn = GGCNNWithText(input_channels=3, text_dim=16)
+        grconvnet = GenerativeResnetWithText(input_channels=3, text_dim=16)
+        self.assertIs(type(ggcnn.fusion), type(grconvnet.fusion))
+
     def test_ggcnn_quality_loss_uses_balanced_logits_contract(self):
         prediction = torch.zeros((1, 1, 4, 4), requires_grad=True)
         target = torch.zeros_like(prediction)

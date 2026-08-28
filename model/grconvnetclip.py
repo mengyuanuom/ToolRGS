@@ -2,26 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .crog_clip import build_model
-
-# 你之前写好的 FiLM 模块，直接复用
-class TextVisualFusionFiLM(nn.Module):
-    def __init__(self, vis_dim: int, text_dim: int, hidden_dim: int = 128):
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(text_dim, hidden_dim),
-            nn.ReLU(inplace=True)
-        )
-        self.gamma = nn.Linear(hidden_dim, vis_dim)
-        self.beta = nn.Linear(hidden_dim, vis_dim)
-
-    def forward(self, feat, e_txt):
-        # feat: (B, C, H, W), e_txt: (B, D)
-        B, C, H, W = feat.shape
-        h = self.mlp(e_txt)              # (B, hidden_dim)
-        gamma = self.gamma(h).view(B, C, 1, 1)
-        beta  = self.beta(h).view(B, C, 1, 1)
-        return feat * (1.0 + gamma) + beta
-
+from .clip_grasp_fusion import TextVisualFusionFiLM
 
 class ResidualBlock(nn.Module):
     # 如果你原来是从 inference.models.grasp_model 里 import 的 ResidualBlock，

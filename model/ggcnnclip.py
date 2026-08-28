@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .crog_clip import build_model
+from .clip_grasp_fusion import TextVisualFusionFiLM
 
 
 def balanced_quality_bce_with_logits(
@@ -22,52 +23,6 @@ def balanced_quality_bce_with_logits(
         target,
         pos_weight=pos_weight,
     )
-
-class TextVisualFusionFiLM(nn.Module):
-
-    def __init__(self, vis_dim: int, text_dim: int, hidden_dim: int = 128):
-        """
-        Args:
-            vis_dim:   Number of channels in the visual feature map (C).
-            text_dim:  Dimension of the text embedding (D).
-            hidden_dim: Hidden size for the MLP that processes text.
-        """
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(text_dim, hidden_dim),
-            nn.ReLU(inplace=True)
-        )
-        self.gamma = nn.Linear(hidden_dim, vis_dim)
-        self.beta = nn.Linear(hidden_dim, vis_dim)
-
-    def forward(self, feat, e_txt):
-        """
-        Args:
-            feat:  Tensor of shape (B, C, H, W) - visual feature map.
-            e_txt: Tensor of shape (B, D)       - text embedding.
-
-        Returns:
-            feat_fused: Tensor of shape (B, C, H, W).
-        """
-        B, C, H, W = feat.shape
-
-        # Text → hidden representation
-        h = self.mlp(e_txt)        # (B, hidden_dim)
-
-        # Map hidden representation to per-channel gamma and beta
-        # Raw CLIP states can have a much larger magnitude than the shallow
-        # GG-CNN feature stream. Bound both FiLM branches so one batch cannot
-        # explode the activations and poison the optimizer with NaN gradients.
-        gamma = torch.tanh(self.gamma(h))      # (B, C)
-        beta = torch.tanh(self.beta(h))        # (B, C)
-
-        # Reshape to broadcast over H and W
-        gamma = gamma.view(B, C, 1, 1)
-        beta = beta.view(B, C, 1, 1)
-
-        # FiLM transformation
-        feat_fused = feat * (1.0 + gamma) + beta
-        return feat_fused
 
 filter_sizes = [32, 16, 8, 8, 16, 32]
 kernel_sizes = [9, 5, 3, 3, 5, 9]
@@ -91,8 +46,8 @@ class GGCNNWithText(nn.Module):
         Args:
             input_channels: Number of input channels (e.g. 4 for RGB-D).
             text_dim:       Dimension of the text embedding (e.g. CLIP text dim).
-            dropout:        Unused here, kept for API compatibility.
-            prob:           Unused here, kept for API compatibility.
+            dropout:        Whether to apply output-head dropout.
+            prob:           Dropout probability when enabled.
         """
         super().__init__()
         self.max_quality_pos_weight = float(max_quality_pos_weight)
@@ -128,9 +83,10 @@ class GGCNNWithText(nn.Module):
             padding=5, output_padding=1
         )
 
-        # Text-visual FiLM fusion: channel dim = filter_sizes[5] = 32
+        # Match GRConvNet-CLIP: fuse text at the encoder bottleneck, then let
+        # the untouched GG-CNN decoder reconstruct the spatial prediction.
         self.fusion = TextVisualFusionFiLM(
-            vis_dim=filter_sizes[5],
+            vis_dim=filter_sizes[2],
             text_dim=text_dim,
             hidden_dim=128
         )
@@ -140,6 +96,7 @@ class GGCNNWithText(nn.Module):
         self.cos_output = nn.Conv2d(filter_sizes[5], 1, kernel_size=2)
         self.sin_output = nn.Conv2d(filter_sizes[5], 1, kernel_size=2)
         self.width_output = nn.Conv2d(filter_sizes[5], 1, kernel_size=2)
+        self.dropout1 = nn.Dropout(p=prob if dropout else 0.0)
 
         # Weight initialization
         for m in self.modules():
@@ -161,17 +118,19 @@ class GGCNNWithText(nn.Module):
         x = F.relu(self.conv1(x_in))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
+
+        # Use the same shared bottleneck FiLM module and placement as
+        # GRConvNet-CLIP. The GG-CNN encoder/decoder layers remain original.
+        x = self.fusion(x, e_txt)
+
         x = F.relu(self.convt1(x))
         x = F.relu(self.convt2(x))
         x = F.relu(self.convt3(x))
 
-        # Text-conditioned FiLM fusion
-        x = self.fusion(x, e_txt)
-
-        pos_output = self.pos_output(x)
-        cos_output = self.cos_output(x)
-        sin_output = self.sin_output(x)
-        width_output = self.width_output(x)
+        pos_output = self.pos_output(self.dropout1(x))
+        cos_output = self.cos_output(self.dropout1(x))
+        sin_output = self.sin_output(self.dropout1(x))
+        width_output = self.width_output(self.dropout1(x))
 
         return pos_output, cos_output, sin_output, width_output
 
@@ -288,6 +247,8 @@ class GGCNN_CLIP(nn.Module):
         self.grasp_head = GGCNNWithText(
             input_channels=in_ch,
             text_dim=text_dim,
+            dropout=getattr(cfg, "dropout", False),
+            prob=getattr(cfg, "dropout_prob", 0.0),
             max_quality_pos_weight=float(
                 getattr(cfg, "ggcnn_quality_pos_weight", 32.0)
             ),
@@ -331,7 +292,6 @@ class GGCNN_CLIP(nn.Module):
         # backbone.encode_text(...) typically returns (word_feat, state).
         # We use 'state' as the sentence-level embedding.
         _, state = self.backbone.encode_text(word)   # state: (B, text_dim)
-        state = F.normalize(state.float(), dim=-1)
 
         # Run GG-CNN with text conditioning
         pos_pred, cos_pred, sin_pred, wid_pred = self.grasp_head(img, state)

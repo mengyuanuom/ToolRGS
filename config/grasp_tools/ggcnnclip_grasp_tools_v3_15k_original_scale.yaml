@@ -14,7 +14,9 @@ TRAIN:
   milestones: [30]
   batch_size: 32
   batch_size_val: 32
-  exp_name: ggcnnclip_grasp_tools_v3_15k_original300_bs32_quality_sigmoid
+  exp_name: ggcnnclip_grasp_tools_v3_15k_original300_bs32_grconv_film
+  dropout: False
+  dropout_prob: 0.0
   ggcnn_quality_pos_weight: 32.0
   save_freq: 5
   val_start_epoch: 11
