@@ -14,7 +14,9 @@ TRAIN:
   milestones: [30]
   batch_size: 8
   batch_size_val: 8
-  exp_name: graspmamba_grasp_tools_v3_15k_original300_bs8
+  base_lr: 0.0001
+  amp: False
+  exp_name: graspmamba_grasp_tools_v3_15k_original300_bs8_fp32_lr1e4
   save_freq: 5
   val_start_epoch: 11
   val_freq: 1

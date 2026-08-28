@@ -23,6 +23,8 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.grasp_size_factor, 300.0)
         self.assertEqual(cfg.word_len, 32)
         self.assertEqual(cfg.batch_size, 8)
+        self.assertEqual(cfg.base_lr, 0.0001)
+        self.assertFalse(cfg.amp)
         self.assertEqual(cfg.epochs, 36)
 
     def test_grasp_tools_v3_ggcnn_profile_uses_clamp_contract(self):
