@@ -1,3 +1,4 @@
+import glob
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,6 +10,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ConfigInheritanceTest(unittest.TestCase):
+    def test_all_grasp_tools_v3_profiles_share_original_300_size_contract(self):
+        matched = []
+        for path in glob.glob(
+            str(ROOT / "config" / "grasp_tools" / "*.yaml")
+        ):
+            cfg = load_cfg_from_cfg_file(path)
+            if "aug_graspall_v3_15k" not in str(getattr(cfg, "root_path", "")):
+                continue
+            matched.append(path)
+            self.assertEqual(cfg.grasp_size_coordinate, "original", path)
+            self.assertEqual(cfg.grasp_size_factor, 300.0, path)
+        self.assertGreaterEqual(len(matched), 9)
+
     def test_grasp_tools_v3_graspmamba_profile_uses_sigmoid_contract(self):
         cfg = load_cfg_from_cfg_file(
             ROOT

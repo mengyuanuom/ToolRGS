@@ -386,8 +386,22 @@ class GraspValLoop(BaseLoop):
                 else:
                     rectangles = rectangles_to_five(rectangles)
 
+                target_width_cap = self.postprocessor.width_factor
+                if self.postprocessor.size_coordinate == "canvas":
+                    target_width_cap *= size_scale
                 for topk in self.topk:
-                    success = calculate_jacquard_index(rectangles[:topk], target_six)
+                    success = calculate_jacquard_index(
+                        rectangles[:topk],
+                        target_six,
+                        iou_threshold=float(
+                            getattr(self.cfg, "grasp_iou_threshold", 0.25)
+                        ),
+                        angle_threshold=float(
+                            getattr(self.cfg, "grasp_angle_threshold", 30.0)
+                        ),
+                        target_width_cap=target_width_cap,
+                        target_height=self.postprocessor.grasp_height,
+                    )
                     self.grasp_metric.update(topk, success)
 
             self.state.result = result

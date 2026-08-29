@@ -39,12 +39,36 @@ class GraspToolTransforms:
             result.append([cx, cy, width, height, angle, target])
         return np.asarray(result, dtype=np.float32).reshape(-1, 6)
 
-    def generate_masks(self, grasp_rectangles, include_short=False):
+    def generate_masks(
+        self,
+        grasp_rectangles,
+        include_short=False,
+        size_rectangles=None,
+    ):
+        grasp_rectangles = np.asarray(
+            grasp_rectangles, dtype=np.float32
+        ).reshape(-1, 6)
+        if size_rectangles is None:
+            size_rectangles = grasp_rectangles
+        else:
+            size_rectangles = np.asarray(
+                size_rectangles, dtype=np.float32
+            ).reshape(-1, 6)
+            if len(size_rectangles) != len(grasp_rectangles):
+                raise ValueError(
+                    "grasp_rectangles and size_rectangles must contain the "
+                    f"same number of grasps, got {len(grasp_rectangles)} and "
+                    f"{len(size_rectangles)}"
+                )
         quality = np.zeros((self.height, self.width), dtype=np.float32)
         angle_map = np.zeros_like(quality)
         width_map = np.zeros_like(quality)
         short_map = np.zeros_like(quality) if include_short else None
-        for center_x, center_y, width, height, angle, _ in grasp_rectangles:
+        for grasp_rectangle, size_rectangle in zip(
+            grasp_rectangles, size_rectangles
+        ):
+            center_x, center_y, width, height, angle, _ = grasp_rectangle
+            size_width, size_height = size_rectangle[2:4]
             rect = (
                 (float(center_x), float(center_y)),
                 (float(width) / 2.0, float(height)),
@@ -57,11 +81,11 @@ class GraspToolTransforms:
             quality[rr, cc] = 1.0
             angle_map[rr, cc] = angle + 180.0 if angle < 0 else angle
             width_map[rr, cc] = np.clip(
-                width, 0.0, self.width_factor
+                size_width, 0.0, self.width_factor
             ) / self.width_factor
             if short_map is not None:
                 short_map[rr, cc] = np.clip(
-                    height, 0.0, self.width_factor
+                    size_height, 0.0, self.width_factor
                 ) / self.width_factor
         masks = {
             "qua": gaussian(quality, 3, preserve_range=True).astype(np.float32),
@@ -90,6 +114,8 @@ class GraspToolDataset(Dataset):
         offset_sigma=None,
         dynamic_train_prompts=False,
         dynamic_prompt_seed=2025,
+        grasp_size_factor=100.0,
+        grasp_size_coordinate="canvas",
     ):
         self.root_dir = os.path.abspath(root_dir)
         self.split = str(split)
@@ -102,6 +128,15 @@ class GraspToolDataset(Dataset):
         self.offset_sigma = offset_sigma
         self.dynamic_train_prompts = bool(dynamic_train_prompts)
         self.dynamic_prompt_seed = int(dynamic_prompt_seed)
+        self.grasp_size_factor = float(grasp_size_factor)
+        if self.grasp_size_factor <= 0.0:
+            raise ValueError("grasp_size_factor must be positive")
+        self.grasp_size_coordinate = str(grasp_size_coordinate).strip().lower()
+        if self.grasp_size_coordinate not in {"canvas", "original"}:
+            raise ValueError(
+                "grasp_size_coordinate must be 'canvas' or 'original', got "
+                f"{grasp_size_coordinate!r}"
+            )
         self.mean = torch.tensor(
             [0.48145466, 0.4578275, 0.40821073]
         ).reshape(3, 1, 1)
@@ -109,7 +144,7 @@ class GraspToolDataset(Dataset):
             [0.26862954, 0.26130258, 0.27577711]
         ).reshape(3, 1, 1)
         self.grasp_transform = GraspToolTransforms(
-            width_factor=100.0,
+            width_factor=self.grasp_size_factor,
             width=self.input_size[1],
             height=self.input_size[0],
         )
@@ -282,8 +317,15 @@ class GraspToolDataset(Dataset):
             transformed = np.zeros((0, 4, 2), dtype=np.float32)
         original_grasps = self.grasp_transform(grasps, target_idx)
         transformed_grasps = self.grasp_transform(transformed, target_idx)
+        size_grasps = (
+            original_grasps
+            if self.grasp_size_coordinate == "original"
+            else transformed_grasps
+        )
         raw_masks = self.grasp_transform.generate_masks(
-            transformed_grasps, include_short=self.with_short_side
+            transformed_grasps,
+            include_short=self.with_short_side,
+            size_rectangles=size_grasps,
         )
         grasp_masks = {
             "qua": torch.from_numpy(raw_masks["qua"]).float(),

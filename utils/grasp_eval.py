@@ -357,15 +357,27 @@ def calculate_max_iou(rects_p, rects_gt):
     return max_iou
 
 
-def calculate_jacquard_index(grasp_preds, grasp_targets, iou_threshold=0.25):
+def calculate_jacquard_index(
+    grasp_preds,
+    grasp_targets,
+    iou_threshold=0.25,
+    angle_threshold=30.0,
+    target_width_cap=100.0,
+    target_height=20.0,
+):
     grasp_preds = np.asarray(grasp_preds)
-    grasp_targets = np.asarray(grasp_targets)
+    grasp_targets = np.asarray(grasp_targets).copy()
 
-    grasp_targets[:, 3] = 20
-    grasp_targets[:, 2] = np.clip(grasp_targets[:, 2], 0, 100)
+    grasp_targets[:, 3] = float(target_height)
+    if target_width_cap is not None:
+        grasp_targets[:, 2] = np.clip(
+            grasp_targets[:, 2], 0, float(target_width_cap)
+        )
 
     for rect_gt in grasp_targets:
         for rect_p in grasp_preds:
-            if calculate_iou(rect_p, rect_gt) > iou_threshold:
+            if calculate_iou(
+                rect_p, rect_gt, angle_threshold=float(angle_threshold)
+            ) > iou_threshold:
                 return 1
     return 0

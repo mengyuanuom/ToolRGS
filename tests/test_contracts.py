@@ -1,5 +1,6 @@
 import glob
 import os
+import tempfile
 import unittest
 
 import numpy as np
@@ -14,6 +15,7 @@ from model.lgd import CosineDiffusion, LGDCore
 from model.maplegrasp import MapleGraspProjector
 from utils.dataset import GraspTransforms, make_dense_offset_with_radius_np
 from utils.data_builder import DATASET_REGISTRY
+from utils.grasp_tool_dataset import GraspToolDataset, GraspToolTransforms
 from utils.ocid_vlg_dataset import parse_ocid_image_filename, resolve_ocid_vlg_split
 from utils.vcot_dataset import grasp_anything_to_quads, resolve_vcot_split
 from toolrgs.evaluation.asymmetric_geometry import generate_asymmetric_grasp_targets
@@ -41,6 +43,40 @@ class ToolRGSContractsTest(unittest.TestCase):
             np.array([[0.0, 0.0, 30.0, 20.0, 0.0, 0.0]], dtype=np.float32)
         )
         self.assertEqual(raw["pos"][-1, -1], 0)
+
+    def test_grasp_tool_dataset_accepts_original_size_contract(self):
+        with tempfile.TemporaryDirectory() as root:
+            split_root = os.path.join(root, "train")
+            os.makedirs(split_root)
+            with open(
+                os.path.join(split_root, "index.jsonl"), "w", encoding="utf-8"
+            ) as stream:
+                stream.write(
+                    '{"image":"sample.jpg","annotation":"sample.json",'
+                    '"query_index":0}\n'
+                )
+            dataset = GraspToolDataset(
+                root,
+                split="train",
+                grasp_size_factor=300.0,
+                grasp_size_coordinate="original",
+            )
+        self.assertEqual(dataset.grasp_transform.width_factor, 300.0)
+        self.assertEqual(dataset.grasp_size_coordinate, "original")
+
+    def test_grasp_tool_masks_separate_canvas_geometry_from_original_size(self):
+        transform = GraspToolTransforms(width_factor=300.0, width=32, height=32)
+        canvas_grasp = np.array(
+            [[16.0, 16.0, 20.0, 8.0, 0.0, 0.0]], dtype=np.float32
+        )
+        original_size = np.array(
+            [[16.0, 16.0, 150.0, 30.0, 0.0, 0.0]], dtype=np.float32
+        )
+        raw = transform.generate_masks(
+            canvas_grasp, size_rectangles=original_size
+        )
+        self.assertAlmostEqual(float(raw["wid"][16, 16]), 0.5, places=5)
+        self.assertGreater(float(raw["qua"][16, 16]), 0.9)
 
     def test_vcot_grasp_six_column_conversion(self):
         quads, scores = grasp_anything_to_quads(

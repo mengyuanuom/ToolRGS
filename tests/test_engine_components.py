@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -16,6 +17,7 @@ from toolrgs.evaluation import (
     targets_to_six,
 )
 from toolrgs.registry import HOOKS, METRICS, POSTPROCESSORS
+from utils.grasp_eval import calculate_jacquard_index
 
 
 class EvaluationComponentTest(unittest.TestCase):
@@ -147,6 +149,25 @@ class EvaluationComponentTest(unittest.TestCase):
         metric.update(1, False)
         metric.update(5, True)
         self.assertEqual(metric.compute(), {"J@1": 0.5, "J@5": 1.0})
+
+    def test_jacquard_uses_configured_original_width_cap_without_mutation(self):
+        predictions = np.array([[100, 100, 250, 20, 0]], dtype=np.float32)
+        targets = np.array([[100, 100, 250, 40, 0, 0]], dtype=np.float32)
+        observed = []
+
+        def record_iou(_prediction, target, **_kwargs):
+            observed.append(target.copy())
+            return 0.0
+
+        with patch("utils.grasp_eval.calculate_iou", side_effect=record_iou):
+            calculate_jacquard_index(
+                predictions,
+                targets,
+                target_width_cap=300.0,
+                target_height=20.0,
+            )
+        np.testing.assert_array_equal(targets[0], [100, 100, 250, 40, 0, 0])
+        np.testing.assert_array_equal(observed[0], [100, 100, 250, 20, 0, 0])
 
     def test_evaluation_components_are_registered(self):
         self.assertIn("binary_segmentation", METRICS)
