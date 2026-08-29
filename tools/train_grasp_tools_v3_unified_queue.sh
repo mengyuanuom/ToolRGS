@@ -7,6 +7,25 @@ cd "$ROOT"
 GPU_ID="${1:?usage: train_grasp_tools_v3_unified_queue.sh <gpu-id> <config>...}"
 shift
 PYTHON_BIN="${TOOLRGS_PYTHON:-python}"
+POLL_SECONDS="${GPU_POLL_SECONDS:-60}"
+
+wait_for_gpu() {
+  local gpu_uuid
+  gpu_uuid="$(nvidia-smi \
+    --query-gpu=index,uuid --format=csv,noheader,nounits \
+    | awk -F ', ' -v index="$GPU_ID" '$1 == index {print $2}')"
+  if [[ -z "$gpu_uuid" ]]; then
+    echo "[error] physical GPU $GPU_ID was not found" >&2
+    return 1
+  fi
+  while nvidia-smi \
+    --query-compute-apps=gpu_uuid --format=csv,noheader,nounits 2>/dev/null \
+    | grep -Fxq "$gpu_uuid"; do
+    echo "[wait] physical GPU $GPU_ID ($gpu_uuid) is occupied"
+    sleep "$POLL_SECONDS"
+  done
+  echo "[ready] physical GPU $GPU_ID ($gpu_uuid) is free"
+}
 
 run_experiment() {
   local config="$1"
@@ -38,6 +57,7 @@ PY
     echo "[start] $exp_name from Epoch 1"
   fi
 
+  wait_for_gpu
   env CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_BIN" -u train.py \
     --config "$config" --gpu 0 "${resume_args[@]}" \
     >>"$console_log" 2>&1
