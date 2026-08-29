@@ -13,7 +13,7 @@ wait_for_gpu() {
   local gpu_uuid
   gpu_uuid="$(nvidia-smi \
     --query-gpu=index,uuid --format=csv,noheader,nounits \
-    | awk -F ', ' -v index="$GPU_ID" '$1 == index {print $2}')"
+    | awk -F ', ' -v wanted="$GPU_ID" '$1 == wanted {print $2}')"
   if [[ -z "$gpu_uuid" ]]; then
     echo "[error] physical GPU $GPU_ID was not found" >&2
     return 1
