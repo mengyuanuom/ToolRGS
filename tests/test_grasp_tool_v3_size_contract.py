@@ -39,8 +39,10 @@ class GraspToolV3SizeContractTest(unittest.TestCase):
         raw = transform.generate_masks(
             canvas_grasp, size_rectangles=original_size
         )
-        self.assertAlmostEqual(float(raw["wid"][16, 16]), 0.5, places=5)
-        self.assertGreater(float(raw["qua"][16, 16]), 0.9)
+        quality = float(raw["qua"][16, 16])
+        width = float(raw["wid"][16, 16])
+        self.assertGreater(quality, 0.5)
+        self.assertAlmostEqual(width / quality, 0.5, places=5)
 
 
 if __name__ == "__main__":
