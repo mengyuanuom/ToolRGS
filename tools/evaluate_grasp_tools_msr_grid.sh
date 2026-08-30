@@ -11,6 +11,9 @@ RESULT_DIR="${4:?missing result directory}"
 SPLIT="${5:-val}"
 PYTHON_BIN="${TOOLRGS_PYTHON:-python}"
 POLL_SECONDS="${GPU_POLL_SECONDS:-60}"
+ALLOW_SHARED_GPU="${ALLOW_SHARED_GPU:-0}"
+EVAL_BATCH_SIZE="${EVAL_BATCH_SIZE:-}"
+EVAL_WORKERS="${EVAL_WORKERS:-}"
 
 gpu_uuid="$(nvidia-smi \
   --query-gpu=index,uuid --format=csv,noheader,nounits \
@@ -19,12 +22,22 @@ if [[ -z "$gpu_uuid" ]]; then
   echo "[error] physical GPU $GPU_ID was not found" >&2
   exit 1
 fi
-while nvidia-smi \
-  --query-compute-apps=gpu_uuid --format=csv,noheader,nounits 2>/dev/null \
-  | grep -Fxq "$gpu_uuid"; do
-  echo "[wait] physical GPU $GPU_ID ($gpu_uuid) is occupied"
-  sleep "$POLL_SECONDS"
-done
+if [[ "$ALLOW_SHARED_GPU" != "1" ]]; then
+  while nvidia-smi \
+    --query-compute-apps=gpu_uuid --format=csv,noheader,nounits 2>/dev/null \
+    | grep -Fxq "$gpu_uuid"; do
+    echo "[wait] physical GPU $GPU_ID ($gpu_uuid) is occupied"
+    sleep "$POLL_SECONDS"
+  done
+fi
+
+extra_opts=()
+if [[ -n "$EVAL_BATCH_SIZE" ]]; then
+  extra_opts+=(TRAIN.batch_size_val "$EVAL_BATCH_SIZE")
+fi
+if [[ -n "$EVAL_WORKERS" ]]; then
+  extra_opts+=(TRAIN.workers_val "$EVAL_WORKERS")
+fi
 
 mkdir -p "$RESULT_DIR"
 for iou in 0.25 0.50 0.75; do
@@ -42,6 +55,7 @@ for iou in 0.25 0.50 0.75; do
       --opts \
       TEST.grasp_iou_threshold "$iou" \
       TEST.grasp_angle_threshold "$angle" \
+      "${extra_opts[@]}" \
       >"$log" 2>&1
   done
 done
