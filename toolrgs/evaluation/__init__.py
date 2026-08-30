@@ -1,6 +1,10 @@
 """Registered metrics and prediction postprocessors."""
 
-from .metrics import BinarySegmentationMetric, GraspSuccessMetric
+from .metrics import (
+    BinarySegmentationMetric,
+    GraspSuccessMetric,
+    GraspThresholdGridMetric,
+)
 from .postprocessors import DenseGraspPostProcessor, GraspDetection
 from .protocols import EvaluationProtocol, resolve_evaluation_protocol
 from .geometry import (
@@ -39,6 +43,7 @@ __all__ = [
     "EvaluationProtocol",
     "GraspDetection",
     "GraspSuccessMetric",
+    "GraspThresholdGridMetric",
     "REALVLG_ANGLE_THRESHOLD",
     "REALVLG_GRIPPER_DEPTH",
     "REALVLG_IOU_THRESHOLD",

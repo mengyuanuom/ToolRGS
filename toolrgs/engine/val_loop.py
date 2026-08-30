@@ -14,6 +14,7 @@ from toolrgs.evaluation import (
     BinarySegmentationMetric,
     DenseGraspPostProcessor,
     GraspSuccessMetric,
+    GraspThresholdGridMetric,
     inverse_warp,
     rectangles_to_five,
     refine_with_grasp_relative_offset,
@@ -68,6 +69,22 @@ class GraspValLoop(BaseLoop):
             getattr(cfg, "grasp_metric", None)
             or {"type": "grasp_success", "topk": self.topk}
         )
+        self.compute_grasp_msr = bool(
+            getattr(cfg, "compute_grasp_msr", False)
+        )
+        self.grasp_grid_metric = None
+        self.grasp_threshold_grid = []
+        self.grasp_msr = {}
+        if self.compute_grasp_msr:
+            self.grasp_grid_metric = GraspThresholdGridMetric(
+                iou_thresholds=getattr(
+                    cfg, "grasp_iou_thresholds", (0.25, 0.50, 0.75)
+                ),
+                angle_thresholds=getattr(
+                    cfg, "grasp_angle_thresholds", (5.0, 10.0, 20.0, 30.0)
+                ),
+                topk=self.topk,
+            )
         self.postprocessor = POSTPROCESSORS.build(
             getattr(cfg, "grasp_postprocessor", None)
             or {
@@ -142,12 +159,33 @@ class GraspValLoop(BaseLoop):
             cursor += 2
         return float(iou), precision, j_index
 
+    def _global_grid_results(self, device):
+        keys = tuple(self.grasp_grid_metric.correct)
+        values = []
+        for key in keys:
+            values.extend(
+                [
+                    self.grasp_grid_metric.correct[key],
+                    self.grasp_grid_metric.total[key],
+                ]
+            )
+        statistics = torch.tensor(values, dtype=torch.float64, device=device)
+        if dist.is_available() and dist.is_initialized():
+            dist.all_reduce(statistics, op=dist.ReduceOp.SUM)
+        statistics = statistics.cpu().tolist()
+        for index, key in enumerate(keys):
+            self.grasp_grid_metric.correct[key] = statistics[2 * index]
+            self.grasp_grid_metric.total[key] = statistics[2 * index + 1]
+        return self.grasp_grid_metric.compute()
+
     @torch.no_grad()
     def run_epoch(self, epoch: int):
         self.state = LoopState(epoch=epoch)
         self.hooks.call("before_epoch", self, self.state)
         self.segmentation_metric.reset()
         self.grasp_metric.reset()
+        if self.grasp_grid_metric is not None:
+            self.grasp_grid_metric.reset()
         self.model.eval()
         rank = int(getattr(self.cfg, "rank", 0))
         progress = tqdm(self.dataloader, disable=rank != 0)
@@ -403,15 +441,42 @@ class GraspValLoop(BaseLoop):
                         target_height=self.postprocessor.grasp_height,
                     )
                     self.grasp_metric.update(topk, success)
+                if self.grasp_grid_metric is not None:
+                    for iou_threshold, angle_threshold in (
+                        self.grasp_grid_metric.threshold_pairs
+                    ):
+                        for topk in self.topk:
+                            success = calculate_jacquard_index(
+                                rectangles[:topk],
+                                target_six,
+                                iou_threshold=iou_threshold,
+                                angle_threshold=angle_threshold,
+                                target_width_cap=target_width_cap,
+                                target_height=self.postprocessor.grasp_height,
+                            )
+                            self.grasp_grid_metric.update(
+                                iou_threshold,
+                                angle_threshold,
+                                topk,
+                                success,
+                            )
 
             self.state.result = result
             self.hooks.call("after_iter", self, self.state)
 
         iou, precision, j_index = self._global_results(device)
+        self.grasp_threshold_grid = []
+        self.grasp_msr = {}
+        if self.grasp_grid_metric is not None:
+            grid_results = self._global_grid_results(device)
+            self.grasp_threshold_grid = grid_results["rows"]
+            self.grasp_msr = grid_results["msr"]
         self.state.logs = {
             "iou": iou,
             "precision": precision,
             "j_index": j_index,
+            "grasp_threshold_grid": self.grasp_threshold_grid,
+            "msr": self.grasp_msr,
         }
         self.hooks.call("after_epoch", self, self.state)
         if rank == 0:
@@ -430,4 +495,12 @@ class GraspValLoop(BaseLoop):
                 grasp_text,
                 precision_text,
             )
+            if self.grasp_msr:
+                logger.info(
+                    "mSR: {}",
+                    "  ".join(
+                        f"mSR@{topk}={100.0 * value:.4f}"
+                        for topk, value in self.grasp_msr.items()
+                    ),
+                )
         return iou, precision, j_index

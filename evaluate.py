@@ -21,12 +21,19 @@ def parse_args():
     parser.add_argument("--config", required=True)
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--split", help="Evaluation split override")
+    parser.add_argument(
+        "--msr-output",
+        help="Write a one-forward-pass IoU/angle threshold-grid summary TSV",
+    )
     parser.add_argument("--opts", nargs=argparse.REMAINDER)
     cli = parser.parse_args()
     cfg = config.load_cfg_from_cfg_file(cli.config)
     if cli.opts:
         cfg = config.merge_cfg_from_list(cfg, cli.opts)
     cfg.resume = cli.checkpoint
+    cfg.msr_output = cli.msr_output
+    if cli.msr_output:
+        cfg.compute_grasp_msr = True
     cfg.eval_split = cli.split or getattr(
         cfg, "test_split", getattr(cfg, "val_split", None)
     )
@@ -91,6 +98,31 @@ def main():
         )
     else:
         logger.info("Final IoU={}, precision={}, J={}", iou, precision, j_index)
+    if args.msr_output:
+        rows = getattr(val_loop, "grasp_threshold_grid", None)
+        msr = getattr(val_loop, "grasp_msr", None)
+        if not rows or not msr:
+            raise RuntimeError("The selected validation loop did not produce an mSR grid")
+        output_parent = os.path.dirname(os.path.abspath(args.msr_output))
+        os.makedirs(output_parent, exist_ok=True)
+        topk = tuple(int(value) for value in args.grasp_topk)
+        with open(args.msr_output, "w", encoding="utf-8") as handle:
+            handle.write("iou\tangle\t" + "\t".join(f"J@{k}" for k in topk) + "\n")
+            for row in rows:
+                values = "\t".join(
+                    f"{100.0 * row['values'][k]:.4f}" for k in topk
+                )
+                handle.write(f"{row['iou']:.2f}\t{row['angle']:.1f}\t{values}\n")
+            handle.write(
+                "mSR\tmean\t"
+                + "\t".join(f"{100.0 * msr[k]:.4f}" for k in topk)
+                + "\n"
+            )
+        logger.info(
+            "mSR summary: {} ({})",
+            args.msr_output,
+            "  ".join(f"mSR@{k}={100.0 * msr[k]:.4f}" for k in topk),
+        )
 
 
 if __name__ == "__main__":

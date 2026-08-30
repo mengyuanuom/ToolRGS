@@ -8,6 +8,7 @@ from toolrgs.evaluation import (
     BinarySegmentationMetric,
     DenseGraspPostProcessor,
     GraspSuccessMetric,
+    GraspThresholdGridMetric,
     corners_to_five,
     five_to_corners,
     inverse_warp,
@@ -150,6 +151,22 @@ class EvaluationComponentTest(unittest.TestCase):
         metric.update(5, True)
         self.assertEqual(metric.compute(), {"J@1": 0.5, "J@5": 1.0})
 
+    def test_grasp_threshold_grid_computes_each_cell_and_msr(self):
+        metric = GraspThresholdGridMetric(
+            iou_thresholds=(0.25, 0.5),
+            angle_thresholds=(10.0,),
+            topk=(1, 5),
+        )
+        for success in (True, False):
+            metric.update(0.25, 10.0, 1, success)
+        metric.update(0.25, 10.0, 5, True)
+        metric.update(0.5, 10.0, 1, False)
+        metric.update(0.5, 10.0, 5, True)
+        result = metric.compute()
+        self.assertEqual(result["rows"][0]["values"], {1: 0.5, 5: 1.0})
+        self.assertEqual(result["rows"][1]["values"], {1: 0.0, 5: 1.0})
+        self.assertEqual(result["msr"], {1: 0.25, 5: 1.0})
+
     def test_jacquard_uses_configured_original_width_cap_without_mutation(self):
         predictions = np.array([[100, 100, 250, 20, 0]], dtype=np.float32)
         targets = np.array([[100, 100, 250, 40, 0, 0]], dtype=np.float32)
@@ -172,6 +189,7 @@ class EvaluationComponentTest(unittest.TestCase):
     def test_evaluation_components_are_registered(self):
         self.assertIn("binary_segmentation", METRICS)
         self.assertIn("grasp_success", METRICS)
+        self.assertIn("grasp_threshold_grid", METRICS)
         self.assertIn("dense_grasp", POSTPROCESSORS)
 
 
