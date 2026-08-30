@@ -118,6 +118,33 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.batch_size, 16)
         self.assertEqual(cfg.epochs, 36)
 
+    def test_native_v3_lora_unified_profile_is_fresh_and_uncropped(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "drogoff_native_v3_lora_r24_12l_v3_unified_original300_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "drogoff")
+        self.assertEqual(cfg.native_variant, "v3")
+        self.assertEqual(cfg.native_lora_rank, 24)
+        self.assertEqual(cfg.native_visual_lora_layers, list(range(12)))
+        self.assertEqual(cfg.native_text_lora_layers, list(range(12)))
+        self.assertEqual(
+            cfg.exp_name,
+            "drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_unified_original300",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.epochs, 24)
+        self.assertEqual(cfg.batch_size, 4)
+        self.assertEqual(cfg.world_size, 1)
+
     def test_etrg_experiment_composes_four_base_configs(self):
         cfg = load_cfg_from_cfg_file(
             ROOT / "configs" / "etrg" / "etrg_r50_ocid_vlg.yaml"
