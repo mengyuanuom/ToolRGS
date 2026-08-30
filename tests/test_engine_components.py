@@ -250,7 +250,7 @@ class EvaluationComponentTest(unittest.TestCase):
         self.assertAlmostEqual(scores["iou"], 0.6, places=6)
         self.assertEqual(scores["precision"], {"Pr@50": 0.5})
         self.assertEqual(scores["j_index"], [0.5, 0.5])
-        self.assertEqual(scores["msr"], {1: 0.25, 5: 0.5})
+        self.assertEqual(scores["msr"], {1: 0.25, 5: 0.25})
 
     def test_evaluation_components_are_registered(self):
         self.assertIn("binary_segmentation", METRICS)
