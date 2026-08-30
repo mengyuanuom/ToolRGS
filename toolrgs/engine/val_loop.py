@@ -62,6 +62,10 @@ class GraspValLoop(BaseLoop):
         if not self.topk or any(int(value) <= 0 for value in self.topk):
             raise ValueError(f"grasp_topk must contain positive integers, got {self.topk}")
         self.max_topk = max(self.topk)
+        self.collect_predictions = bool(
+            getattr(cfg, "collect_predictions", False)
+        )
+        self.prediction_records = []
         self.segmentation_metric = METRICS.build(
             getattr(cfg, "segmentation_metric", None)
             or {
@@ -190,6 +194,8 @@ class GraspValLoop(BaseLoop):
         self.grasp_metric.reset()
         if self.grasp_grid_metric is not None:
             self.grasp_grid_metric.reset()
+        if self.collect_predictions:
+            self.prediction_records = []
         self.model.eval()
         rank = int(getattr(self.cfg, "rank", 0))
         progress = tqdm(self.dataloader, disable=rank != 0)
@@ -286,6 +292,17 @@ class GraspValLoop(BaseLoop):
                             dense_maps[index, 1], inverse_matrix, original_hw
                         ) > 0.5,
                     )
+                    if self.collect_predictions:
+                        self.prediction_records.append(
+                            {
+                                "segmentation_iou": self.segmentation_metric.ious[-1],
+                                "rectangles": np.empty((0, 5), dtype=np.float32),
+                                "targets": np.empty((0, 6), dtype=np.float32),
+                                "matches": np.empty((0, 3), dtype=np.float32),
+                                "target_width_cap": self.postprocessor.width_factor,
+                                "target_height": self.postprocessor.grasp_height,
+                            }
+                        )
                 self.state.result = result
                 self.hooks.call("after_iter", self, self.state)
                 continue
@@ -350,6 +367,7 @@ class GraspValLoop(BaseLoop):
                     predicted_segmentation,
                     target_segmentation_original > 0.5,
                 )
+                segmentation_iou = self.segmentation_metric.ious[-1]
 
                 quality_original = inverse_warp(
                     dense_maps[index, 2], inverse_matrix, original_hw
@@ -431,27 +449,41 @@ class GraspValLoop(BaseLoop):
                 target_width_cap = self.postprocessor.width_factor
                 if self.postprocessor.size_coordinate == "canvas":
                     target_width_cap *= size_scale
-                for topk in self.topk:
-                    success = calculate_jacquard_index(
-                        rectangles[:topk],
-                        target_six,
-                        iou_threshold=float(
-                            getattr(self.cfg, "grasp_iou_threshold", 0.25)
-                        ),
-                        angle_threshold=float(
-                            getattr(self.cfg, "grasp_angle_threshold", 30.0)
-                        ),
-                        target_width_cap=target_width_cap,
-                        target_height=self.postprocessor.grasp_height,
-                    )
-                    self.grasp_metric.update(topk, success)
-                if self.grasp_grid_metric is not None:
+                matches = None
+                if self.collect_predictions or self.grasp_grid_metric is not None:
                     matches = calculate_grasp_matches(
                         rectangles[: self.max_topk],
                         target_six,
                         target_width_cap=target_width_cap,
                         target_height=self.postprocessor.grasp_height,
                     )
+                for topk in self.topk:
+                    if matches is None:
+                        success = calculate_jacquard_index(
+                            rectangles[:topk],
+                            target_six,
+                            iou_threshold=float(
+                                getattr(self.cfg, "grasp_iou_threshold", 0.25)
+                            ),
+                            angle_threshold=float(
+                                getattr(self.cfg, "grasp_angle_threshold", 30.0)
+                            ),
+                            target_width_cap=target_width_cap,
+                            target_height=self.postprocessor.grasp_height,
+                        )
+                    else:
+                        success = calculate_jacquard_from_matches(
+                            matches,
+                            topk,
+                            iou_threshold=float(
+                                getattr(self.cfg, "grasp_iou_threshold", 0.25)
+                            ),
+                            angle_threshold=float(
+                                getattr(self.cfg, "grasp_angle_threshold", 30.0)
+                            ),
+                        )
+                    self.grasp_metric.update(topk, success)
+                if self.grasp_grid_metric is not None:
                     for iou_threshold, angle_threshold in (
                         self.grasp_grid_metric.threshold_pairs
                     ):
@@ -468,6 +500,23 @@ class GraspValLoop(BaseLoop):
                                 topk,
                                 success,
                             )
+                if self.collect_predictions:
+                    self.prediction_records.append(
+                        {
+                            "segmentation_iou": segmentation_iou,
+                            "rectangles": np.asarray(
+                                rectangles, dtype=np.float32
+                            ).reshape(-1, 5),
+                            "targets": np.asarray(
+                                target_six, dtype=np.float32
+                            ).reshape(-1, 6),
+                            "matches": np.asarray(
+                                matches, dtype=np.float32
+                            ).reshape(-1, 3),
+                            "target_width_cap": target_width_cap,
+                            "target_height": self.postprocessor.grasp_height,
+                        }
+                    )
 
             self.state.result = result
             self.hooks.call("after_iter", self, self.state)

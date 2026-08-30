@@ -42,18 +42,31 @@ fi
 mkdir -p "$RESULT_DIR"
 summary="$RESULT_DIR/summary.tsv"
 log="$RESULT_DIR/evaluate.log"
+cache="$RESULT_DIR/predictions.npz"
 if grep -q $'^mSR\tmean\t' "$summary" 2>/dev/null; then
   echo "[skip] completed $summary"
   tail -n 1 "$summary"
   exit 0
 fi
 
-echo "[evaluate] one forward pass; accumulate the configured IoU/angle grid"
-env CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_BIN" -u evaluate.py \
-  --config "$CONFIG" \
-  --checkpoint "$CHECKPOINT" \
-  --split "$SPLIT" \
-  --msr-output "$summary" \
-  --opts "${extra_opts[@]}" \
-  >"$log" 2>&1
+if [[ -f "$cache" ]]; then
+  echo "[score] reuse decoded predictions without model inference"
+  "$PYTHON_BIN" -u evaluate.py \
+    --config "$CONFIG" \
+    --score-cache "$cache" \
+    --split "$SPLIT" \
+    --msr-output "$summary" \
+    --opts "${extra_opts[@]}" \
+    >"$log" 2>&1
+else
+  echo "[evaluate] one forward pass and save decoded predictions"
+  env CUDA_VISIBLE_DEVICES="$GPU_ID" "$PYTHON_BIN" -u evaluate.py \
+    --config "$CONFIG" \
+    --checkpoint "$CHECKPOINT" \
+    --split "$SPLIT" \
+    --prediction-cache "$cache" \
+    --msr-output "$summary" \
+    --opts "${extra_opts[@]}" \
+    >"$log" 2>&1
+fi
 tail -n 1 "$summary"

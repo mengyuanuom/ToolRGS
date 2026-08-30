@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +11,9 @@ from toolrgs.evaluation import (
     DenseGraspPostProcessor,
     GraspSuccessMetric,
     GraspThresholdGridMetric,
+    load_prediction_cache,
+    save_prediction_cache,
+    score_prediction_cache,
     corners_to_five,
     five_to_corners,
     inverse_warp,
@@ -208,6 +213,44 @@ class EvaluationComponentTest(unittest.TestCase):
         self.assertEqual(
             calculate_jacquard_from_matches(matches, 5, 0.5, 20.0), 1
         )
+
+    def test_prediction_cache_can_be_rescored_without_inference(self):
+        records = [
+            {
+                "segmentation_iou": 0.8,
+                "rectangles": [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]],
+                "targets": [[1, 2, 3, 4, 5, 0]],
+                "matches": [[0, 0.6, 5], [1, 0.8, 20]],
+                "target_width_cap": 300,
+                "target_height": 20,
+            },
+            {
+                "segmentation_iou": 0.4,
+                "rectangles": [],
+                "targets": [],
+                "matches": [],
+                "target_width_cap": 300,
+                "target_height": 20,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "predictions.npz")
+            save_prediction_cache(path, records, {"max_topk": 5, "split": "val"})
+            cache = load_prediction_cache(path)
+            scores = score_prediction_cache(
+                cache,
+                topk=(1, 5),
+                grasp_iou_threshold=0.5,
+                grasp_angle_threshold=10,
+                grasp_iou_thresholds=(0.5, 0.75),
+                grasp_angle_thresholds=(10,),
+                segmentation_iou_thresholds=(0.5,),
+            )
+        self.assertEqual(scores["num_samples"], 2)
+        self.assertAlmostEqual(scores["iou"], 0.6, places=6)
+        self.assertEqual(scores["precision"], {"Pr@50": 0.5})
+        self.assertEqual(scores["j_index"], [0.5, 0.5])
+        self.assertEqual(scores["msr"], {1: 0.25, 5: 0.5})
 
     def test_evaluation_components_are_registered(self):
         self.assertIn("binary_segmentation", METRICS)

@@ -410,6 +410,10 @@ def calculate_grasp_matches(
                 abs(float(rect_p[4]) - float(rect_gt[4])),
                 abs(float(rect_p[4]) + float(rect_gt[4])),
             )
+            # Preserve calculate_iou's legacy NaN comparison behavior: both
+            # angle-rejection comparisons are false for NaN, so it proceeds.
+            if not np.isfinite(angle_error):
+                angle_error = 0.0
             iou = calculate_iou(rect_p, rect_gt, angle_threshold=float("inf"))
             matches.append((prediction_index, float(iou), angle_error))
     return matches
