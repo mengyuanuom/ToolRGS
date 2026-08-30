@@ -1,0 +1,14 @@
+_base_: grconvnetclip_grasp_tools_v3_15k_original_scale.yaml
+
+TRAIN:
+  # Fresh unified-V3 run; never resume the earlier crog_legacy experiment.
+  exp_name: grconvnetclip_grasp_tools_v3_15k_unified_original300
+  weight:
+  resume:
+
+TEST:
+  evaluation_protocol: toolrgs
+  grasp_topk: [1, 5]
+  grasp_iou_threshold: 0.25
+  grasp_angle_threshold: 30.0
+  restore_grasp_size_scale: False
