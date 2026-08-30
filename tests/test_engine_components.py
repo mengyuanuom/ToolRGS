@@ -18,7 +18,11 @@ from toolrgs.evaluation import (
     targets_to_six,
 )
 from toolrgs.registry import HOOKS, METRICS, POSTPROCESSORS
-from utils.grasp_eval import calculate_jacquard_index
+from utils.grasp_eval import (
+    calculate_grasp_matches,
+    calculate_jacquard_from_matches,
+    calculate_jacquard_index,
+)
 
 
 class EvaluationComponentTest(unittest.TestCase):
@@ -185,6 +189,25 @@ class EvaluationComponentTest(unittest.TestCase):
             )
         np.testing.assert_array_equal(targets[0], [100, 100, 250, 40, 0, 0])
         np.testing.assert_array_equal(observed[0], [100, 100, 250, 20, 0, 0])
+
+    def test_threshold_grid_reuses_each_rasterized_iou(self):
+        predictions = np.array(
+            [[100, 100, 80, 20, 5], [120, 100, 80, 20, 25]],
+            dtype=np.float32,
+        )
+        targets = np.array([[100, 100, 80, 40, 0, 0]], dtype=np.float32)
+        with patch("utils.grasp_eval.calculate_iou", return_value=0.6) as iou:
+            matches = calculate_grasp_matches(predictions, targets)
+        self.assertEqual(iou.call_count, 2)
+        self.assertEqual(
+            calculate_jacquard_from_matches(matches, 1, 0.5, 10.0), 1
+        )
+        self.assertEqual(
+            calculate_jacquard_from_matches(matches, 1, 0.75, 30.0), 0
+        )
+        self.assertEqual(
+            calculate_jacquard_from_matches(matches, 5, 0.5, 20.0), 1
+        )
 
     def test_evaluation_components_are_registered(self):
         self.assertIn("binary_segmentation", METRICS)

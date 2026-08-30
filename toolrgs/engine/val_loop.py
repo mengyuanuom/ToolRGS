@@ -24,7 +24,11 @@ from toolrgs.evaluation import (
 )
 from toolrgs.registry import LOOPS, METRICS, POSTPROCESSORS
 from toolrgs.structures import GraspModelResult
-from utils.grasp_eval import calculate_jacquard_index
+from utils.grasp_eval import (
+    calculate_grasp_matches,
+    calculate_jacquard_from_matches,
+    calculate_jacquard_index,
+)
 from utils.config import (
     resolve_grasp_quality_activation,
     resolve_grasp_size_activation,
@@ -442,17 +446,21 @@ class GraspValLoop(BaseLoop):
                     )
                     self.grasp_metric.update(topk, success)
                 if self.grasp_grid_metric is not None:
+                    matches = calculate_grasp_matches(
+                        rectangles[: self.max_topk],
+                        target_six,
+                        target_width_cap=target_width_cap,
+                        target_height=self.postprocessor.grasp_height,
+                    )
                     for iou_threshold, angle_threshold in (
                         self.grasp_grid_metric.threshold_pairs
                     ):
                         for topk in self.topk:
-                            success = calculate_jacquard_index(
-                                rectangles[:topk],
-                                target_six,
+                            success = calculate_jacquard_from_matches(
+                                matches,
+                                topk,
                                 iou_threshold=iou_threshold,
                                 angle_threshold=angle_threshold,
-                                target_width_cap=target_width_cap,
-                                target_height=self.postprocessor.grasp_height,
                             )
                             self.grasp_grid_metric.update(
                                 iou_threshold,

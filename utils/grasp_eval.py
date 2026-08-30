@@ -381,3 +381,53 @@ def calculate_jacquard_index(
             ) > iou_threshold:
                 return 1
     return 0
+
+
+def calculate_grasp_matches(
+    grasp_preds,
+    grasp_targets,
+    target_width_cap=100.0,
+    target_height=20.0,
+):
+    """Cache geometry shared by every IoU/angle threshold-grid cell."""
+
+    grasp_preds = np.asarray(grasp_preds)
+    grasp_targets = np.asarray(grasp_targets).copy()
+    if grasp_preds.size == 0 or grasp_targets.size == 0:
+        return []
+    grasp_preds = grasp_preds.reshape(-1, 5)
+    grasp_targets = grasp_targets.reshape(-1, 6)
+    grasp_targets[:, 3] = float(target_height)
+    if target_width_cap is not None:
+        grasp_targets[:, 2] = np.clip(
+            grasp_targets[:, 2], 0, float(target_width_cap)
+        )
+
+    matches = []
+    for prediction_index, rect_p in enumerate(grasp_preds):
+        for rect_gt in grasp_targets:
+            angle_error = min(
+                abs(float(rect_p[4]) - float(rect_gt[4])),
+                abs(float(rect_p[4]) + float(rect_gt[4])),
+            )
+            iou = calculate_iou(rect_p, rect_gt, angle_threshold=float("inf"))
+            matches.append((prediction_index, float(iou), angle_error))
+    return matches
+
+
+def calculate_jacquard_from_matches(
+    matches,
+    topk,
+    iou_threshold=0.25,
+    angle_threshold=30.0,
+):
+    """Threshold cached prediction/target matches without rerasterizing IoU."""
+
+    return int(
+        any(
+            prediction_index < int(topk)
+            and iou > float(iou_threshold)
+            and angle_error <= float(angle_threshold)
+            for prediction_index, iou, angle_error in matches
+        )
+    )
