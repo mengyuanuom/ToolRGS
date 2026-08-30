@@ -10,8 +10,6 @@ import torch
 from torch.utils.data import DataLoader
 
 import utils.config as config
-from model import build_model
-from toolrgs.engine import GraspValLoop, RealVLGValLoop  # register validation loops
 from toolrgs.evaluation import (
     load_prediction_cache,
     save_prediction_cache,
@@ -19,7 +17,6 @@ from toolrgs.evaluation import (
     write_score_summary,
 )
 from toolrgs.registry import LOOPS
-from utils.data_builder import build_dataset
 from utils.misc import setup_logger
 
 
@@ -191,6 +188,11 @@ def main():
         return
     if not torch.cuda.is_available():
         raise RuntimeError("ToolRGS model inference currently requires a CUDA GPU")
+
+    # Keep cache-only scoring independent from model and dataset initialization.
+    from model import build_model
+    from toolrgs.engine import GraspValLoop, RealVLGValLoop  # noqa: F401
+    from utils.data_builder import build_dataset
 
     model, _ = build_model(args)
     model = model.cuda().eval()
