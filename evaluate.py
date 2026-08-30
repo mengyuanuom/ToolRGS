@@ -22,7 +22,10 @@ from utils.misc import setup_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate ToolRGS")
-    parser.add_argument("--config", required=True)
+    parser.add_argument(
+        "--config",
+        help="Model config (required for inference, optional for cache scoring)",
+    )
     parser.add_argument("--checkpoint")
     parser.add_argument("--split", help="Evaluation split override")
     parser.add_argument(
@@ -46,8 +49,21 @@ def parse_args():
     )
     parser.add_argument("--opts", nargs=argparse.REMAINDER)
     cli = parser.parse_args()
+    if cli.score_cache and not cli.config:
+        if cli.opts:
+            parser.error("--opts requires --config")
+        cli.eval_split = cli.split
+        cli.grasp_topk = (1, 5)
+        cli.grasp_iou_threshold = 0.25
+        cli.grasp_angle_threshold = 30.0
+        cli.grasp_iou_thresholds = (0.25, 0.50, 0.75)
+        cli.grasp_angle_thresholds = (5.0, 10.0, 20.0, 30.0)
+        cli.segmentation_metric = None
+        return cli
+    if not cli.config:
+        parser.error("--config is required for model inference")
     if not cli.score_cache and not cli.checkpoint:
-        parser.error("--checkpoint is required unless --score-cache is used")
+        parser.error("--checkpoint is required for model inference")
     cfg = config.load_cfg_from_cfg_file(cli.config)
     if cli.opts:
         cfg = config.merge_cfg_from_list(cfg, cli.opts)
@@ -140,11 +156,16 @@ def _log_scores(scores, source):
 def _score_and_write(cache_path, cfg):
     cache = load_prediction_cache(cache_path)
     cached_split = cache["metadata"].get("split")
-    if cached_split and str(cached_split) != str(cfg.eval_split):
+    requested_split = getattr(cfg, "eval_split", None)
+    if (
+        cached_split
+        and requested_split
+        and str(cached_split) != str(requested_split)
+    ):
         logger.warning(
             "Scoring cached split {!r} while config requests {!r}",
             cached_split,
-            cfg.eval_split,
+            requested_split,
         )
     scores = score_prediction_cache(cache, **_score_kwargs(cfg))
     score_output = cfg.msr_output or _default_score_output(cache_path)
@@ -178,14 +199,15 @@ def _cache_metadata(cfg):
 def main():
     args = parse_args()
     cv2.setNumThreads(0)
+    if args.score_cache:
+        _score_and_write(args.score_cache, args)
+        return
+
     args.gpu = 0
     args.rank = 0
     args.output_dir = os.path.join(args.output_folder, args.exp_name)
     setup_logger(args.output_dir, distributed_rank=0, filename="eval.log", mode="a")
 
-    if args.score_cache:
-        _score_and_write(args.score_cache, args)
-        return
     if not torch.cuda.is_available():
         raise RuntimeError("ToolRGS model inference currently requires a CUDA GPU")
 
