@@ -18,9 +18,11 @@ wait_for_gpu() {
     echo "[error] physical GPU $GPU_ID was not found" >&2
     return 1
   fi
+  # Do not use grep -q here: with pipefail, its early exit can SIGPIPE
+  # nvidia-smi and make an occupied GPU look free.
   while nvidia-smi \
     --query-compute-apps=gpu_uuid --format=csv,noheader,nounits 2>/dev/null \
-    | grep -Fxq "$gpu_uuid"; do
+    | grep -Fx "$gpu_uuid" >/dev/null; do
     echo "[wait] physical GPU $GPU_ID ($gpu_uuid) is occupied"
     sleep "$POLL_SECONDS"
   done
