@@ -20,7 +20,6 @@ class DROGOFF(DROG):
     """DINOv2/CLIP grasp model with optional Native V3 LoRA adaptation."""
 
     supports_offset = True
-    grasp_size_loss_activation = "sigmoid"
 
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -46,7 +45,7 @@ class DROGOFF(DROG):
             self.grasp_width_loss_activation,
             self.grasp_size_decode_activation,
         ) = resolve_grasp_training_activation(
-            getattr(cfg, "grasp_width_loss_activation", "sigmoid"),
+            getattr(cfg, "grasp_width_loss_activation", "raw"),
             getattr(cfg, "grasp_size_activation", "auto"),
             name="grasp width",
         )

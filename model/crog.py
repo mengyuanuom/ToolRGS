@@ -30,9 +30,6 @@ def grasp_quality_for_loss(quality, activation: str):
 
 
 class CROG(nn.Module):
-    grasp_size_loss_activation = "clamp"
-    grasp_quality_loss_activation = "clamp"
-
     def __init__(self, cfg):
         super().__init__()
         self.use_contrastive = cfg.use_contrastive
