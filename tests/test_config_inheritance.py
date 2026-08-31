@@ -191,6 +191,33 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.batch_size, 4)
         self.assertEqual(cfg.world_size, 1)
 
+    def test_drog_unified_v3_profile_is_fresh_and_sigmoid_consistent(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "drog_v3_unified_original300_sigmoid_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "drog")
+        self.assertEqual(
+            cfg.exp_name,
+            "drog_grasp_tools_v3_15k_unified_original300_sigmoid",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.word_len, 32)
+        self.assertEqual(cfg.batch_size, 8)
+        self.assertEqual(cfg.epochs, 36)
+        self.assertEqual(cfg.world_size, 1)
+
     def test_etrg_experiment_composes_four_base_configs(self):
         cfg = load_cfg_from_cfg_file(
             ROOT / "configs" / "etrg" / "etrg_r50_ocid_vlg.yaml"
