@@ -34,6 +34,7 @@ from model.clip_grasp_fusion import TextVisualFusionFiLM
 from model.etrg.model import ETRG, grasp_width_for_loss as etrg_grasp_width_for_loss
 from model.ggcnnclip import GGCNNWithText, balanced_quality_bce_with_logits
 from model.grconvnetclip import GenerativeResnetWithText
+from model.graspmamba import GraspMamba
 from utils.config import (
     resolve_grasp_quality_activation,
     resolve_grasp_size_activation,
@@ -532,6 +533,8 @@ class DeploymentContractTest(unittest.TestCase):
         )
         self.assertEqual(v3_mamba["model"]["grasp_quality_activation"], "sigmoid")
         self.assertEqual(v3_mamba["model"]["grasp_size_activation"], "sigmoid")
+        self.assertEqual(GraspMamba.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(GraspMamba.grasp_size_loss_activation, "sigmoid")
         v3_crog = activate_model_profile(cfg, "V3-CROG")
         self.assertEqual(
             v3_crog["model"]["config"],
