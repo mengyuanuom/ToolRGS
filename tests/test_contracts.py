@@ -8,7 +8,7 @@ import yaml
 
 from model import MODEL_REGISTRY
 from model.darg import DARGProjector, decode_asymmetric_geometry, rotated_gwd_kld
-from model.graspmamba import HierarchicalFeatureFusion
+from model.graspmamba import GraspMamba, HierarchicalFeatureFusion
 from model.layers import OffsetMultiTaskProjector
 from model.lgd import CosineDiffusion, LGDCore
 from model.maplegrasp import MapleGraspProjector
@@ -219,6 +219,8 @@ class ToolRGSContractsTest(unittest.TestCase):
             self.assertEqual(tuple(output.shape), (2, 1, 64, 64))
 
     def test_graspmamba_hierarchical_fusion_contract(self):
+        self.assertEqual(GraspMamba.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(GraspMamba.grasp_size_loss_activation, "sigmoid")
         fusion = HierarchicalFeatureFusion(
             visual_channels=(8, 16, 32, 64),
             text_dim=24,

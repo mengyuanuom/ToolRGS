@@ -2,13 +2,38 @@
 # The GUI can switch profiles without restarting the camera/robot layer.
 active_model: drogoff-grasptools-v2-original300
 model_profiles:
-  V3-DROG-OFF-V1:
-    config: config/grasp_tools/v3_drogoff_v1_grasp_tools_15k_original_scale.yaml
-    checkpoint: weights/v3_drogoff_v1_grasp_tools_15k_original300_best_msr.pth
-    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_drogoff_v1_grasp_tools_15k_original300_20260825_epoch24_best_msr_inference.pth
-    checkpoint_sha256: 5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340
+  V3-DROG-OFF-V2:
+    config: config/grasp_tools/drogoff_v2_grasp_tools_v3_15k_eval.yaml
+    checkpoint: weights/v3_drogoff_v2_grasp_tools_15k_original300_best_msr.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_drogoff_v2_grasp_tools_15k_original300_20260826_epoch30_best_msr_inference.pth
+    checkpoint_sha256: e28f4923b9958bfcca5d738f0a3b60fcdcc439be1b14e3213fed88c1adbf8422
     device: cuda:0
     prompt: Grasp the screwdriver
+    grasp_quality_activation: sigmoid
+    grasp_size_activation: sigmoid
+    use_mask_postprocessing: true
+    mask_threshold: 0.35
+    mask_expand_px: 0
+    quality_threshold: 0.40
+    num_grasps: 1
+    postprocessor:
+      type: dense_grasp
+      min_distance: 2
+      width_factor: 300.0
+      grasp_height: 20.0
+      size_coordinate: original
+    filter_grasps_by_mask: true
+    gate_quality_by_mask: true
+    scale_grasp_to_source: true
+    overrides: {}
+  V3-MambaGrasp:
+    config: config/grasp_tools/graspmamba_v3_unified_original300_retrain.yaml
+    checkpoint: weights/v3_mambagrasp_grasp_tools_15k_unified_original300_best_j1.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_mambagrasp_grasp_tools_15k_unified_original300_20260830_epoch20_best_j1_inference.pth
+    checkpoint_sha256: c3c6765172c8936fa71a3be53acd00c66d54a98e1cc75770d8f5c047e65fcb95
+    device: cuda:0
+    prompt: Grasp the screwdriver
+    grasp_quality_activation: sigmoid
     grasp_size_activation: sigmoid
     use_mask_postprocessing: true
     mask_threshold: 0.35

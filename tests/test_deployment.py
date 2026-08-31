@@ -483,7 +483,8 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(
             list(cfg["_model_profiles"]),
             [
-                "V3-DROG-OFF-V1",
+                "V3-DROG-OFF-V2",
+                "V3-MambaGrasp",
                 "V3-CROG",
                 "drogoff-grasptools-v2-original300",
                 "crog-aligned-grasptools-v2-original300",
@@ -507,18 +508,30 @@ class DeploymentContractTest(unittest.TestCase):
             crog["model"]["checkpoint_sha256"],
             "6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2",
         )
-        v3_v1 = activate_model_profile(
-            cfg, "V3-DROG-OFF-V1"
+        v3_v2 = activate_model_profile(
+            cfg, "V3-DROG-OFF-V2"
         )
         self.assertEqual(
-            v3_v1["model"]["config"],
-            "config/grasp_tools/v3_drogoff_v1_grasp_tools_15k_original_scale.yaml",
+            v3_v2["model"]["config"],
+            "config/grasp_tools/drogoff_v2_grasp_tools_v3_15k_eval.yaml",
         )
         self.assertEqual(
-            v3_v1["model"]["checkpoint_sha256"],
-            "5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340",
+            v3_v2["model"]["checkpoint_sha256"],
+            "e28f4923b9958bfcca5d738f0a3b60fcdcc439be1b14e3213fed88c1adbf8422",
         )
-        self.assertEqual(v3_v1["model"]["grasp_size_activation"], "sigmoid")
+        self.assertEqual(v3_v2["model"]["grasp_quality_activation"], "sigmoid")
+        self.assertEqual(v3_v2["model"]["grasp_size_activation"], "sigmoid")
+        v3_mamba = activate_model_profile(cfg, "V3-MambaGrasp")
+        self.assertEqual(
+            v3_mamba["model"]["config"],
+            "config/grasp_tools/graspmamba_v3_unified_original300_retrain.yaml",
+        )
+        self.assertEqual(
+            v3_mamba["model"]["checkpoint_sha256"],
+            "c3c6765172c8936fa71a3be53acd00c66d54a98e1cc75770d8f5c047e65fcb95",
+        )
+        self.assertEqual(v3_mamba["model"]["grasp_quality_activation"], "sigmoid")
+        self.assertEqual(v3_mamba["model"]["grasp_size_activation"], "sigmoid")
         v3_crog = activate_model_profile(cfg, "V3-CROG")
         self.assertEqual(
             v3_crog["model"]["config"],
