@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .crog_clip import build_model
+from utils.config import resolve_grasp_training_activation
 from utils.pretrained import ensure_pretrained
 
 from .crog_layers import FPN, MultiTaskProjector, Projector, TransformerDecoder
@@ -43,27 +44,25 @@ class CROG(nn.Module):
         self.short_side_loss_weight = float(
             getattr(cfg, "short_side_loss_weight", 1.0)
         )
-        self.grasp_width_loss_activation = str(
-            getattr(cfg, "grasp_width_loss_activation", "raw")
-        ).strip().lower()
-        if self.grasp_width_loss_activation not in {"raw", "sigmoid"}:
-            raise ValueError(
-                "grasp_width_loss_activation must be 'raw' or 'sigmoid'"
-            )
-        if self.grasp_width_loss_activation == "sigmoid":
-            # Checkpoint metadata and GUI decoding must match the loss target.
-            self.grasp_size_loss_activation = "sigmoid"
-        self.grasp_quality_train_activation = str(
-            getattr(cfg, "grasp_quality_loss_activation", "raw")
-        ).strip().lower()
-        if self.grasp_quality_train_activation not in {"raw", "sigmoid"}:
-            raise ValueError(
-                "grasp_quality_loss_activation must be 'raw' or 'sigmoid'"
-            )
-        if self.grasp_quality_train_activation == "sigmoid":
-            # Keep checkpoint metadata and inference decoding consistent with
-            # the probability seen by the training loss.
-            self.grasp_quality_loss_activation = "sigmoid"
+        (
+            self.grasp_width_loss_activation,
+            self.grasp_size_decode_activation,
+        ) = resolve_grasp_training_activation(
+            getattr(cfg, "grasp_width_loss_activation", "raw"),
+            getattr(cfg, "grasp_size_activation", "auto"),
+            name="grasp width",
+        )
+        (
+            self.grasp_quality_train_activation,
+            self.grasp_quality_decode_activation,
+        ) = resolve_grasp_training_activation(
+            getattr(cfg, "grasp_quality_loss_activation", "raw"),
+            getattr(cfg, "grasp_quality_activation", "auto"),
+            name="grasp quality",
+        )
+        # Legacy attributes remain decode aliases for older callers.
+        self.grasp_size_loss_activation = self.grasp_size_decode_activation
+        self.grasp_quality_loss_activation = self.grasp_quality_decode_activation
         if self.predicts_grasp_short_side and not self.use_grasp_masks:
             raise ValueError(
                 "CROG short-side prediction requires use_grasp_masks=True"

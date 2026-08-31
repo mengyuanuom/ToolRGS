@@ -137,8 +137,8 @@ and SR@IoU0.50/10deg `90.81`. Its Release asset is
 `2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f`.
 All three assets contain only inference state plus geometry metadata; optimizer
 and scheduler state are deliberately omitted. The activation contract is
-explicit at every layer: `V3-DROG-OFF-V2` and `V3-MambaGrasp` use `sigmoid`
-for quality and size decoding, while `V3-CROG` uses `clamp` for size decoding,
+explicit at every layer: GUI profiles use `auto`, and quality/size decoding is
+selected from the activation contract saved by the model's training config,
 matching how each selected checkpoint is evaluated.
 Selecting any profile downloads and verifies it on demand; running the
 preflight downloads all of them in advance with the other selectable profiles.

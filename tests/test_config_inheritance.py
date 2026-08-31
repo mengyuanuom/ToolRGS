@@ -3,13 +3,31 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from utils.config import load_cfg_from_cfg_file, merge_cfg_from_list
+from utils.config import (
+    load_cfg_from_cfg_file,
+    merge_cfg_from_list,
+    resolve_grasp_training_activation,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class ConfigInheritanceTest(unittest.TestCase):
+    def test_training_activation_contract_rejects_mismatched_inference(self):
+        self.assertEqual(
+            resolve_grasp_training_activation("raw", "auto", name="quality"),
+            ("raw", "clamp"),
+        )
+        self.assertEqual(
+            resolve_grasp_training_activation(
+                "sigmoid", "sigmoid", name="quality"
+            ),
+            ("sigmoid", "sigmoid"),
+        )
+        with self.assertRaisesRegex(ValueError, "train/inference activation mismatch"):
+            resolve_grasp_training_activation("raw", "sigmoid", name="quality")
+
     def test_all_grasp_tools_v3_profiles_share_original_300_size_contract(self):
         matched = []
         for path in glob.glob(
@@ -157,12 +175,15 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.native_text_lora_layers, list(range(12)))
         self.assertEqual(
             cfg.exp_name,
-            "drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_unified_original300",
+            "drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_unified_original300_sigmoid_consistent",
         )
         self.assertIsNone(cfg.weight)
         self.assertIsNone(cfg.resume)
         self.assertEqual(cfg.evaluation_protocol, "toolrgs")
         self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
         self.assertEqual(cfg.grasp_size_activation, "sigmoid")
         self.assertEqual(cfg.grasp_size_coordinate, "original")
         self.assertEqual(cfg.grasp_size_factor, 300.0)

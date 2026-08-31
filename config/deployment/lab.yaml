@@ -11,8 +11,8 @@ model_profiles:
     checkpoint_sha256: e28f4923b9958bfcca5d738f0a3b60fcdcc439be1b14e3213fed88c1adbf8422
     device: cuda:0
     prompt: Grasp the screwdriver
-    grasp_quality_activation: sigmoid
-    grasp_size_activation: sigmoid
+    grasp_quality_activation: auto
+    grasp_size_activation: auto
     use_mask_postprocessing: true
     mask_threshold: 0.35
     mask_expand_px: 0
@@ -61,7 +61,8 @@ model_profiles:
     checkpoint_sha256: 2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f
     device: cuda:0
     prompt: Grasp the screwdriver
-    grasp_size_activation: clamp
+    grasp_quality_activation: auto
+    grasp_size_activation: auto
     use_mask_postprocessing: true
     mask_threshold: 0.35
     mask_expand_px: 0

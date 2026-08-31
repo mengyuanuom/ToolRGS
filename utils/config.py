@@ -262,6 +262,53 @@ def _check_and_coerce_cfg_value_type(replacement, original, key, full_key):
                          replacement, full_key))
 
 
+def resolve_grasp_training_activation(
+    loss_requested="raw",
+    decode_requested="auto",
+    *,
+    name="grasp output",
+):
+    """Bind a training-space activation to its matching inference decoder.
+
+    ``raw`` regression is decoded with a final clamp, while ``sigmoid``
+    regression is decoded with sigmoid.  An explicit, conflicting TEST value
+    is rejected at model construction time instead of silently changing the
+    model contract between training and inference.
+    """
+    loss_aliases = {
+        "raw": "raw",
+        "clamp": "raw",
+        "raw_clamp": "raw",
+        "sigmoid": "sigmoid",
+    }
+    decode_aliases = {
+        "auto": "auto",
+        "clamp": "clamp",
+        "raw_clamp": "clamp",
+        "sigmoid": "sigmoid",
+    }
+    loss_value = str(loss_requested or "raw").strip().lower()
+    decode_value = str(decode_requested or "auto").strip().lower()
+    if loss_value not in loss_aliases:
+        raise ValueError(
+            f"{name} loss activation must be raw, clamp, raw_clamp, or sigmoid"
+        )
+    if decode_value not in decode_aliases:
+        raise ValueError(
+            f"{name} inference activation must be auto, clamp, raw_clamp, or sigmoid"
+        )
+    loss_value = loss_aliases[loss_value]
+    decode_value = decode_aliases[decode_value]
+    expected_decode = "sigmoid" if loss_value == "sigmoid" else "clamp"
+    if decode_value != "auto" and decode_value != expected_decode:
+        raise ValueError(
+            f"{name} train/inference activation mismatch: training uses "
+            f"{loss_value!r}, which requires {expected_decode!r} inference, "
+            f"but the config requests {decode_value!r}"
+        )
+    return loss_value, expected_decode
+
+
 def resolve_grasp_size_activation(requested="auto", checkpoint=None, model=None):
     """Resolve width/short-side decoding without silently changing geometry."""
     value = str(requested or "auto").strip().lower()
@@ -290,7 +337,9 @@ def resolve_grasp_size_activation(requested="auto", checkpoint=None, model=None)
 
     if metadata is None and model is not None:
         unwrapped = getattr(model, "module", model)
-        metadata = getattr(unwrapped, "grasp_size_loss_activation", None)
+        metadata = getattr(unwrapped, "grasp_size_decode_activation", None)
+        if metadata is None:
+            metadata = getattr(unwrapped, "grasp_size_loss_activation", None)
     if metadata is None:
         return "clamp"
     resolved = aliases.get(str(metadata).strip().lower())
@@ -333,7 +382,9 @@ def resolve_grasp_quality_activation(requested="auto", checkpoint=None, model=No
 
     if metadata is None and model is not None:
         unwrapped = getattr(model, "module", model)
-        metadata = getattr(unwrapped, "grasp_quality_loss_activation", None)
+        metadata = getattr(unwrapped, "grasp_quality_decode_activation", None)
+        if metadata is None:
+            metadata = getattr(unwrapped, "grasp_quality_loss_activation", None)
     if metadata is None:
         return "sigmoid"
     resolved = aliases.get(str(metadata).strip().lower())

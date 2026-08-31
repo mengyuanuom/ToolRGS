@@ -10,7 +10,11 @@ DATA:
 
 TRAIN:
   # Fresh single-3090 run of the original rank-24, 12-layer, 24-epoch recipe.
-  exp_name: drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_unified_original300
+  # The earlier directory mixed raw-quality training with sigmoid inference;
+  # keep it untouched and start a clean, auditable activation contract.
+  exp_name: drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_unified_original300_sigmoid_consistent
+  grasp_quality_loss_activation: sigmoid
+  grasp_width_loss_activation: sigmoid
   val_start_epoch: 11
   val_freq: 1
   weight:
@@ -24,5 +28,6 @@ TEST:
   grasp_topk: [1, 5]
   grasp_iou_threshold: 0.25
   grasp_angle_threshold: 30.0
+  grasp_quality_activation: sigmoid
   grasp_size_activation: sigmoid
   restore_grasp_size_scale: False

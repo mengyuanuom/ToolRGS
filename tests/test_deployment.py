@@ -36,6 +36,7 @@ from model.ggcnnclip import GGCNNWithText, balanced_quality_bce_with_logits
 from model.grconvnetclip import GenerativeResnetWithText
 from model.graspmamba import GraspMamba
 from utils.config import (
+    resolve_grasp_training_activation,
     resolve_grasp_quality_activation,
     resolve_grasp_size_activation,
 )
@@ -97,6 +98,22 @@ class DeploymentContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "conflicts with checkpoint metadata"):
             resolve_grasp_quality_activation(
                 "clamp", checkpoint={"grasp_quality_activation": "sigmoid"}
+            )
+
+    def test_training_activation_selects_matching_inference_decoder(self):
+        self.assertEqual(
+            resolve_grasp_training_activation("raw", "auto", name="quality"),
+            ("raw", "clamp"),
+        )
+        self.assertEqual(
+            resolve_grasp_training_activation(
+                "sigmoid", "sigmoid", name="quality"
+            ),
+            ("sigmoid", "sigmoid"),
+        )
+        with self.assertRaisesRegex(ValueError, "train/inference activation mismatch"):
+            resolve_grasp_training_activation(
+                "raw", "sigmoid", name="quality"
             )
 
     def test_etrg_width_training_contract_is_sigmoid(self):
@@ -520,8 +537,8 @@ class DeploymentContractTest(unittest.TestCase):
             v3_v2["model"]["checkpoint_sha256"],
             "e28f4923b9958bfcca5d738f0a3b60fcdcc439be1b14e3213fed88c1adbf8422",
         )
-        self.assertEqual(v3_v2["model"]["grasp_quality_activation"], "sigmoid")
-        self.assertEqual(v3_v2["model"]["grasp_size_activation"], "sigmoid")
+        self.assertEqual(v3_v2["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_v2["model"]["grasp_size_activation"], "auto")
         v3_mamba = activate_model_profile(cfg, "V3-MambaGrasp")
         self.assertEqual(
             v3_mamba["model"]["config"],
@@ -544,7 +561,8 @@ class DeploymentContractTest(unittest.TestCase):
             v3_crog["model"]["checkpoint_sha256"],
             "2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f",
         )
-        self.assertEqual(v3_crog["model"]["grasp_size_activation"], "clamp")
+        self.assertEqual(v3_crog["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_crog["model"]["grasp_size_activation"], "auto")
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]

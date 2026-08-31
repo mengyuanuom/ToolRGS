@@ -344,10 +344,20 @@ class CUDAGraspRunner:
 
         unwrapped = getattr(self.model, "module", self.model)
         size_activation = getattr(
-            unwrapped, "grasp_size_loss_activation", None
+            unwrapped,
+            "grasp_size_decode_activation",
+            getattr(unwrapped, "grasp_size_loss_activation", None),
         )
         quality_activation = getattr(
-            unwrapped, "grasp_quality_loss_activation", "sigmoid"
+            unwrapped,
+            "grasp_quality_decode_activation",
+            getattr(unwrapped, "grasp_quality_loss_activation", None),
+        )
+        quality_loss_activation = getattr(
+            unwrapped, "grasp_quality_train_activation", None
+        )
+        width_loss_activation = getattr(
+            unwrapped, "grasp_width_loss_activation", None
         )
 
         Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
@@ -358,8 +368,11 @@ class CUDAGraspRunner:
                 "best_iou": self.best_iou,
                 "best_j_index": self.best_j,
                 "best_j5_index": self.best_j5,
+                "activation_contract_version": 1,
                 "grasp_size_activation": size_activation,
                 "grasp_quality_activation": quality_activation,
+                "grasp_quality_loss_activation": quality_loss_activation,
+                "grasp_width_loss_activation": width_loss_activation,
                 "state_dict": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
                 "scheduler": self.scheduler.state_dict(),
