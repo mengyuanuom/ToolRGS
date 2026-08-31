@@ -72,6 +72,31 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.batch_size, 32)
         self.assertEqual(cfg.epochs, 36)
 
+    def test_crog_unified_v3_sigmoid_profile_is_fresh_and_consistent(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "v3_crog_unified_original300_sigmoid_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "crog")
+        self.assertEqual(
+            cfg.exp_name,
+            "crog_grasp_tools_v3_15k_unified_original300_sigmoid",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.epochs, 36)
+        self.assertEqual(cfg.batch_size, 32)
+
     def test_grconvnetclip_unified_v3_profile_is_a_fresh_toolrgs_run(self):
         cfg = load_cfg_from_cfg_file(
             ROOT

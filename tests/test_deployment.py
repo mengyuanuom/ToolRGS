@@ -29,7 +29,7 @@ from deployment.inference import (
 from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
-from model.crog import grasp_width_for_loss
+from model.crog import grasp_quality_for_loss, grasp_width_for_loss
 from model.clip_grasp_fusion import TextVisualFusionFiLM
 from model.etrg.model import ETRG, grasp_width_for_loss as etrg_grasp_width_for_loss
 from model.ggcnnclip import GGCNNWithText, balanced_quality_bce_with_logits
@@ -360,6 +360,15 @@ class DeploymentContractTest(unittest.TestCase):
             torch.equal(grasp_width_for_loss(raw, "raw"), raw)
         )
         bounded = grasp_width_for_loss(raw, "sigmoid")
+        self.assertTrue(torch.all((bounded > 0.0) & (bounded < 1.0)))
+        self.assertAlmostEqual(float(bounded[1]), 0.5)
+
+    def test_aligned_crog_quality_loss_uses_sigmoid_contract(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        self.assertTrue(
+            torch.equal(grasp_quality_for_loss(raw, "raw"), raw)
+        )
+        bounded = grasp_quality_for_loss(raw, "sigmoid")
         self.assertTrue(torch.all((bounded > 0.0) & (bounded < 1.0)))
         self.assertAlmostEqual(float(bounded[1]), 0.5)
 

@@ -18,8 +18,19 @@ def grasp_width_for_loss(width, activation: str):
     raise ValueError("grasp_width_loss_activation must be 'raw' or 'sigmoid'")
 
 
+def grasp_quality_for_loss(quality, activation: str):
+    """Apply the configured bounded-quality contract before regression loss."""
+    activation = str(activation).strip().lower()
+    if activation == "sigmoid":
+        return torch.sigmoid(quality)
+    if activation == "raw":
+        return quality
+    raise ValueError("grasp_quality_loss_activation must be 'raw' or 'sigmoid'")
+
+
 class CROG(nn.Module):
     grasp_size_loss_activation = "clamp"
+    grasp_quality_loss_activation = "clamp"
 
     def __init__(self, cfg):
         super().__init__()
@@ -42,6 +53,17 @@ class CROG(nn.Module):
         if self.grasp_width_loss_activation == "sigmoid":
             # Checkpoint metadata and GUI decoding must match the loss target.
             self.grasp_size_loss_activation = "sigmoid"
+        self.grasp_quality_train_activation = str(
+            getattr(cfg, "grasp_quality_loss_activation", "raw")
+        ).strip().lower()
+        if self.grasp_quality_train_activation not in {"raw", "sigmoid"}:
+            raise ValueError(
+                "grasp_quality_loss_activation must be 'raw' or 'sigmoid'"
+            )
+        if self.grasp_quality_train_activation == "sigmoid":
+            # Keep checkpoint metadata and inference decoding consistent with
+            # the probability seen by the training loss.
+            self.grasp_quality_loss_activation = "sigmoid"
         if self.predicts_grasp_short_side and not self.use_grasp_masks:
             raise ValueError(
                 "CROG short-side prediction requires use_grasp_masks=True"
@@ -178,7 +200,10 @@ class CROG(nn.Module):
         seg_loss = F.binary_cross_entropy_with_logits(
             pred, mask, weight=seg_weight
         )
-        qua_loss = F.smooth_l1_loss(qua, grasp_qua_mask)
+        qua_loss = F.smooth_l1_loss(
+            grasp_quality_for_loss(qua, self.grasp_quality_train_activation),
+            grasp_qua_mask,
+        )
         sin_loss = F.smooth_l1_loss(sin, grasp_sin_mask)
         cos_loss = F.smooth_l1_loss(cos, grasp_cos_mask)
         width_loss = F.smooth_l1_loss(
