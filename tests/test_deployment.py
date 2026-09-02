@@ -38,7 +38,14 @@ from model.etrg.model import (
     grasp_width_for_loss as etrg_grasp_width_for_loss,
     masked_geometry_smooth_l1,
 )
-from model.ggcnnclip import GGCNNWithText, balanced_quality_bce_with_logits
+from model.ggcnnclip import (
+    GGCNN_CLIP,
+    GGCNNWithText,
+    balanced_quality_smooth_l1 as ggcnn_balanced_quality_smooth_l1,
+    grasp_quality_for_loss as ggcnn_grasp_quality_for_loss,
+    grasp_width_for_loss as ggcnn_grasp_width_for_loss,
+    masked_geometry_smooth_l1 as ggcnn_masked_geometry_smooth_l1,
+)
 from model.grconvnetclip import GenerativeResnetWithText
 from model.graspmamba import GraspMamba
 from utils.config import (
@@ -84,15 +91,35 @@ class DeploymentContractTest(unittest.TestCase):
         grconvnet = GenerativeResnetWithText(input_channels=3, text_dim=16)
         self.assertIs(type(ggcnn.fusion), type(grconvnet.fusion))
 
-    def test_ggcnn_quality_loss_uses_balanced_logits_contract(self):
+    def test_ggcnn_quality_loss_balances_sparse_sigmoid_pixels(self):
         prediction = torch.zeros((1, 1, 4, 4), requires_grad=True)
         target = torch.zeros_like(prediction)
         target[..., 1, 2] = 1.0
-        loss = balanced_quality_bce_with_logits(prediction, target)
+        loss = ggcnn_balanced_quality_smooth_l1(prediction, target)
         loss.backward()
         self.assertTrue(torch.isfinite(loss))
         self.assertLess(prediction.grad[..., 1, 2].item(), 0.0)
         self.assertGreater(prediction.grad[..., 0, 0].item(), 0.0)
+
+    def test_ggcnn_quality_and_width_training_contracts_are_sigmoid(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        expected = torch.sigmoid(raw)
+        self.assertTrue(torch.equal(ggcnn_grasp_quality_for_loss(raw), expected))
+        self.assertTrue(torch.equal(ggcnn_grasp_width_for_loss(raw), expected))
+        self.assertEqual(GGCNN_CLIP.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(GGCNN_CLIP.grasp_quality_decode_activation, "sigmoid")
+        self.assertEqual(GGCNN_CLIP.grasp_size_loss_activation, "sigmoid")
+        self.assertEqual(GGCNN_CLIP.grasp_size_decode_activation, "sigmoid")
+
+    def test_ggcnn_geometry_loss_ignores_background(self):
+        prediction = torch.tensor([[[[5.0, 2.0], [3.0, 4.0]]]])
+        target = torch.tensor([[[[0.0, 1.0], [0.0, 0.0]]]])
+        valid = torch.tensor([[[[False, True], [False, False]]]])
+        actual = ggcnn_masked_geometry_smooth_l1(prediction, target, valid)
+        expected = torch.nn.functional.smooth_l1_loss(
+            prediction[..., 0, 1], target[..., 0, 1]
+        )
+        self.assertTrue(torch.equal(actual, expected))
 
     def test_quality_activation_must_match_checkpoint_metadata(self):
         self.assertEqual(

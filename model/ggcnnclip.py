@@ -5,24 +5,45 @@ from .crog_clip import build_model
 from .clip_grasp_fusion import TextVisualFusionFiLM
 
 
-def balanced_quality_bce_with_logits(
+def grasp_quality_for_loss(prediction: torch.Tensor) -> torch.Tensor:
+    """Use the same sigmoid quality space during training and inference."""
+    return torch.sigmoid(prediction)
+
+
+def grasp_width_for_loss(prediction: torch.Tensor) -> torch.Tensor:
+    """Use the same sigmoid width space during training and inference."""
+    return torch.sigmoid(prediction)
+
+
+def balanced_quality_smooth_l1(
     prediction: torch.Tensor,
     target: torch.Tensor,
-    max_pos_weight: float = 32.0,
+    positive_threshold: float = 0.05,
 ) -> torch.Tensor:
-    """Train a sparse grasp-quality map as logits without background collapse."""
+    """Give sparse positive and background quality regions equal influence."""
     target = target.to(dtype=prediction.dtype).clamp(0.0, 1.0)
-    with torch.no_grad():
-        positive_mass = target.sum().clamp_min(1.0)
-        negative_mass = (1.0 - target).sum()
-        pos_weight = (negative_mass / positive_mass).clamp(
-            min=1.0, max=float(max_pos_weight)
-        )
-    return F.binary_cross_entropy_with_logits(
-        prediction,
-        target,
-        pos_weight=pos_weight,
+    error = F.smooth_l1_loss(
+        grasp_quality_for_loss(prediction), target, reduction="none"
     )
+    positive = (target > float(positive_threshold)).to(error.dtype)
+    negative = 1.0 - positive
+    positive_count = positive.sum()
+    negative_count = negative.sum()
+    positive_loss = (error * positive).sum() / positive_count.clamp_min(1.0)
+    negative_loss = (error * negative).sum() / negative_count.clamp_min(1.0)
+    balanced = 0.5 * (positive_loss + negative_loss)
+    return torch.where(positive_count > 0, balanced, negative_loss)
+
+
+def masked_geometry_smooth_l1(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    valid_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Regress grasp geometry only where a labelled grasp is present."""
+    error = F.smooth_l1_loss(prediction, target, reduction="none")
+    weight = valid_mask.to(error.dtype).expand_as(error)
+    return (error * weight).sum() / weight.sum().clamp_min(1.0)
 
 filter_sizes = [32, 16, 8, 8, 16, 32]
 kernel_sizes = [9, 5, 3, 3, 5, 9]
@@ -39,9 +60,15 @@ class GGCNNWithText(nn.Module):
       - Adding a compute_loss(..., e_txt) that matches the style of GraspModel.
     """
 
-    def __init__(self, input_channels: int = 4, text_dim: int = 512,
-                 dropout: bool = False, prob: float = 0.0,
-                 max_quality_pos_weight: float = 32.0):
+    def __init__(
+        self,
+        input_channels: int = 4,
+        text_dim: int = 512,
+        dropout: bool = False,
+        prob: float = 0.0,
+        quality_positive_threshold: float = 0.05,
+        geometry_mask_threshold: float = 1.0e-6,
+    ):
         """
         Args:
             input_channels: Number of input channels (e.g. 4 for RGB-D).
@@ -50,7 +77,12 @@ class GGCNNWithText(nn.Module):
             prob:           Dropout probability when enabled.
         """
         super().__init__()
-        self.max_quality_pos_weight = float(max_quality_pos_weight)
+        self.quality_positive_threshold = float(quality_positive_threshold)
+        self.geometry_mask_threshold = float(geometry_mask_threshold)
+        if not 0.0 <= self.quality_positive_threshold <= 1.0:
+            raise ValueError("quality_positive_threshold must be in [0, 1]")
+        if not 0.0 <= self.geometry_mask_threshold <= 1.0:
+            raise ValueError("geometry_mask_threshold must be in [0, 1]")
 
         # Encoder
         self.conv1 = nn.Conv2d(
@@ -153,12 +185,19 @@ class GGCNNWithText(nn.Module):
         y_pos, y_cos, y_sin, y_width = yc
         pos_pred, cos_pred, sin_pred, width_pred = self(xc, e_txt)
 
-        p_loss = balanced_quality_bce_with_logits(
-            pos_pred, y_pos, self.max_quality_pos_weight
+        p_loss = balanced_quality_smooth_l1(
+            pos_pred, y_pos, self.quality_positive_threshold
         )
-        cos_loss = F.smooth_l1_loss(cos_pred, y_cos)
-        sin_loss = F.smooth_l1_loss(sin_pred, y_sin)
-        width_loss = F.smooth_l1_loss(width_pred, y_width)
+        geometry_mask = y_width > self.geometry_mask_threshold
+        cos_loss = masked_geometry_smooth_l1(
+            cos_pred, y_cos, geometry_mask
+        )
+        sin_loss = masked_geometry_smooth_l1(
+            sin_pred, y_sin, geometry_mask
+        )
+        width_loss = masked_geometry_smooth_l1(
+            grasp_width_for_loss(width_pred), y_width, geometry_mask
+        )
 
         return {
             'loss': p_loss + cos_loss + sin_loss + width_loss,
@@ -212,8 +251,12 @@ class GGCNN_CLIP(nn.Module):
     This allows you to plug it directly into train_with_grasp / validate_with_grasp.
     """
 
-    grasp_size_loss_activation = "clamp"
+    grasp_quality_train_activation = "sigmoid"
+    grasp_quality_decode_activation = "sigmoid"
     grasp_quality_loss_activation = "sigmoid"
+    grasp_width_loss_activation = "sigmoid"
+    grasp_size_decode_activation = "sigmoid"
+    grasp_size_loss_activation = "sigmoid"
 
     def __init__(self, cfg):
         """
@@ -249,8 +292,11 @@ class GGCNN_CLIP(nn.Module):
             text_dim=text_dim,
             dropout=getattr(cfg, "dropout", False),
             prob=getattr(cfg, "dropout_prob", 0.0),
-            max_quality_pos_weight=float(
-                getattr(cfg, "ggcnn_quality_pos_weight", 32.0)
+            quality_positive_threshold=float(
+                getattr(cfg, "ggcnn_quality_positive_threshold", 0.05)
+            ),
+            geometry_mask_threshold=float(
+                getattr(cfg, "ggcnn_geometry_mask_threshold", 1.0e-6)
             ),
         )
 
@@ -314,14 +360,23 @@ class GGCNN_CLIP(nn.Module):
 
             # Compute regression losses for grasp maps.
             # Note: we treat pos_pred as quality prediction for training.
-            p_loss = balanced_quality_bce_with_logits(
+            p_loss = balanced_quality_smooth_l1(
                 pos_pred,
                 grasp_qua_mask,
-                self.grasp_head.max_quality_pos_weight,
+                self.grasp_head.quality_positive_threshold,
             )
-            cos_loss = F.smooth_l1_loss(cos_pred, grasp_cos_mask)
-            sin_loss = F.smooth_l1_loss(sin_pred, grasp_sin_mask)
-            wid_loss = F.smooth_l1_loss(wid_pred, grasp_wid_mask)
+            geometry_mask = (
+                grasp_wid_mask > self.grasp_head.geometry_mask_threshold
+            )
+            cos_loss = masked_geometry_smooth_l1(
+                cos_pred, grasp_cos_mask, geometry_mask
+            )
+            sin_loss = masked_geometry_smooth_l1(
+                sin_pred, grasp_sin_mask, geometry_mask
+            )
+            wid_loss = masked_geometry_smooth_l1(
+                grasp_width_for_loss(wid_pred), grasp_wid_mask, geometry_mask
+            )
 
             total_loss = p_loss + cos_loss + sin_loss + wid_loss
 

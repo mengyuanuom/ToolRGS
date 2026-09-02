@@ -138,6 +138,35 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.batch_size, 32)
         self.assertEqual(cfg.epochs, 36)
 
+    def test_ggcnn_unified_v3_profile_is_sigmoid_and_geometry_masked(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "ggcnnclip_v3_unified_original300_sigmoid_masked_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "ggcnnclip")
+        self.assertEqual(
+            cfg.exp_name,
+            "ggcnnclip_grasp_tools_v3_15k_unified_original300_sigmoid_masked",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.ggcnn_quality_positive_threshold, 0.05)
+        self.assertEqual(cfg.ggcnn_geometry_mask_threshold, 0.000001)
+        self.assertEqual(cfg.base_lr, 0.0001)
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.batch_size, 32)
+        self.assertEqual(cfg.batch_size_val, 32)
+        self.assertEqual(cfg.epochs, 36)
+
     def test_etrg_unified_v3_profile_is_sigmoid_and_geometry_masked(self):
         cfg = load_cfg_from_cfg_file(
             ROOT
