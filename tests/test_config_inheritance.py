@@ -275,6 +275,31 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.epochs, 36)
         self.assertEqual(cfg.world_size, 1)
 
+    def test_droglr_unified_v3_profile_uses_original_size_and_lr_offset(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "droglr_v3_unified_original300_sigmoid_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "droglr")
+        self.assertEqual(
+            cfg.exp_name,
+            "droglr_grasp_tools_v3_15k_unified_original300_sigmoid",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.droglr_offset_size_factor, 448.0)
+        self.assertTrue(cfg.offset_resample_geometry)
+        self.assertEqual(cfg.batch_size, 8)
+        self.assertEqual(cfg.epochs, 36)
+
     def test_etrg_experiment_composes_four_base_configs(self):
         cfg = load_cfg_from_cfg_file(
             ROOT / "configs" / "etrg" / "etrg_r50_ocid_vlg.yaml"

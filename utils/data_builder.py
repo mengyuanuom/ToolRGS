@@ -97,7 +97,9 @@ def build_dataset(cfg, split, with_offset=False):
         getattr(cfg, "with_asymmetric_grasp_targets", False)
     )
     is_training_split = str(split) == str(getattr(cfg, "train_split", "train"))
-    if explicit_asymmetric or (architecture == "darg" and is_training_split):
+    if explicit_asymmetric or (
+        architecture in {"darg", "droglr"} and is_training_split
+    ):
         dataset = AsymmetricGraspDataset(
             dataset,
             size_factor=float(getattr(cfg, "grasp_size_factor", 100.0)),
