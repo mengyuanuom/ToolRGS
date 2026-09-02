@@ -20,6 +20,37 @@ def grasp_width_for_loss(width):
     return torch.sigmoid(width)
 
 
+def grasp_quality_for_loss(quality):
+    """Use the same sigmoid quality space during training and inference."""
+    return torch.sigmoid(quality)
+
+
+def balanced_quality_smooth_l1(
+    prediction,
+    target,
+    positive_threshold=0.05,
+):
+    """Balance sparse positive grasp-quality pixels against the background."""
+    error = F.smooth_l1_loss(
+        grasp_quality_for_loss(prediction), target, reduction="none"
+    )
+    positive = (target > positive_threshold).to(error.dtype)
+    negative = 1.0 - positive
+    positive_count = positive.sum()
+    negative_count = negative.sum()
+    positive_loss = (error * positive).sum() / positive_count.clamp_min(1.0)
+    negative_loss = (error * negative).sum() / negative_count.clamp_min(1.0)
+    balanced = 0.5 * (positive_loss + negative_loss)
+    return torch.where(positive_count > 0, balanced, negative_loss)
+
+
+def masked_geometry_smooth_l1(prediction, target, valid_mask):
+    """Regress grasp geometry only where a labelled grasp is present."""
+    error = F.smooth_l1_loss(prediction, target, reduction="none")
+    weight = valid_mask.to(error.dtype).expand_as(error)
+    return (error * weight).sum() / weight.sum().clamp_min(1.0)
+
+
 class BCEDiceLoss(nn.Module):
     """Official ETRG instance loss: BCE plus a small soft Dice term."""
 
@@ -118,6 +149,11 @@ def _build_depth_backbone(cfg):
 
 
 class ETRG(BaseGraspModel):
+    grasp_quality_train_activation = "sigmoid"
+    grasp_quality_decode_activation = "sigmoid"
+    grasp_quality_loss_activation = "sigmoid"
+    grasp_width_loss_activation = "sigmoid"
+    grasp_size_decode_activation = "sigmoid"
     grasp_size_loss_activation = "sigmoid"
     """Parameter-efficient CLIP adapter with RGB or RGB-D auxiliary fusion."""
 
@@ -159,6 +195,16 @@ class ETRG(BaseGraspModel):
         self.depth_normalization = str(
             getattr(cfg, "depth_normalization", "inverse_max")
         ).lower()
+        self.quality_positive_threshold = float(
+            getattr(cfg, "etrg_quality_positive_threshold", 0.05)
+        )
+        self.geometry_mask_threshold = float(
+            getattr(cfg, "etrg_geometry_mask_threshold", 1e-6)
+        )
+        if not 0.0 <= self.quality_positive_threshold <= 1.0:
+            raise ValueError("etrg_quality_positive_threshold must be in [0, 1]")
+        if not 0.0 <= self.geometry_mask_threshold <= 1.0:
+            raise ValueError("etrg_geometry_mask_threshold must be in [0, 1]")
 
         self.visual_sent_fpn = FPN(
             in_channels=cfg.fpn_in,
@@ -268,10 +314,21 @@ class ETRG(BaseGraspModel):
             raise ValueError("ETRG training requires all five dense target maps")
 
         instance = self.loss(outputs[0], mask)
-        quality = F.smooth_l1_loss(outputs[1], grasp_qua_mask)
-        sine = F.smooth_l1_loss(outputs[2], grasp_sin_mask)
-        cosine = F.smooth_l1_loss(outputs[3], grasp_cos_mask)
-        width = F.smooth_l1_loss(grasp_width_for_loss(outputs[4]), grasp_wid_mask)
+        quality = balanced_quality_smooth_l1(
+            outputs[1],
+            grasp_qua_mask,
+            positive_threshold=self.quality_positive_threshold,
+        )
+        geometry_mask = grasp_wid_mask > self.geometry_mask_threshold
+        sine = masked_geometry_smooth_l1(
+            outputs[2], grasp_sin_mask, geometry_mask
+        )
+        cosine = masked_geometry_smooth_l1(
+            outputs[3], grasp_cos_mask, geometry_mask
+        )
+        width = masked_geometry_smooth_l1(
+            grasp_width_for_loss(outputs[4]), grasp_wid_mask, geometry_mask
+        )
         total = instance + quality + sine + cosine + width
         detached = GraspOutput(*(output.detach() for output in outputs))
         return GraspModelResult(

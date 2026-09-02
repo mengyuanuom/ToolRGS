@@ -31,7 +31,13 @@ from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
 from model.crog import grasp_quality_for_loss, grasp_width_for_loss
 from model.clip_grasp_fusion import TextVisualFusionFiLM
-from model.etrg.model import ETRG, grasp_width_for_loss as etrg_grasp_width_for_loss
+from model.etrg.model import (
+    ETRG,
+    balanced_quality_smooth_l1,
+    grasp_quality_for_loss as etrg_grasp_quality_for_loss,
+    grasp_width_for_loss as etrg_grasp_width_for_loss,
+    masked_geometry_smooth_l1,
+)
 from model.ggcnnclip import GGCNNWithText, balanced_quality_bce_with_logits
 from model.grconvnetclip import GenerativeResnetWithText
 from model.graspmamba import GraspMamba
@@ -120,6 +126,33 @@ class DeploymentContractTest(unittest.TestCase):
         raw = torch.tensor([-2.0, 0.0, 2.0])
         expected = torch.sigmoid(raw)
         self.assertTrue(torch.equal(etrg_grasp_width_for_loss(raw), expected))
+
+    def test_etrg_quality_training_contract_is_sigmoid(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        expected = torch.sigmoid(raw)
+        self.assertTrue(torch.equal(etrg_grasp_quality_for_loss(raw), expected))
+        self.assertEqual(ETRG.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(ETRG.grasp_quality_decode_activation, "sigmoid")
+
+    def test_etrg_quality_loss_balances_sparse_positive_pixels(self):
+        prediction = torch.zeros((1, 1, 4, 4), requires_grad=True)
+        target = torch.zeros_like(prediction)
+        target[..., 1, 2] = 1.0
+        loss = balanced_quality_smooth_l1(prediction, target)
+        loss.backward()
+        self.assertTrue(torch.isfinite(loss))
+        self.assertLess(prediction.grad[..., 1, 2].item(), 0.0)
+        self.assertGreater(prediction.grad[..., 0, 0].item(), 0.0)
+
+    def test_etrg_geometry_loss_ignores_background(self):
+        prediction = torch.tensor([[[[5.0, 2.0], [3.0, 4.0]]]])
+        target = torch.tensor([[[[0.0, 1.0], [0.0, 0.0]]]])
+        valid = torch.tensor([[[[False, True], [False, False]]]])
+        actual = masked_geometry_smooth_l1(prediction, target, valid)
+        expected = torch.nn.functional.smooth_l1_loss(
+            prediction[..., 0, 1], target[..., 0, 1]
+        )
+        self.assertTrue(torch.equal(actual, expected))
 
     def test_etrg_rgb_forward_accepts_common_two_argument_contract(self):
         signature = inspect.signature(ETRG.forward)

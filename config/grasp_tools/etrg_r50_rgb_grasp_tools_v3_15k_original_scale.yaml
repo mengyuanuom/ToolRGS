@@ -9,6 +9,10 @@ MODEL:
 TRAIN:
   # Grasp-Tools V3 contains RGB images but no aligned depth maps.
   etrg_input_mode: rgb
+  grasp_quality_loss_activation: sigmoid
+  grasp_width_loss_activation: sigmoid
+  etrg_quality_positive_threshold: 0.05
+  etrg_geometry_mask_threshold: 0.000001
   clip_pretrain: pretrain/RN50.pt
   depth_pretrain:
   depth_backbone_pretrained: True
@@ -37,6 +41,7 @@ TRAIN:
 
 TEST:
   evaluation_protocol: crog_legacy
+  grasp_quality_activation: sigmoid
   grasp_size_activation: sigmoid
   grasp_iou_thresholds: [0.25, 0.50, 0.75]
   grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]

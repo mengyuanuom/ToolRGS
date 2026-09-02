@@ -138,6 +138,33 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.batch_size, 32)
         self.assertEqual(cfg.epochs, 36)
 
+    def test_etrg_unified_v3_profile_is_sigmoid_and_geometry_masked(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "etrg_r50_rgb_v3_unified_original300_sigmoid_masked_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "etrg")
+        self.assertEqual(
+            cfg.exp_name,
+            "etrg_r50_rgb_grasp_tools_v3_15k_unified_original300_sigmoid_masked",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.etrg_quality_positive_threshold, 0.05)
+        self.assertEqual(cfg.etrg_geometry_mask_threshold, 0.000001)
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.batch_size, 8)
+        self.assertEqual(cfg.epochs, 36)
+
     def test_lgd_unified_v3_profile_matches_the_common_data_contract(self):
         cfg = load_cfg_from_cfg_file(
             ROOT
