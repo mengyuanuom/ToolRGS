@@ -148,7 +148,7 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.architecture, "etrg")
         self.assertEqual(
             cfg.exp_name,
-            "etrg_r50_rgb_grasp_tools_v3_15k_unified_original300_sigmoid_masked",
+            "etrg_r50_rgb_grasp_tools_v3_15k_unified_original300_sigmoid_masked_bs16",
         )
         self.assertIsNone(cfg.weight)
         self.assertIsNone(cfg.resume)
@@ -162,7 +162,8 @@ class ConfigInheritanceTest(unittest.TestCase):
         self.assertEqual(cfg.grasp_size_coordinate, "original")
         self.assertEqual(cfg.grasp_size_factor, 300.0)
         self.assertFalse(cfg.restore_grasp_size_scale)
-        self.assertEqual(cfg.batch_size, 8)
+        self.assertEqual(cfg.batch_size, 16)
+        self.assertEqual(cfg.batch_size_val, 16)
         self.assertEqual(cfg.epochs, 36)
 
     def test_lgd_unified_v3_profile_matches_the_common_data_contract(self):

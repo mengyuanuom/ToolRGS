@@ -7,7 +7,9 @@ TRAIN:
   grasp_width_loss_activation: sigmoid
   etrg_quality_positive_threshold: 0.05
   etrg_geometry_mask_threshold: 0.000001
-  exp_name: etrg_r50_rgb_grasp_tools_v3_15k_unified_original300_sigmoid_masked
+  batch_size: 16
+  batch_size_val: 16
+  exp_name: etrg_r50_rgb_grasp_tools_v3_15k_unified_original300_sigmoid_masked_bs16
   weight:
   resume:
 
