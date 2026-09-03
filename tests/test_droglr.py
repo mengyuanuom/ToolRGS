@@ -6,6 +6,7 @@ import torch
 from model import MODEL_REGISTRY
 from model.droglr import (
     DROGLRProjector,
+    combine_quality_logits,
     decode_direct_lr_geometry,
     decode_lr_geometry,
 )
@@ -89,6 +90,29 @@ class DROGLRTest(unittest.TestCase):
         torch.testing.assert_close(
             offset,
             torch.tensor([[[[-1.0 / 15.0]], [[0.0]]]]),
+        )
+
+    def test_centerness_can_be_removed_from_head_and_score(self):
+        projector = DROGLRProjector(
+            word_dim=32,
+            in_dim=8,
+            hidden_dim=16,
+            parameterization="direct",
+            use_centerness=False,
+        )
+        output = projector(torch.randn(2, 16, 8, 8), torch.randn(2, 32))
+        self.assertNotIn("centerness", output)
+
+        quality_logits = torch.tensor([[[[-0.7, 0.8]]]])
+        torch.testing.assert_close(
+            combine_quality_logits(quality_logits), quality_logits
+        )
+        center_logits = torch.tensor([[[[0.2, -0.4]]]])
+        expected = torch.logit(
+            torch.sigmoid(quality_logits) * torch.sigmoid(center_logits)
+        )
+        torch.testing.assert_close(
+            combine_quality_logits(quality_logits, center_logits), expected
         )
 
 

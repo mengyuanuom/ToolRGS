@@ -19,9 +19,11 @@ class DROGLRProjector(nn.Module):
         hidden_dim=256,
         mask_guidance_strength=0.5,
         parameterization="total_fraction",
+        use_centerness=True,
     ):
         super().__init__()
         self.mask_guidance_strength = float(mask_guidance_strength)
+        self.use_centerness = bool(use_centerness)
         self.parameterization = str(parameterization).lower()
         if self.parameterization not in {"total_fraction", "direct"}:
             raise ValueError(
@@ -49,7 +51,8 @@ class DROGLRProjector(nn.Module):
             nn.GELU(),
         )
         self.quality = nn.Conv2d(hidden_dim, 1, 1)
-        self.centerness = nn.Conv2d(hidden_dim, 1, 1)
+        if self.use_centerness:
+            self.centerness = nn.Conv2d(hidden_dim, 1, 1)
         self.angle = nn.Conv2d(hidden_dim, 2, 1)
         if self.parameterization == "direct":
             self.left_width = nn.Conv2d(hidden_dim, 1, 1)
@@ -80,9 +83,10 @@ class DROGLRProjector(nn.Module):
         output = {
             "segmentation": segmentation,
             "quality": self.quality(guided),
-            "centerness": self.centerness(guided),
             "angle": self.angle(guided),
         }
+        if self.use_centerness:
+            output["centerness"] = self.centerness(guided)
         if self.parameterization == "direct":
             output["left_width"] = self.left_width(guided)
             output["right_width"] = self.right_width(guided)
@@ -173,6 +177,16 @@ def _balanced_probability_loss(logits, target, positive_threshold):
     return sum(terms) / max(1, len(terms))
 
 
+def combine_quality_logits(quality_logits, centerness_logits=None):
+    """Return inference logits with optional centerness score modulation."""
+    if centerness_logits is None:
+        return quality_logits
+    combined = (
+        torch.sigmoid(quality_logits) * torch.sigmoid(centerness_logits)
+    ).clamp(1e-6, 1.0 - 1e-6)
+    return torch.logit(combined)
+
+
 class DROGLR(DROG):
     """DROG backbone with two-sided long-axis geometry and center correction."""
 
@@ -188,6 +202,9 @@ class DROGLR(DROG):
         self.lr_parameterization = str(
             getattr(cfg, "droglr_parameterization", "total_fraction")
         ).lower()
+        self.use_centerness = bool(
+            getattr(cfg, "droglr_use_centerness", True)
+        )
         self.proj = DROGLRProjector(
             word_dim=cfg.word_dim,
             in_dim=cfg.vis_dim // 2,
@@ -196,6 +213,7 @@ class DROGLR(DROG):
                 getattr(cfg, "mask_guidance_strength", 0.5)
             ),
             parameterization=self.lr_parameterization,
+            use_centerness=self.use_centerness,
         )
         self.size_factor = float(getattr(cfg, "grasp_size_factor", 300.0))
         self.max_total_width = float(
@@ -273,12 +291,12 @@ class DROGLR(DROG):
             )
             loss_left, loss_right = left, right
             width_logits = raw["total_width"]
-        combined_quality = (
-            torch.sigmoid(raw["quality"]) * torch.sigmoid(raw["centerness"])
-        ).clamp(1e-6, 1.0 - 1e-6)
+        quality_logits = combine_quality_logits(
+            raw["quality"], raw.get("centerness")
+        )
         predictions = GraspOutput(
             segmentation=raw["segmentation"],
-            quality=torch.logit(combined_quality),
+            quality=quality_logits,
             sine=sine,
             cosine=cosine,
             width=width_logits,
@@ -348,11 +366,12 @@ class DROGLR(DROG):
         required = {
             "grasp_qua_mask": grasp_qua_mask,
             "grasp_ltrb_mask": grasp_ltrb_mask,
-            "grasp_centerness_mask": grasp_centerness_mask,
             "grasp_geometry_weight": grasp_geometry_weight,
             "grasp_geometry_sin_mask": grasp_geometry_sin_mask,
             "grasp_geometry_cos_mask": grasp_geometry_cos_mask,
         }
+        if self.use_centerness:
+            required["grasp_centerness_mask"] = grasp_centerness_mask
         missing = [name for name, value in required.items() if value is None]
         if missing:
             raise ValueError(
@@ -364,7 +383,11 @@ class DROGLR(DROG):
         mask = self._resize(mask, output_size)
         target_quality = self._resize(grasp_qua_mask, output_size)
         target_ltrb = self._resize(grasp_ltrb_mask, output_size)
-        target_center = self._resize(grasp_centerness_mask, output_size)
+        target_center = (
+            self._resize(grasp_centerness_mask, output_size)
+            if self.use_centerness
+            else None
+        )
         geometry_weight = self._resize(grasp_geometry_weight, output_size)
         target_sine = self._resize(grasp_geometry_sin_mask, output_size)
         target_cosine = self._resize(grasp_geometry_cos_mask, output_size)
@@ -377,9 +400,14 @@ class DROGLR(DROG):
         quality_loss = _balanced_probability_loss(
             raw["quality"], target_quality, self.quality_positive_threshold
         )
-        center_loss = F.binary_cross_entropy_with_logits(
-            raw["centerness"], target_center, weight=1.0 + 4.0 * target_center
-        )
+        if self.use_centerness:
+            center_loss = F.binary_cross_entropy_with_logits(
+                raw["centerness"],
+                target_center,
+                weight=1.0 + 4.0 * target_center,
+            )
+        else:
+            center_loss = raw["quality"].new_zeros(())
         side_error = F.smooth_l1_loss(
             torch.cat([loss_left, loss_right], dim=1),
             torch.cat([target_left, target_right], dim=1),
