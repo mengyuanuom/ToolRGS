@@ -561,9 +561,10 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(
             list(cfg["_model_profiles"]),
             [
-                "V3-DROG-OFF-V2",
-                "V3-MambaGrasp",
-                "V3-CROG",
+                "V3-DROG-OFF-V2 (mSR@1 49.88%, J@1 58.94%)",
+                "V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)",
+                "V3-CROG (mSR@1 47.65%, J@1 59.38%)",
+                "V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)",
                 "drogoff-grasptools-v2-original300",
                 "crog-aligned-grasptools-v2-original300",
             ],
@@ -587,7 +588,7 @@ class DeploymentContractTest(unittest.TestCase):
             "6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2",
         )
         v3_v2 = activate_model_profile(
-            cfg, "V3-DROG-OFF-V2"
+            cfg, "V3-DROG-OFF-V2 (mSR@1 49.88%, J@1 58.94%)"
         )
         self.assertEqual(
             v3_v2["model"]["config"],
@@ -599,7 +600,9 @@ class DeploymentContractTest(unittest.TestCase):
         )
         self.assertEqual(v3_v2["model"]["grasp_quality_activation"], "auto")
         self.assertEqual(v3_v2["model"]["grasp_size_activation"], "auto")
-        v3_mamba = activate_model_profile(cfg, "V3-MambaGrasp")
+        v3_mamba = activate_model_profile(
+            cfg, "V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)"
+        )
         self.assertEqual(
             v3_mamba["model"]["config"],
             "config/grasp_tools/graspmamba_v3_unified_original300_retrain.yaml",
@@ -608,21 +611,36 @@ class DeploymentContractTest(unittest.TestCase):
             v3_mamba["model"]["checkpoint_sha256"],
             "c3c6765172c8936fa71a3be53acd00c66d54a98e1cc75770d8f5c047e65fcb95",
         )
-        self.assertEqual(v3_mamba["model"]["grasp_quality_activation"], "sigmoid")
-        self.assertEqual(v3_mamba["model"]["grasp_size_activation"], "sigmoid")
+        self.assertEqual(v3_mamba["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_mamba["model"]["grasp_size_activation"], "auto")
         self.assertEqual(GraspMamba.grasp_quality_loss_activation, "sigmoid")
         self.assertEqual(GraspMamba.grasp_size_loss_activation, "sigmoid")
-        v3_crog = activate_model_profile(cfg, "V3-CROG")
+        v3_crog = activate_model_profile(
+            cfg, "V3-CROG (mSR@1 47.65%, J@1 59.38%)"
+        )
         self.assertEqual(
             v3_crog["model"]["config"],
-            "config/grasp_tools/v3_crog_grasp_tools_15k_original_scale.yaml",
+            "config/grasp_tools/v3_crog_unified_original300_retrain.yaml",
         )
         self.assertEqual(
             v3_crog["model"]["checkpoint_sha256"],
-            "2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f",
+            "a9f2164aa5e79b77b5e708d518bd0b8938802983fecf4672fa5a5f89b9d55266",
         )
         self.assertEqual(v3_crog["model"]["grasp_quality_activation"], "auto")
         self.assertEqual(v3_crog["model"]["grasp_size_activation"], "auto")
+        v3_maple = activate_model_profile(
+            cfg, "V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)"
+        )
+        self.assertEqual(
+            v3_maple["model"]["config"],
+            "config/grasp_tools/maplegrasp_v3_stage2_unified_original300_retrain.yaml",
+        )
+        self.assertEqual(
+            v3_maple["model"]["checkpoint_sha256"],
+            "a5c394b4edcd8d88dcb8b0c4fa072a1de398afdaef9e1812d9169838034d7c03",
+        )
+        self.assertEqual(v3_maple["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_maple["model"]["grasp_size_activation"], "auto")
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]
