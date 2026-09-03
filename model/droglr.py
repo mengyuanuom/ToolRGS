@@ -10,7 +10,7 @@ from .drog import DROG
 
 
 class DROGLRProjector(nn.Module):
-    """Language-conditioned head with bounded total width and left/right split."""
+    """Language-conditioned head with selectable left/right parameterization."""
 
     def __init__(
         self,
@@ -18,9 +18,15 @@ class DROGLRProjector(nn.Module):
         in_dim=256,
         hidden_dim=256,
         mask_guidance_strength=0.5,
+        parameterization="total_fraction",
     ):
         super().__init__()
         self.mask_guidance_strength = float(mask_guidance_strength)
+        self.parameterization = str(parameterization).lower()
+        if self.parameterization not in {"total_fraction", "direct"}:
+            raise ValueError(
+                "DROG-LR parameterization must be total_fraction or direct"
+            )
         self.visual = nn.Sequential(
             nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
             nn.Conv2d(in_dim * 2, hidden_dim * 2, 3, padding=1, bias=False),
@@ -45,12 +51,18 @@ class DROGLRProjector(nn.Module):
         self.quality = nn.Conv2d(hidden_dim, 1, 1)
         self.centerness = nn.Conv2d(hidden_dim, 1, 1)
         self.angle = nn.Conv2d(hidden_dim, 2, 1)
-        self.total_width = nn.Conv2d(hidden_dim, 1, 1)
-        self.left_fraction = nn.Conv2d(hidden_dim, 1, 1)
-
-        # A conservative initial total width and a symmetric 50/50 split.
-        nn.init.constant_(self.total_width.bias, -1.0)
-        nn.init.constant_(self.left_fraction.bias, 0.0)
+        if self.parameterization == "direct":
+            self.left_width = nn.Conv2d(hidden_dim, 1, 1)
+            self.right_width = nn.Conv2d(hidden_dim, 1, 1)
+            # sigmoid(-2) * 300 ~= 36 px per side.
+            nn.init.constant_(self.left_width.bias, -2.0)
+            nn.init.constant_(self.right_width.bias, -2.0)
+        else:
+            self.total_width = nn.Conv2d(hidden_dim, 1, 1)
+            self.left_fraction = nn.Conv2d(hidden_dim, 1, 1)
+            # A conservative initial total width and a symmetric 50/50 split.
+            nn.init.constant_(self.total_width.bias, -1.0)
+            nn.init.constant_(self.left_fraction.bias, 0.0)
 
     def forward(self, features, text_state):
         features = self.visual(features)
@@ -65,14 +77,19 @@ class DROGLRProjector(nn.Module):
             + self.mask_guidance_strength * torch.sigmoid(segmentation)
         )
         guided = self.geometry(guided)
-        return {
+        output = {
             "segmentation": segmentation,
             "quality": self.quality(guided),
             "centerness": self.centerness(guided),
             "angle": self.angle(guided),
-            "total_width": self.total_width(guided),
-            "left_fraction": self.left_fraction(guided),
         }
+        if self.parameterization == "direct":
+            output["left_width"] = self.left_width(guided)
+            output["right_width"] = self.right_width(guided)
+        else:
+            output["total_width"] = self.total_width(guided)
+            output["left_fraction"] = self.left_fraction(guided)
+        return output
 
 
 def decode_lr_geometry(
@@ -99,6 +116,43 @@ def decode_lr_geometry(
     offset_y = delta_long * torch.sin(theta)
     offset = torch.cat([offset_x, offset_y], dim=1) / float(offset_radius)
     return width, left, right, offset
+
+
+def decode_direct_lr_geometry(
+    left_width_logits,
+    right_width_logits,
+    sine,
+    cosine,
+    offset_size_factor,
+    offset_radius,
+    max_total_normalized=1.0,
+):
+    """Decode independent sides and proportionally cap their total width.
+
+    The raw side predictions remain available for direct supervision.  The
+    returned decoded sides preserve their ratio while guaranteeing that their
+    sum is no larger than ``max_total_normalized``.  With the unified V3
+    ``grasp_size_factor=300`` contract, a limit of 1.0 is exactly 300 original
+    image pixels.
+    """
+    raw_left = torch.sigmoid(left_width_logits)
+    raw_right = torch.sigmoid(right_width_logits)
+    raw_total = raw_left + raw_right
+    limit = torch.as_tensor(
+        max_total_normalized,
+        dtype=raw_total.dtype,
+        device=raw_total.device,
+    )
+    scale = torch.clamp(limit / raw_total.clamp_min(1e-6), max=1.0)
+    left = raw_left * scale
+    right = raw_right * scale
+    width = left + right
+    theta = 0.5 * torch.atan2(sine, cosine)
+    delta_long = 0.5 * (right - left) * float(offset_size_factor)
+    offset_x = delta_long * torch.cos(theta)
+    offset_y = delta_long * torch.sin(theta)
+    offset = torch.cat([offset_x, offset_y], dim=1) / float(offset_radius)
+    return width, left, right, offset, raw_left, raw_right
 
 
 def _masked_mean(values, weight):
@@ -131,6 +185,9 @@ class DROGLR(DROG):
         if not self.use_grasp_masks:
             raise ValueError("DROG-LR requires use_grasp_masks=True")
         hidden_dim = int(getattr(cfg, "droglr_head_dim", cfg.vis_dim // 2))
+        self.lr_parameterization = str(
+            getattr(cfg, "droglr_parameterization", "total_fraction")
+        ).lower()
         self.proj = DROGLRProjector(
             word_dim=cfg.word_dim,
             in_dim=cfg.vis_dim // 2,
@@ -138,13 +195,23 @@ class DROGLR(DROG):
             mask_guidance_strength=float(
                 getattr(cfg, "mask_guidance_strength", 0.5)
             ),
+            parameterization=self.lr_parameterization,
         )
         self.size_factor = float(getattr(cfg, "grasp_size_factor", 300.0))
+        self.max_total_width = float(
+            getattr(cfg, "droglr_max_total_width", self.size_factor)
+        )
+        self.max_total_normalized = self.max_total_width / self.size_factor
         self.offset_size_factor = float(
             getattr(cfg, "droglr_offset_size_factor", cfg.input_size)
         )
         self.offset_radius = float(getattr(cfg, "offset_r", 20.0))
-        if min(self.size_factor, self.offset_size_factor, self.offset_radius) <= 0:
+        if min(
+            self.size_factor,
+            self.max_total_width,
+            self.offset_size_factor,
+            self.offset_radius,
+        ) <= 0:
             raise ValueError("DROG-LR size and offset factors must be positive")
         self.quality_positive_threshold = float(
             getattr(cfg, "droglr_quality_positive_threshold", 0.05)
@@ -182,14 +249,30 @@ class DROGLR(DROG):
             raw["angle"], dim=1, keepdim=True
         ).clamp_min(1e-6)
         sine, cosine = (raw["angle"] / angle_norm).chunk(2, dim=1)
-        width, left, right, offset = decode_lr_geometry(
-            raw["total_width"],
-            raw["left_fraction"],
-            sine,
-            cosine,
-            self.offset_size_factor,
-            self.offset_radius,
-        )
+        if self.lr_parameterization == "direct":
+            width, left, right, offset, loss_left, loss_right = (
+                decode_direct_lr_geometry(
+                    raw["left_width"],
+                    raw["right_width"],
+                    sine,
+                    cosine,
+                    self.offset_size_factor,
+                    self.offset_radius,
+                    self.max_total_normalized,
+                )
+            )
+            width_logits = torch.logit(width.clamp(1e-6, 1.0 - 1e-6))
+        else:
+            width, left, right, offset = decode_lr_geometry(
+                raw["total_width"],
+                raw["left_fraction"],
+                sine,
+                cosine,
+                self.offset_size_factor,
+                self.offset_radius,
+            )
+            loss_left, loss_right = left, right
+            width_logits = raw["total_width"]
         combined_quality = (
             torch.sigmoid(raw["quality"]) * torch.sigmoid(raw["centerness"])
         ).clamp(1e-6, 1.0 - 1e-6)
@@ -198,10 +281,19 @@ class DROGLR(DROG):
             quality=torch.logit(combined_quality),
             sine=sine,
             cosine=cosine,
-            width=raw["total_width"],
+            width=width_logits,
             offset=offset,
         )
-        return predictions, sine, cosine, width, left, right
+        return (
+            predictions,
+            sine,
+            cosine,
+            width,
+            left,
+            right,
+            loss_left,
+            loss_right,
+        )
 
     def forward(
         self,
@@ -239,9 +331,16 @@ class DROGLR(DROG):
             batch, channels, height, width
         )
         raw = self.proj(features, state)
-        predictions, pred_sine, pred_cosine, pred_width, pred_left, pred_right = (
-            self._decode(raw)
-        )
+        (
+            predictions,
+            pred_sine,
+            pred_cosine,
+            pred_width,
+            pred_left,
+            pred_right,
+            loss_left,
+            loss_right,
+        ) = self._decode(raw)
 
         if not self.training or mask is None:
             return GraspModelResult(predictions=predictions.detach())
@@ -282,7 +381,7 @@ class DROGLR(DROG):
             raw["centerness"], target_center, weight=1.0 + 4.0 * target_center
         )
         side_error = F.smooth_l1_loss(
-            torch.cat([pred_left, pred_right], dim=1),
+            torch.cat([loss_left, loss_right], dim=1),
             torch.cat([target_left, target_right], dim=1),
             reduction="none",
         )
