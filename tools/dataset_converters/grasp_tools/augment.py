@@ -212,11 +212,18 @@ class GeneratorConfig:
     language_templates: str
     category_vocabulary: str
     scales: Tuple[float, ...]
+    adaptive_min_scale: Optional[float]
+    adaptive_scale_step: float
     angle_bins: int
     same_category_probability: float
     hard_negative_probability: float
     placement_attempts: int
     scene_attempts: int
+    candidate_replacements: int
+    require_exact_object_count: bool
+    query_every_object: bool
+    unique_categories: bool
+    balance_on_success: bool
     border_margin: int
     relation_margin: float
     nearest_ratio: float
@@ -289,6 +296,21 @@ def parse_args() -> argparse.Namespace:
         "--scales", type=parse_scales, default=parse_scales("0.9,1.0,1.15,1.3")
     )
     parser.add_argument(
+        "--adaptive-min-scale",
+        type=float,
+        default=None,
+        help=(
+            "When placement fails, retry the same source and angle at progressively "
+            "smaller scales down to this inclusive floor. Disabled by default."
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-scale-step",
+        type=float,
+        default=0.1,
+        help="Scale decrement used with --adaptive-min-scale.",
+    )
+    parser.add_argument(
         "--angle-bins",
         type=int,
         default=24,
@@ -301,6 +323,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hard-negative-probability", type=float, default=0.0)
     parser.add_argument("--placement-attempts", type=int, default=200)
     parser.add_argument("--scene-attempts", type=int, default=30)
+    parser.add_argument(
+        "--candidate-replacements",
+        type=int,
+        default=48,
+        help=(
+            "Maximum category candidates tried while filling one dense scene. "
+            "A candidate that cannot be placed is replaced by another category."
+        ),
+    )
+    parser.add_argument(
+        "--require-exact-object-count",
+        action="store_true",
+        help="Reject and rebuild a scene unless its requested object count is reached.",
+    )
+    parser.add_argument(
+        "--query-every-object",
+        action="store_true",
+        help="Emit exactly one category-only language query for every placed object.",
+    )
+    parser.add_argument(
+        "--unique-categories",
+        action="store_true",
+        help="Require every object in a scene to have a different canonical category.",
+    )
+    parser.add_argument(
+        "--balance-on-success",
+        action="store_true",
+        help=(
+            "Balance categories, source instances, nominal scales, and angle bins "
+            "using only objects in completed scenes; failed attempts consume no quota."
+        ),
+    )
     parser.add_argument("--border-margin", type=int, default=4)
     parser.add_argument("--relation-margin", type=float, default=35.0)
     parser.add_argument("--nearest-ratio", type=float, default=1.20)
@@ -339,6 +393,21 @@ def build_config(args: argparse.Namespace) -> GeneratorConfig:
         raise ValueError("category-vocabulary must be 'canonical' or 'expanded'")
     if args.angle_bins < 1:
         raise ValueError("angle-bins must be positive")
+    if args.adaptive_min_scale is not None:
+        if args.adaptive_min_scale <= 0:
+            raise ValueError("adaptive-min-scale must be positive")
+        if args.adaptive_min_scale > min(args.scales):
+            raise ValueError("adaptive-min-scale must not exceed the smallest nominal scale")
+    if args.adaptive_scale_step <= 0:
+        raise ValueError("adaptive-scale-step must be positive")
+    if args.candidate_replacements < 1:
+        raise ValueError("candidate-replacements must be positive")
+    if args.unique_categories and args.objects_max > len(CANONICAL_CATEGORY_NAMES):
+        raise ValueError("objects-max exceeds the number of canonical categories")
+    if args.query_every_object and args.max_query_difficulty != 1:
+        raise ValueError("query-every-object requires max-query-difficulty=1")
+    if args.query_every_object and not args.unique_categories:
+        raise ValueError("query-every-object requires unique-categories")
     for name in ("same_category_probability", "hard_negative_probability"):
         value = float(getattr(args, name))
         if not 0.0 <= value <= 1.0:
@@ -361,11 +430,18 @@ def build_config(args: argparse.Namespace) -> GeneratorConfig:
         language_templates=args.language_templates,
         category_vocabulary=args.category_vocabulary,
         scales=tuple(args.scales),
+        adaptive_min_scale=args.adaptive_min_scale,
+        adaptive_scale_step=args.adaptive_scale_step,
         angle_bins=args.angle_bins,
         same_category_probability=args.same_category_probability,
         hard_negative_probability=args.hard_negative_probability,
         placement_attempts=args.placement_attempts,
         scene_attempts=args.scene_attempts,
+        candidate_replacements=args.candidate_replacements,
+        require_exact_object_count=args.require_exact_object_count,
+        query_every_object=args.query_every_object,
+        unique_categories=args.unique_categories,
+        balance_on_success=args.balance_on_success,
         border_margin=args.border_margin,
         relation_margin=args.relation_margin,
         nearest_ratio=args.nearest_ratio,
@@ -727,6 +803,117 @@ class BalancedTransformSampler:
         return source, scale, angle
 
 
+@dataclass(frozen=True)
+class TransformChoice:
+    source: SourceObject
+    nominal_scale: float
+    angle_deg: float
+    angle_bin: int
+
+
+class SuccessBalancedCategorySampler:
+    """Propose least-used categories and count only completed scenes."""
+
+    def __init__(self, categories: Sequence[str], rng: random.Random):
+        self.categories = list(categories)
+        self.rng = rng
+        self.success_counts: Counter[str] = Counter()
+
+    def propose(
+        self,
+        excluded: Iterable[str],
+        pending: Counter[str],
+    ) -> Optional[str]:
+        excluded_set = set(excluded)
+        candidates = [item for item in self.categories if item not in excluded_set]
+        if not candidates:
+            return None
+        scores = {
+            item: self.success_counts[item] + pending.get(item, 0)
+            for item in candidates
+        }
+        minimum = min(scores.values())
+        tied = [item for item in candidates if scores[item] == minimum]
+        return self.rng.choice(tied)
+
+    def commit(self, categories: Iterable[str]) -> None:
+        self.success_counts.update(categories)
+
+
+class SuccessBalancedTransformSampler:
+    """Balance source/scale/angle strata using successful placements only."""
+
+    def __init__(
+        self,
+        objects_by_category: Dict[str, List[SourceObject]],
+        scales: Sequence[float],
+        angle_bins: int,
+        rng: random.Random,
+    ):
+        self.objects_by_category = objects_by_category
+        self.scales = tuple(float(value) for value in scales)
+        self.angle_bins = int(angle_bins)
+        self.rng = rng
+        self.angle_success: Dict[str, Counter[int]] = defaultdict(Counter)
+        self.source_success: Dict[str, Counter[str]] = defaultdict(Counter)
+        self.scale_success: Dict[str, Counter[float]] = defaultdict(Counter)
+
+    def propose(
+        self,
+        category: str,
+        pending_angles: Counter[int],
+        pending_sources: Counter[str],
+        pending_scales: Counter[float],
+        blocked: set[Tuple[str, float, int]],
+    ) -> Optional[TransformChoice]:
+        tasks: List[Tuple[Tuple[int, int, int, float], SourceObject, float, int]] = []
+        for source in self.objects_by_category[category]:
+            for scale in self.scales:
+                for angle_bin in range(self.angle_bins):
+                    key = (source.source_id, scale, angle_bin)
+                    if key in blocked:
+                        continue
+                    score = (
+                        self.angle_success[category][angle_bin]
+                        + pending_angles[angle_bin],
+                        self.source_success[category][source.source_id]
+                        + pending_sources[source.source_id],
+                        self.scale_success[category][scale]
+                        + pending_scales[scale],
+                        self.rng.random(),
+                    )
+                    tasks.append((score, source, scale, angle_bin))
+        if not tasks:
+            return None
+        _, source, scale, angle_bin = min(tasks, key=lambda item: item[0])
+        bin_width = 360.0 / self.angle_bins
+        center = angle_bin * bin_width
+        angle = (center + self.rng.uniform(-bin_width / 2.0, bin_width / 2.0)) % 360.0
+        return TransformChoice(source, scale, angle, angle_bin)
+
+    def commit(self, category: str, choice: TransformChoice) -> None:
+        self.angle_success[category][choice.angle_bin] += 1
+        self.source_success[category][choice.source.source_id] += 1
+        self.scale_success[category][choice.nominal_scale] += 1
+
+
+def adaptive_scale_values(
+    nominal_scale: float,
+    minimum_scale: Optional[float],
+    step: float,
+) -> Tuple[float, ...]:
+    if minimum_scale is None:
+        return (float(nominal_scale),)
+    current = float(nominal_scale)
+    floor = float(minimum_scale)
+    values: List[float] = []
+    while current > floor + 1e-8:
+        values.append(round(current, 6))
+        current -= step
+    values.append(round(floor, 6))
+    return tuple(dict.fromkeys(values))
+
+
 def hard_neighbors(category: str, available: Iterable[str]) -> List[str]:
     available_set = set(available)
     for group in HARD_NEGATIVE_GROUPS:
@@ -1003,6 +1190,7 @@ def render_queries(
     language_templates: str,
     category_vocabulary: str,
     rng: random.Random,
+    query_every_object: bool = False,
 ) -> List[Dict[str, Any]]:
     by_type: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for candidate in candidates:
@@ -1010,6 +1198,13 @@ def render_queries(
             by_type[candidate["type"]].append(candidate)
     for values in by_type.values():
         rng.shuffle(values)
+
+    if query_every_object:
+        selected = sorted(
+            by_type.get("category", []), key=lambda item: int(item["target_idx"])
+        )
+    else:
+        selected = []
 
     type_priority = [
         "same_category_location",
@@ -1020,15 +1215,15 @@ def render_queries(
         "absolute_location",
         "category",
     ]
-    selected: List[Dict[str, Any]] = []
-    while len(selected) < maximum:
-        added = False
-        for query_type in type_priority:
-            if by_type[query_type] and len(selected) < maximum:
-                selected.append(by_type[query_type].pop())
-                added = True
-        if not added:
-            break
+    if not query_every_object:
+        while len(selected) < maximum:
+            added = False
+            for query_type in type_priority:
+                if by_type[query_type] and len(selected) < maximum:
+                    selected.append(by_type[query_type].pop())
+                    added = True
+            if not added:
+                break
 
     if len(selected) < minimum:
         return []
@@ -1185,17 +1380,194 @@ def validate_annotation(annotation: Dict[str, Any], width: int, height: int) -> 
             raise ValueError("Query has empty text")
 
 
+def validate_dense_annotation(
+    annotation: Dict[str, Any], requested_count: int, config: GeneratorConfig
+) -> None:
+    objects = annotation["objects"]
+    queries = annotation["queries"]
+    if config.require_exact_object_count and len(objects) != requested_count:
+        raise ValueError(
+            f"Dense scene requested {requested_count} objects but has {len(objects)}"
+        )
+    if config.unique_categories:
+        categories = [category_key_from_object(obj) for obj in objects]
+        if len(categories) != len(set(categories)):
+            raise ValueError("Dense scene contains duplicate canonical categories")
+    if config.query_every_object:
+        targets = [int(query["target_idx"]) for query in queries]
+        if len(queries) != len(objects) or sorted(targets) != list(range(len(objects))):
+            raise ValueError("Every dense-scene object must have exactly one query")
+        if any(query["type"] != "category" for query in queries):
+            raise ValueError("V4 object queries must be category-only")
+
+
+def build_success_balanced_scene(
+    split: str,
+    scene_number: int,
+    background_paths: Sequence[Path],
+    objects_by_category: Dict[str, List[SourceObject]],
+    prepared_cache: Dict[str, PreparedObject],
+    category_sampler: SuccessBalancedCategorySampler,
+    transform_sampler: SuccessBalancedTransformSampler,
+    rng: random.Random,
+    config: GeneratorConfig,
+) -> Optional[Tuple[np.ndarray, Dict[str, Any]]]:
+    available_categories = sorted(objects_by_category)
+    scene_id = f"{split}_scene_{scene_number:06d}"
+
+    for scene_attempt in range(config.scene_attempts):
+        background_path = background_paths[(scene_number + scene_attempt) % len(background_paths)]
+        canvas = cv2.imread(str(background_path), cv2.IMREAD_COLOR)
+        if canvas is None:
+            raise FileNotFoundError(f"Cannot read background: {background_path}")
+        occupancy = np.zeros(canvas.shape[:2], dtype=bool)
+        requested_count = rng.randint(config.objects_min, config.objects_max)
+        placed_objects: List[Dict[str, Any]] = []
+        committed_categories: List[str] = []
+        committed_choices: List[TransformChoice] = []
+        rejected_categories: set[str] = set()
+        pending_categories: Counter[str] = Counter()
+        candidate_attempts = 0
+
+        while (
+            len(placed_objects) < requested_count
+            and candidate_attempts < config.candidate_replacements
+        ):
+            excluded = set(committed_categories) | rejected_categories
+            category = category_sampler.propose(excluded, pending_categories)
+            if category is None:
+                break
+            candidate_attempts += 1
+            blocked: set[Tuple[str, float, int]] = set()
+            placed: Optional[Dict[str, Any]] = None
+            accepted_choice: Optional[TransformChoice] = None
+
+            for _ in range(12):
+                choice = transform_sampler.propose(
+                    category,
+                    Counter(),
+                    Counter(),
+                    Counter(),
+                    blocked,
+                )
+                if choice is None:
+                    break
+                blocked.add(
+                    (choice.source.source_id, choice.nominal_scale, choice.angle_bin)
+                )
+                if choice.source.source_id not in prepared_cache:
+                    prepared_cache[choice.source.source_id] = prepare_source_object(
+                        choice.source
+                    )
+                for actual_scale in adaptive_scale_values(
+                    choice.nominal_scale,
+                    config.adaptive_min_scale,
+                    config.adaptive_scale_step,
+                ):
+                    transformed = transform_object(
+                        prepared_cache[choice.source.source_id],
+                        actual_scale,
+                        choice.angle_deg,
+                        rng,
+                        config,
+                    )
+                    placed = paste_object(canvas, occupancy, transformed, rng, config)
+                    if placed is not None:
+                        placed["transform"].update({
+                            "nominal_scale": round(choice.nominal_scale, 6),
+                            "angle_bin": int(choice.angle_bin),
+                        })
+                        accepted_choice = choice
+                        break
+                if placed is not None:
+                    break
+
+            if placed is None or accepted_choice is None:
+                rejected_categories.add(category)
+                continue
+            placed["object_id"] = len(placed_objects)
+            placed_objects.append(placed)
+            committed_categories.append(category)
+            committed_choices.append(accepted_choice)
+            pending_categories[category] += 1
+
+        if config.require_exact_object_count and len(placed_objects) != requested_count:
+            continue
+        if len(placed_objects) < config.objects_min:
+            continue
+
+        height, width = canvas.shape[:2]
+        candidates = logical_candidates(
+            placed_objects,
+            width,
+            height,
+            config.relation_margin,
+            config.nearest_ratio,
+        )
+        queries = render_queries(
+            candidates,
+            split,
+            scene_id,
+            config.queries_min,
+            config.queries_max,
+            config.max_query_difficulty,
+            config.language_templates,
+            config.category_vocabulary,
+            rng,
+            query_every_object=config.query_every_object,
+        )
+        if not config.query_every_object and len(queries) < config.queries_min:
+            continue
+
+        annotation = {
+            "schema_version": "2.0",
+            "dataset_version": "grasp-tools-v4-dense",
+            "split": split,
+            "scene_id": scene_id,
+            "image_filename": f"{scene_id}.{config.image_ext}",
+            "background_source": background_path.name,
+            "image_size": [int(width), int(height)],
+            "requested_object_count": int(requested_count),
+            "objects": placed_objects,
+            "queries": queries,
+        }
+        validate_annotation(annotation, width, height)
+        validate_dense_annotation(annotation, requested_count, config)
+        category_sampler.commit(committed_categories)
+        for category, choice in zip(committed_categories, committed_choices):
+            transform_sampler.commit(category, choice)
+        return canvas, annotation
+    return None
+
+
 def build_scene(
     split: str,
     scene_number: int,
     background_paths: Sequence[Path],
     objects_by_category: Dict[str, List[SourceObject]],
     prepared_cache: Dict[str, PreparedObject],
-    category_sampler: BalancedCategorySampler,
-    transform_sampler: BalancedTransformSampler,
+    category_sampler: Any,
+    transform_sampler: Any,
     rng: random.Random,
     config: GeneratorConfig,
 ) -> Optional[Tuple[np.ndarray, Dict[str, Any]]]:
+    if config.balance_on_success:
+        if not isinstance(category_sampler, SuccessBalancedCategorySampler):
+            raise TypeError("balance-on-success requires SuccessBalancedCategorySampler")
+        if not isinstance(transform_sampler, SuccessBalancedTransformSampler):
+            raise TypeError("balance-on-success requires SuccessBalancedTransformSampler")
+        return build_success_balanced_scene(
+            split,
+            scene_number,
+            background_paths,
+            objects_by_category,
+            prepared_cache,
+            category_sampler,
+            transform_sampler,
+            rng,
+            config,
+        )
+
     available_categories = sorted(objects_by_category)
     scene_id = f"{split}_scene_{scene_number:06d}"
 
@@ -1254,6 +1626,7 @@ def build_scene(
             config.language_templates,
             config.category_vocabulary,
             rng,
+            query_every_object=config.query_every_object,
         )
         if len(queries) < config.queries_min:
             continue
@@ -1274,7 +1647,23 @@ def build_scene(
 
 
 def write_readme(out_dir: Path, config: GeneratorConfig) -> None:
-    text = f"""Grasp-Tools compositional augmentation v2
+    dataset_name = (
+        "Grasp-Tools V4 Dense compositional augmentation"
+        if config.balance_on_success
+        else "Grasp-Tools compositional augmentation v2"
+    )
+    dense_notes = ""
+    if config.balance_on_success:
+        dense_notes = f"""
+V4 Dense contract:
+  - each scene contains exactly {config.objects_min}-{config.objects_max} objects;
+  - canonical categories are unique inside a scene;
+  - every object has exactly one category-only language query;
+  - nominal scales are {','.join(f'{value:g}' for value in config.scales)};
+  - failed placement scale floor is {config.adaptive_min_scale if config.adaptive_min_scale is not None else 'disabled'};
+  - category and angle balance is charged only after a full scene succeeds.
+"""
+    text = f"""{dataset_name}
 
 Schema:
   Each split contains one image and one JSON per rendered scene.
@@ -1294,6 +1683,7 @@ Important:
 
 Recommended ToolRGS configuration:
   word_len: 32
+{dense_notes}
 """
     (out_dir / "README.txt").write_text(text, encoding="utf-8")
 
@@ -1328,8 +1718,8 @@ def generate_dataset(config: GeneratorConfig) -> Path:
         print(f"[backgrounds] {split}: {len(values)}")
 
     rng = random.Random(config.seed)
-    category_sampler = BalancedCategorySampler(sorted(objects_by_category), rng)
-    transform_sampler = BalancedTransformSampler(
+    category_sampler: Any = BalancedCategorySampler(sorted(objects_by_category), rng)
+    transform_sampler: Any = BalancedTransformSampler(
         objects_by_category, config.scales, config.angle_bins, rng
     )
     prepared_cache: Dict[str, PreparedObject] = {}
@@ -1345,11 +1735,28 @@ def generate_dataset(config: GeneratorConfig) -> Path:
         "query_types": Counter(),
         "difficulty": Counter(),
         "category_placements": Counter(),
+        "category_placements_by_split": {
+            split: Counter() for split in ("train", "val", "test")
+        },
+        "category_queries_by_split": {
+            split: Counter() for split in ("train", "val", "test")
+        },
+        "angle_bins_by_split": {
+            split: defaultdict(Counter) for split in ("train", "val", "test")
+        },
+        "actual_scales": Counter(),
     }
     start_time = time.time()
     preview_written = 0
 
     for split in ("train", "val", "test"):
+        if config.balance_on_success:
+            category_sampler = SuccessBalancedCategorySampler(
+                sorted(objects_by_category), rng
+            )
+            transform_sampler = SuccessBalancedTransformSampler(
+                objects_by_category, config.scales, config.angle_bins, rng
+            )
         index_path = out_dir / split / "index.jsonl"
         with index_path.open("w", encoding="utf-8") as index_file:
             for scene_number in range(scene_counts[split]):
@@ -1403,9 +1810,19 @@ def generate_dataset(config: GeneratorConfig) -> Path:
                 stats["queries"][split] += len(annotation["queries"])
                 for obj in annotation["objects"]:
                     stats["category_placements"][obj["category"]] += 1
+                    stats["category_placements_by_split"][split][obj["category"]] += 1
+                    transform = obj.get("transform", {})
+                    if "angle_bin" in transform:
+                        stats["angle_bins_by_split"][split][obj["category"]][
+                            str(transform["angle_bin"])
+                        ] += 1
+                    if "scale" in transform:
+                        stats["actual_scales"][f"{float(transform['scale']):.1f}"] += 1
                 for query in annotation["queries"]:
                     stats["query_types"][query["type"]] += 1
                     stats["difficulty"][str(query["difficulty"])] += 1
+                    target = annotation["objects"][int(query["target_idx"])]
+                    stats["category_queries_by_split"][split][target["category"]] += 1
 
                 done = scene_number + 1
                 if done == scene_counts[split] or done % 100 == 0:
@@ -1415,10 +1832,12 @@ def generate_dataset(config: GeneratorConfig) -> Path:
                         f"elapsed {elapsed / 60.0:.1f} min"
                     )
 
-    serializable_stats = {
-        key: dict(value) if isinstance(value, Counter) else value
-        for key, value in stats.items()
-    }
+    def serialize(value: Any) -> Any:
+        if isinstance(value, (Counter, defaultdict, dict)):
+            return {str(key): serialize(item) for key, item in value.items()}
+        return value
+
+    serializable_stats = serialize(stats)
     metadata = {
         "generator": "tools/dataset_converters/grasp_tools/augment.py",
         "schema_version": "2.0",
