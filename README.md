@@ -450,6 +450,18 @@ python train.py --config config/vcot/graspmamba.yaml --opts \
 Use Python 3.9 and PyTorch 2.0.1. Install the dependencies from
 `requirement.txt`. Pretrained CLIP and DINOv2 weights are not stored in Git.
 
+For a fresh GUI checkout, install a CUDA-matched PyTorch build first and run:
+
+```bash
+bash tools/gui_quickstart.sh check --install-deps --with-detector
+```
+
+The explicit `--install-deps` flag installs the core GUI and GraspMamba
+requirements before preflight; `--with-detector` additionally installs the
+pinned MMEngine/MMCV/MMDetection stack. Preflight then downloads and verifies
+the configured checkpoints. It does not replace PyTorch because that wheel
+must match the target host's CUDA runtime.
+
 GraspMamba has an optional CUDA extension and must be installed after the
 CUDA-matched PyTorch build:
 

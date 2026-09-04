@@ -8,6 +8,8 @@ and exposes dense quality/sine/cosine/width maps so all datasets can use the
 shared engine.
 """
 
+import argparse
+from contextlib import nullcontext
 from pathlib import Path
 
 import torch
@@ -15,6 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .crog_clip import build_model as build_clip_model
+from utils.pretrained import ensure_pretrained
 
 
 MAMBAVISION_CHANNELS = {
@@ -25,6 +28,28 @@ MAMBAVISION_CHANNELS = {
     "mamba_vision_L": (196, 392, 784, 1568),
     "mamba_vision_L2": (196, 392, 784, 1568),
 }
+
+
+_OFFICIAL_MAMBAVISION_ARTIFACTS = {
+    "mamba_vision_T": "mambavision-t",
+}
+
+
+def _official_checkpoint_context(checkpoint, artifact_key):
+    """Allow metadata only for a hash-verified official checkpoint.
+
+    PyTorch 2.6 changed torch.load to weights_only=True by default. NVIDIA's
+    official MambaVision-T archive contains an argparse.Namespace metadata
+    object, so the upstream loader needs this narrowly scoped allowlist. Older
+    PyTorch releases do not expose safe_globals.
+    """
+
+    if checkpoint is None or artifact_key is None:
+        return nullcontext()
+    safe_globals = getattr(torch.serialization, "safe_globals", None)
+    if safe_globals is None:
+        return nullcontext()
+    return safe_globals([argparse.Namespace])
 
 
 class MambaVisionFeatureExtractor(nn.Module):
@@ -47,23 +72,36 @@ class MambaVisionFeatureExtractor(nn.Module):
             ) from exc
 
         model_kwargs = {"num_classes": 0}
+        artifact_key = _OFFICIAL_MAMBAVISION_ARTIFACTS.get(model_name)
         if checkpoint:
-            checkpoint = Path(checkpoint)
-            if pretrained:
-                checkpoint.parent.mkdir(parents=True, exist_ok=True)
+            checkpoint = Path(checkpoint).expanduser()
+            if pretrained and artifact_key is not None:
+                checkpoint = ensure_pretrained(
+                    checkpoint,
+                    artifact_key=artifact_key,
+                )
+            elif pretrained and not checkpoint.is_file():
+                raise FileNotFoundError(
+                    f"MambaVision checkpoint not found: {checkpoint}. "
+                    "Automatic download is currently registered only for "
+                    "mamba_vision_T."
+                )
             model_kwargs["model_path"] = str(checkpoint)
         try:
-            self.model = create_model(
-                model_name,
-                pretrained=pretrained,
-                **model_kwargs,
-            )
+            with _official_checkpoint_context(checkpoint, artifact_key):
+                self.model = create_model(
+                    model_name,
+                    pretrained=pretrained,
+                    **model_kwargs,
+                )
         except Exception as exc:
             raise RuntimeError(
-                "Unable to construct the MambaVision backbone. If automatic weight "
-                "download is unavailable, download the official checkpoint and set "
-                "TRAIN.mamba_pretrain to its local path; use "
-                "TRAIN.mamba_pretrained=False only for training from scratch."
+                "Unable to construct the MambaVision backbone after resolving "
+                f"checkpoint {checkpoint!s}. Run bash tools/gui_quickstart.sh "
+                "check --install-deps to install the optional runtime and download "
+                "the hash-verified official weight. Use "
+                "TRAIN.mamba_pretrained=False only when intentionally training "
+                f"from scratch. Original error: {exc}"
             ) from exc
 
         if not hasattr(self.model, "levels") or len(self.model.levels) != 4:

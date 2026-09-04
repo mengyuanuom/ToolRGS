@@ -13,8 +13,37 @@ fi
 
 case "$ACTION" in
   check)
+    INSTALL_DEPS=0
+    INSTALL_DETECTOR=0
+    CHECK_ARGS=()
+    for argument in "$@"; do
+      case "$argument" in
+        --install-deps)
+          INSTALL_DEPS=1
+          ;;
+        --with-detector)
+          INSTALL_DETECTOR=1
+          ;;
+        *)
+          CHECK_ARGS+=("$argument")
+          ;;
+      esac
+    done
+    if [[ "$INSTALL_DEPS" -eq 1 ]]; then
+      INSTALL_ARGS=()
+      if [[ "$INSTALL_DETECTOR" -eq 1 ]]; then
+        INSTALL_ARGS+=(--with-detector)
+      fi
+      bash tools/install_gui_dependencies.sh "${INSTALL_ARGS[@]}"
+    elif [[ "$INSTALL_DETECTOR" -eq 1 ]]; then
+      printf '%s\n' '--with-detector requires --install-deps' >&2
+      exit 2
+    fi
     exec python tools/check_deployment.py \
-      --config "$CONFIG" "$@"
+      --config "$CONFIG" "${CHECK_ARGS[@]}"
+    ;;
+  install)
+    exec bash tools/install_gui_dependencies.sh "$@"
     ;;
   demo)
     exec python deploy_gui_realsense.py --config "$CONFIG" "$@"
@@ -32,6 +61,9 @@ case "$ACTION" in
       '' \
       'Usage:' \
       '  bash tools/gui_quickstart.sh check       # check and download configured weights' \
+      '  bash tools/gui_quickstart.sh check --install-deps  # install GUI/Mamba deps, then check' \
+      '  bash tools/gui_quickstart.sh check --install-deps --with-detector  # include MMDetection' \
+      '  bash tools/gui_quickstart.sh install     # install dependencies without running preflight' \
       '  bash tools/gui_quickstart.sh demo        # direct RealSense demo; never sends robot data' \
       '  bash tools/gui_quickstart.sh gi-preview  # GI shared video; robot dry-run' \
       '  bash tools/gui_quickstart.sh robot       # GI shared video + real robot TCP output' \

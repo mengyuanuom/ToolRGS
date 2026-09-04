@@ -62,6 +62,18 @@ pip install -r requirement-deploy.txt
 pip install -r requirement-detector.txt
 ```
 
+也可以让 quickstart 在检查前完成安装。先安装与机器 CUDA
+匹配的 PyTorch，然后在仓库根目录执行：
+
+```bash
+bash tools/gui_quickstart.sh check --install-deps --with-detector
+```
+
+该命令会依次安装基础 GUI、GraspMamba 和可选 MMDetection 依赖，
+随后下载并校验全部配置权重。若不使用目标检测标签页，可省略
+`--with-detector`。安装脚本不会替换已有 PyTorch，因为 PyTorch wheel
+必须与目标机器的 NVIDIA 驱动/CUDA 环境匹配。
+
 纯 RealSense GUI 需要 `pyrealsense2`。GI GUI 还需要系统 GStreamer：
 
 ```bash

@@ -2,6 +2,13 @@
 
 import argparse
 from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from utils.pretrained import ensure_pretrained
 
 
 def main():
@@ -31,16 +38,26 @@ def main():
         )
 
     print(f"mamba_ssm: {getattr(mamba_ssm, '__version__', 'unknown')}")
-    model = create_model("mamba_vision_T", pretrained=False, num_classes=0)
+    mamba_path = ensure_pretrained(args.mamba, "mambavision-t")
+    from model.graspmamba import _official_checkpoint_context
+
+    with _official_checkpoint_context(mamba_path, "mambavision-t"):
+        model = create_model(
+            "mamba_vision_T",
+            pretrained=True,
+            model_path=str(mamba_path),
+            num_classes=0,
+        )
     channels = [80, 160, 320, 640]
-    print(f"MambaVision-T: OK, expected stage channels={channels}")
+    print(
+        "MambaVision-T: OK, official checkpoint loaded; "
+        f"expected stage channels={channels}"
+    )
     del model
 
     clip_path = Path(args.clip)
     print(f"CLIP: {'OK' if clip_path.is_file() else 'MISSING'} ({clip_path.resolve()})")
-    mamba_path = Path(args.mamba)
-    state = "OK" if mamba_path.is_file() else "missing; first model build will download it"
-    print(f"MambaVision checkpoint: {state} ({mamba_path.resolve()})")
+    print(f"MambaVision checkpoint: OK ({mamba_path.resolve()})")
 
 
 if __name__ == "__main__":
