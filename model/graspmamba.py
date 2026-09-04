@@ -220,6 +220,9 @@ class GraspMapDecoder(nn.Module):
 class GraspMamba(nn.Module):
     """ToolRGS-compatible paper reimplementation of GraspMamba."""
 
+    grasp_quality_loss_activation = "sigmoid"
+    grasp_size_loss_activation = "sigmoid"
+
     def __init__(self, cfg):
         super().__init__()
         mamba_model = getattr(cfg, "mamba_model", "mamba_vision_T")

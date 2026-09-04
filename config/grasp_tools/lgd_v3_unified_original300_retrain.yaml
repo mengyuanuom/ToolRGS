@@ -1,0 +1,36 @@
+_base_: lgd.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+  grasp_size_factor: 300.0
+  grasp_height: 20.0
+  grasp_size_coordinate: original
+
+TRAIN:
+  # Match the common GraspTools V3 schedule and text-label contract.
+  word_len: 32
+  workers: 4
+  workers_val: 2
+  epochs: 36
+  milestones: [30]
+  batch_size: 16
+  batch_size_val: 8
+  exp_name: lgd_grasp_tools_v3_15k_unified_original300
+  save_freq: 5
+  val_start_epoch: 11
+  val_freq: 1
+  weight:
+  resume:
+
+TEST:
+  evaluation_protocol: toolrgs
+  grasp_topk: [1, 5]
+  grasp_iou_threshold: 0.25
+  grasp_angle_threshold: 30.0
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: clamp
+  grasp_iou_thresholds: [0.25, 0.50, 0.75]
+  grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]
+  restore_grasp_size_scale: False
+  filter_grasps_by_segmentation: False
+  visualize: False

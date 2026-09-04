@@ -33,6 +33,7 @@ def generate_asymmetric_grasp_targets(
     rectangles,
     image_hw,
     size_factor=100.0,
+    size_rectangles=None,
 ):
     """Rasterize full-box FCOS targets for rotated grasp rectangles.
 
@@ -53,7 +54,15 @@ def generate_asymmetric_grasp_targets(
     sine = np.zeros((1, height, width), dtype=np.float32)
     cosine = np.zeros((1, height, width), dtype=np.float32)
 
-    for rectangle in rectangles:
+    rectangles = list(rectangles)
+    if size_rectangles is None:
+        size_rectangles = rectangles
+    else:
+        size_rectangles = list(size_rectangles)
+        if len(size_rectangles) != len(rectangles):
+            raise ValueError("size_rectangles must align one-to-one with rectangles")
+
+    for rectangle, size_rectangle in zip(rectangles, size_rectangles):
         center_x, center_y, box_width, box_height, theta_deg = rect_to_five(
             rectangle
         )
@@ -125,7 +134,21 @@ def generate_asymmetric_grasp_targets(
             continue
 
         target_ltrb = ltrb[:, row_slice, column_slice]
-        normalized = distances / size_factor
+        _sx, _sy, size_width, size_height, _stheta = rect_to_five(
+            size_rectangle
+        )
+        size_width = max(0.0, float(size_width))
+        size_height = max(0.0, float(size_height))
+        coordinate_scale = np.asarray(
+            [
+                size_width / max(box_width, 1e-6),
+                size_width / max(box_width, 1e-6),
+                size_height / max(box_height, 1e-6),
+                size_height / max(box_height, 1e-6),
+            ],
+            dtype=np.float32,
+        ).reshape(4, 1, 1)
+        normalized = distances * coordinate_scale / size_factor
         for channel in range(4):
             target_ltrb[channel][replace] = normalized[channel][replace]
         current_center[replace] = candidate_centerness[replace]

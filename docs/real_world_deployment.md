@@ -111,28 +111,45 @@ SHA-256
 `38b2824b385a293b883bfe03682fec0e2f30c83457e3f86ba08e14d884fd7ecf`.
 ToolRGS validates that digest before loading the checkpoint.
 
-The two Grasp-Tools V3 profiles are deliberately named and ordered first in the
-GUI as `V3-DROG-OFF-V1` and `V3-CROG`. `V3-DROG-OFF-V1` provides the epoch-24
-best-mSR checkpoint: segmentation IoU `83.78`, multi-IoU/multi-angle mSR
-`89.14`, legacy SR@IoU0.25/30deg `99.51`, and SR@IoU0.50/10deg `96.52`. Its
-Release asset is
-`v3_drogoff_v1_grasp_tools_15k_original300_20260825_epoch24_best_msr_inference.pth`
-(`717897106` bytes), with SHA-256
-`5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340`.
+The four unified Grasp-Tools V3 profiles are deliberately named and ordered
+first in the GUI. Every name includes comparable full-test mSR@1 and J@1
+scores, so operators can distinguish checkpoints without consulting a
+separate benchmark table. `V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)`
+provides the unified-V3 epoch-23 best-J@1 checkpoint. The unified 5,029-sample
+test cache reports J@5 `61.80` and mean multi-threshold J@5 `58.11`.
+Its Release asset is
+`v3_drogoff_v1_grasp_tools_15k_unified_original300_20260829_epoch23_best_j1_inference.pth`
+(`717892286` bytes), with SHA-256
+`98f146b391b62d51e6b462f5e70324c786d141f23e34a0f08b9256965e2c7c7a`.
 
-`V3-CROG` provides the max-norm-fixed epoch-36 checkpoint resumed from epoch 20.
-With the training-matched `clamp` size decoder it reaches segmentation IoU
-`81.72`, multi-IoU/multi-angle mSR `75.28`, legacy SR@IoU0.25/30deg `99.15`,
-and SR@IoU0.50/10deg `90.81`. Its Release asset is
-`v3_crog_grasp_tools_15k_original300_20260823_epoch36_best_msr_clamp_inference.pth`
-(`589066850` bytes), with SHA-256
-`2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f`.
-Both assets contain only inference state plus geometry metadata; optimizer and
-scheduler state are deliberately omitted. The activation contract is explicit
-at every layer: `V3-DROG-OFF-V1` uses `sigmoid`, while `V3-CROG` uses `clamp`,
-matching how each size head was trained.
-Selecting either profile downloads and verifies it on demand; running the
-preflight downloads both in advance with the other selectable profiles.
+`V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)` provides the unified-V3 epoch-20 best-J@1 checkpoint. The
+independent test cache reports J@1 `60.97`, J@5 `61.15`, mean multi-threshold
+J@1 `53.62`, and mean multi-threshold J@5 `55.69`. Its Release asset is
+`v3_mambagrasp_grasp_tools_15k_unified_original300_20260830_epoch20_best_j1_inference.pth`
+(`552098073` bytes), with SHA-256
+`c3c6765172c8936fa71a3be53acd00c66d54a98e1cc75770d8f5c047e65fcb95`.
+
+`V3-CROG (mSR@1 47.65%, J@1 59.38%)` uses the unified-V3 epoch-19 best-J@1
+checkpoint that produced those full-test scores. Its Release asset is
+`v3_crog_grasp_tools_15k_unified_original300_20260831_epoch19_best_j1_inference.pth`
+(`589060028` bytes), with SHA-256
+`a9f2164aa5e79b77b5e708d518bd0b8938802983fecf4672fa5a5f89b9d55266`.
+
+`V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)` uses the unified-V3
+epoch-16 best-J@1 Stage-2 checkpoint. The independent test cache reports J@5
+`58.68` and mean multi-threshold J@5 `45.94`. Its Release asset is
+`v3_maplegrasp_stage2_grasp_tools_15k_unified_original300_20260830_epoch16_best_j1_inference.pth`
+(`589069746` bytes), with SHA-256
+`a5c394b4edcd8d88dcb8b0c4fa072a1de398afdaef9e1812d9169838034d7c03`.
+
+All four assets contain only inference state plus checkpoint metadata;
+optimizer and scheduler state are deliberately omitted. Every GUI profile uses
+`auto`: quality/size decoding is resolved from checkpoint metadata first and
+then the training-config/model contract when legacy metadata is absent.
+DROG-OFF V1, MambaGrasp, and MapleGrasp resolve to sigmoid quality plus sigmoid
+size; CROG resolves to sigmoid quality plus clamp size.
+Selecting any profile downloads and verifies it on demand; running the
+preflight downloads all of them in advance with the other selectable profiles.
 
 Paths in deployment YAML are resolved from the ToolRGS repository root, so the
 command can be run from any working directory.
@@ -156,7 +173,7 @@ extended reference. A normal deployment no longer needs a YAML copy/edit step.
 The preflight never connects to the robot and never sends a command. It downloads
 and verifies every selectable `model_profiles` checkpoint, not only the active
 one. In the GUI, expand **Model & Post-processing** to switch among the published
-`V3-DROG-OFF-V1`, `V3-CROG`, DROG-OFF V2, and aligned CROG V2 profiles without
+the four score-suffixed V3 profiles, DROG-OFF V2, and aligned CROG V2 profiles without
 restarting the camera, detector, or robot-control layer. The same panel exposes
 source-pixel grasp height, mask threshold, mask expansion radius, and independent
 mask-based grasp point filtering; every initial value comes from the selected

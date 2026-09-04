@@ -14,6 +14,7 @@ from toolrgs.evaluation import (
     BinarySegmentationMetric,
     DenseGraspPostProcessor,
     GraspSuccessMetric,
+    GraspThresholdGridMetric,
     inverse_warp,
     rectangles_to_five,
     refine_with_grasp_relative_offset,
@@ -23,8 +24,15 @@ from toolrgs.evaluation import (
 )
 from toolrgs.registry import LOOPS, METRICS, POSTPROCESSORS
 from toolrgs.structures import GraspModelResult
-from utils.grasp_eval import calculate_jacquard_index
-from utils.config import resolve_grasp_size_activation
+from utils.grasp_eval import (
+    calculate_grasp_matches,
+    calculate_jacquard_from_matches,
+    calculate_jacquard_index,
+)
+from utils.config import (
+    resolve_grasp_quality_activation,
+    resolve_grasp_size_activation,
+)
 
 
 def _resize_prediction(tensor, output_hw, mode="bicubic"):
@@ -54,6 +62,10 @@ class GraspValLoop(BaseLoop):
         if not self.topk or any(int(value) <= 0 for value in self.topk):
             raise ValueError(f"grasp_topk must contain positive integers, got {self.topk}")
         self.max_topk = max(self.topk)
+        self.collect_predictions = bool(
+            getattr(cfg, "collect_predictions", False)
+        )
+        self.prediction_records = []
         self.segmentation_metric = METRICS.build(
             getattr(cfg, "segmentation_metric", None)
             or {
@@ -65,6 +77,22 @@ class GraspValLoop(BaseLoop):
             getattr(cfg, "grasp_metric", None)
             or {"type": "grasp_success", "topk": self.topk}
         )
+        self.compute_grasp_msr = bool(
+            getattr(cfg, "compute_grasp_msr", False)
+        )
+        self.grasp_grid_metric = None
+        self.grasp_threshold_grid = []
+        self.grasp_msr = {}
+        if self.compute_grasp_msr:
+            self.grasp_grid_metric = GraspThresholdGridMetric(
+                iou_thresholds=getattr(
+                    cfg, "grasp_iou_thresholds", (0.25, 0.50, 0.75)
+                ),
+                angle_thresholds=getattr(
+                    cfg, "grasp_angle_thresholds", (5.0, 10.0, 20.0, 30.0)
+                ),
+                topk=self.topk,
+            )
         self.postprocessor = POSTPROCESSORS.build(
             getattr(cfg, "grasp_postprocessor", None)
             or {
@@ -85,6 +113,9 @@ class GraspValLoop(BaseLoop):
         self.grasp_size_activation = resolve_grasp_size_activation(
             getattr(cfg, "grasp_size_activation", "auto"), model=model
         )
+        self.grasp_quality_activation = resolve_grasp_quality_activation(
+            getattr(cfg, "grasp_quality_activation", "auto"), model=model
+        )
         self.offset_decode_mode = str(
             getattr(cfg, "offset_decode_mode", "radius")
         ).strip().lower()
@@ -96,6 +127,11 @@ class GraspValLoop(BaseLoop):
 
     def _decode_size(self, prediction):
         if self.grasp_size_activation == "sigmoid":
+            return torch.sigmoid(prediction)
+        return prediction.clamp(0.0, 1.0)
+
+    def _decode_quality(self, prediction):
+        if self.grasp_quality_activation == "sigmoid":
             return torch.sigmoid(prediction)
         return prediction.clamp(0.0, 1.0)
 
@@ -131,12 +167,35 @@ class GraspValLoop(BaseLoop):
             cursor += 2
         return float(iou), precision, j_index
 
+    def _global_grid_results(self, device):
+        keys = tuple(self.grasp_grid_metric.correct)
+        values = []
+        for key in keys:
+            values.extend(
+                [
+                    self.grasp_grid_metric.correct[key],
+                    self.grasp_grid_metric.total[key],
+                ]
+            )
+        statistics = torch.tensor(values, dtype=torch.float64, device=device)
+        if dist.is_available() and dist.is_initialized():
+            dist.all_reduce(statistics, op=dist.ReduceOp.SUM)
+        statistics = statistics.cpu().tolist()
+        for index, key in enumerate(keys):
+            self.grasp_grid_metric.correct[key] = statistics[2 * index]
+            self.grasp_grid_metric.total[key] = statistics[2 * index + 1]
+        return self.grasp_grid_metric.compute()
+
     @torch.no_grad()
     def run_epoch(self, epoch: int):
         self.state = LoopState(epoch=epoch)
         self.hooks.call("before_epoch", self, self.state)
         self.segmentation_metric.reset()
         self.grasp_metric.reset()
+        if self.grasp_grid_metric is not None:
+            self.grasp_grid_metric.reset()
+        if self.collect_predictions:
+            self.prediction_records = []
         self.model.eval()
         rank = int(getattr(self.cfg, "rank", 0))
         progress = tqdm(self.dataloader, disable=rank != 0)
@@ -233,10 +292,23 @@ class GraspValLoop(BaseLoop):
                             dense_maps[index, 1], inverse_matrix, original_hw
                         ) > 0.5,
                     )
+                    if self.collect_predictions:
+                        self.prediction_records.append(
+                            {
+                                "segmentation_iou": self.segmentation_metric.ious[-1],
+                                "rectangles": np.empty((0, 5), dtype=np.float32),
+                                "targets": np.empty((0, 6), dtype=np.float32),
+                                "matches": np.empty((0, 3), dtype=np.float32),
+                                "target_width_cap": self.postprocessor.width_factor,
+                                "target_height": self.postprocessor.grasp_height,
+                            }
+                        )
                 self.state.result = result
                 self.hooks.call("after_iter", self, self.state)
                 continue
-            quality = _resize_prediction(torch.sigmoid(predictions.quality), input_hw)
+            quality = _resize_prediction(
+                self._decode_quality(predictions.quality), input_hw
+            )
             sine = _resize_prediction(predictions.sine, input_hw)
             cosine = _resize_prediction(predictions.cosine, input_hw)
             width = _resize_prediction(self._decode_size(predictions.width), input_hw)
@@ -295,6 +367,7 @@ class GraspValLoop(BaseLoop):
                     predicted_segmentation,
                     target_segmentation_original > 0.5,
                 )
+                segmentation_iou = self.segmentation_metric.ious[-1]
 
                 quality_original = inverse_warp(
                     dense_maps[index, 2], inverse_matrix, original_hw
@@ -373,18 +446,94 @@ class GraspValLoop(BaseLoop):
                 else:
                     rectangles = rectangles_to_five(rectangles)
 
+                target_width_cap = self.postprocessor.width_factor
+                if self.postprocessor.size_coordinate == "canvas":
+                    target_width_cap *= size_scale
+                matches = None
+                if self.collect_predictions or self.grasp_grid_metric is not None:
+                    matches = calculate_grasp_matches(
+                        rectangles[: self.max_topk],
+                        target_six,
+                        target_width_cap=target_width_cap,
+                        target_height=self.postprocessor.grasp_height,
+                    )
                 for topk in self.topk:
-                    success = calculate_jacquard_index(rectangles[:topk], target_six)
+                    if matches is None:
+                        success = calculate_jacquard_index(
+                            rectangles[:topk],
+                            target_six,
+                            iou_threshold=float(
+                                getattr(self.cfg, "grasp_iou_threshold", 0.25)
+                            ),
+                            angle_threshold=float(
+                                getattr(self.cfg, "grasp_angle_threshold", 30.0)
+                            ),
+                            target_width_cap=target_width_cap,
+                            target_height=self.postprocessor.grasp_height,
+                        )
+                    else:
+                        success = calculate_jacquard_from_matches(
+                            matches,
+                            topk,
+                            iou_threshold=float(
+                                getattr(self.cfg, "grasp_iou_threshold", 0.25)
+                            ),
+                            angle_threshold=float(
+                                getattr(self.cfg, "grasp_angle_threshold", 30.0)
+                            ),
+                        )
                     self.grasp_metric.update(topk, success)
+                if self.grasp_grid_metric is not None:
+                    for iou_threshold, angle_threshold in (
+                        self.grasp_grid_metric.threshold_pairs
+                    ):
+                        for topk in self.topk:
+                            success = calculate_jacquard_from_matches(
+                                matches,
+                                topk,
+                                iou_threshold=iou_threshold,
+                                angle_threshold=angle_threshold,
+                            )
+                            self.grasp_grid_metric.update(
+                                iou_threshold,
+                                angle_threshold,
+                                topk,
+                                success,
+                            )
+                if self.collect_predictions:
+                    self.prediction_records.append(
+                        {
+                            "segmentation_iou": segmentation_iou,
+                            "rectangles": np.asarray(
+                                rectangles, dtype=np.float32
+                            ).reshape(-1, 5),
+                            "targets": np.asarray(
+                                target_six, dtype=np.float32
+                            ).reshape(-1, 6),
+                            "matches": np.asarray(
+                                matches, dtype=np.float32
+                            ).reshape(-1, 3),
+                            "target_width_cap": target_width_cap,
+                            "target_height": self.postprocessor.grasp_height,
+                        }
+                    )
 
             self.state.result = result
             self.hooks.call("after_iter", self, self.state)
 
         iou, precision, j_index = self._global_results(device)
+        self.grasp_threshold_grid = []
+        self.grasp_msr = {}
+        if self.grasp_grid_metric is not None:
+            grid_results = self._global_grid_results(device)
+            self.grasp_threshold_grid = grid_results["rows"]
+            self.grasp_msr = grid_results["msr"]
         self.state.logs = {
             "iou": iou,
             "precision": precision,
             "j_index": j_index,
+            "grasp_threshold_grid": self.grasp_threshold_grid,
+            "msr": self.grasp_msr,
         }
         self.hooks.call("after_epoch", self, self.state)
         if rank == 0:
@@ -403,4 +552,12 @@ class GraspValLoop(BaseLoop):
                 grasp_text,
                 precision_text,
             )
+            if self.grasp_msr:
+                logger.info(
+                    "mSR: {}",
+                    "  ".join(
+                        f"mSR@{topk}={100.0 * value:.4f}"
+                        for topk, value in self.grasp_msr.items()
+                    ),
+                )
         return iou, precision, j_index

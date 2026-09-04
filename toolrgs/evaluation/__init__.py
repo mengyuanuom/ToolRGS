@@ -1,8 +1,19 @@
 """Registered metrics and prediction postprocessors."""
 
-from .metrics import BinarySegmentationMetric, GraspSuccessMetric
+from .metrics import (
+    BinarySegmentationMetric,
+    GraspSuccessMetric,
+    GraspThresholdGridMetric,
+)
 from .postprocessors import DenseGraspPostProcessor, GraspDetection
 from .protocols import EvaluationProtocol, resolve_evaluation_protocol
+from .prediction_cache import (
+    PREDICTION_CACHE_VERSION,
+    load_prediction_cache,
+    save_prediction_cache,
+    score_prediction_cache,
+    write_score_summary,
+)
 from .geometry import (
     apply_affine,
     corners_to_five,
@@ -39,6 +50,8 @@ __all__ = [
     "EvaluationProtocol",
     "GraspDetection",
     "GraspSuccessMetric",
+    "GraspThresholdGridMetric",
+    "PREDICTION_CACHE_VERSION",
     "REALVLG_ANGLE_THRESHOLD",
     "REALVLG_GRIPPER_DEPTH",
     "REALVLG_IOU_THRESHOLD",
@@ -48,6 +61,7 @@ __all__ = [
     "five_to_corners",
     "grasp_relative_offset_scale",
     "inverse_warp",
+    "load_prediction_cache",
     "rect_to_five",
     "rectangles_to_five",
     "realvlg_angular_diff",
@@ -63,6 +77,9 @@ __all__ = [
     "refine_with_grasp_relative_offset",
     "refine_with_offset",
     "resolve_evaluation_protocol",
+    "save_prediction_cache",
+    "score_prediction_cache",
     "resample_grasp_geometry",
     "targets_to_six",
+    "write_score_summary",
 ]

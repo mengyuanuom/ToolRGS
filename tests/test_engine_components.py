@@ -1,4 +1,7 @@
+import os
+import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -7,6 +10,10 @@ from toolrgs.evaluation import (
     BinarySegmentationMetric,
     DenseGraspPostProcessor,
     GraspSuccessMetric,
+    GraspThresholdGridMetric,
+    load_prediction_cache,
+    save_prediction_cache,
+    score_prediction_cache,
     corners_to_five,
     five_to_corners,
     inverse_warp,
@@ -16,6 +23,11 @@ from toolrgs.evaluation import (
     targets_to_six,
 )
 from toolrgs.registry import HOOKS, METRICS, POSTPROCESSORS
+from utils.grasp_eval import (
+    calculate_grasp_matches,
+    calculate_jacquard_from_matches,
+    calculate_jacquard_index,
+)
 
 
 class EvaluationComponentTest(unittest.TestCase):
@@ -148,9 +160,102 @@ class EvaluationComponentTest(unittest.TestCase):
         metric.update(5, True)
         self.assertEqual(metric.compute(), {"J@1": 0.5, "J@5": 1.0})
 
+    def test_grasp_threshold_grid_computes_each_cell_and_msr(self):
+        metric = GraspThresholdGridMetric(
+            iou_thresholds=(0.25, 0.5),
+            angle_thresholds=(10.0,),
+            topk=(1, 5),
+        )
+        for success in (True, False):
+            metric.update(0.25, 10.0, 1, success)
+        metric.update(0.25, 10.0, 5, True)
+        metric.update(0.5, 10.0, 1, False)
+        metric.update(0.5, 10.0, 5, True)
+        result = metric.compute()
+        self.assertEqual(result["rows"][0]["values"], {1: 0.5, 5: 1.0})
+        self.assertEqual(result["rows"][1]["values"], {1: 0.0, 5: 1.0})
+        self.assertEqual(result["msr"], {1: 0.25, 5: 1.0})
+
+    def test_jacquard_uses_configured_original_width_cap_without_mutation(self):
+        predictions = np.array([[100, 100, 250, 20, 0]], dtype=np.float32)
+        targets = np.array([[100, 100, 250, 40, 0, 0]], dtype=np.float32)
+        observed = []
+
+        def record_iou(_prediction, target, **_kwargs):
+            observed.append(target.copy())
+            return 0.0
+
+        with patch("utils.grasp_eval.calculate_iou", side_effect=record_iou):
+            calculate_jacquard_index(
+                predictions,
+                targets,
+                target_width_cap=300.0,
+                target_height=20.0,
+            )
+        np.testing.assert_array_equal(targets[0], [100, 100, 250, 40, 0, 0])
+        np.testing.assert_array_equal(observed[0], [100, 100, 250, 20, 0, 0])
+
+    def test_threshold_grid_reuses_each_rasterized_iou(self):
+        predictions = np.array(
+            [[100, 100, 80, 20, 5], [120, 100, 80, 20, 25]],
+            dtype=np.float32,
+        )
+        targets = np.array([[100, 100, 80, 40, 0, 0]], dtype=np.float32)
+        with patch("utils.grasp_eval.calculate_iou", return_value=0.6) as iou:
+            matches = calculate_grasp_matches(predictions, targets)
+        self.assertEqual(iou.call_count, 2)
+        self.assertEqual(
+            calculate_jacquard_from_matches(matches, 1, 0.5, 10.0), 1
+        )
+        self.assertEqual(
+            calculate_jacquard_from_matches(matches, 1, 0.75, 30.0), 0
+        )
+        self.assertEqual(
+            calculate_jacquard_from_matches(matches, 5, 0.5, 20.0), 1
+        )
+
+    def test_prediction_cache_can_be_rescored_without_inference(self):
+        records = [
+            {
+                "segmentation_iou": 0.8,
+                "rectangles": [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]],
+                "targets": [[1, 2, 3, 4, 5, 0]],
+                "matches": [[0, 0.6, 5], [1, 0.8, 20]],
+                "target_width_cap": 300,
+                "target_height": 20,
+            },
+            {
+                "segmentation_iou": 0.4,
+                "rectangles": [],
+                "targets": [],
+                "matches": [],
+                "target_width_cap": 300,
+                "target_height": 20,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "predictions.npz")
+            save_prediction_cache(path, records, {"max_topk": 5, "split": "val"})
+            cache = load_prediction_cache(path)
+            scores = score_prediction_cache(
+                cache,
+                topk=(1, 5),
+                grasp_iou_threshold=0.5,
+                grasp_angle_threshold=10,
+                grasp_iou_thresholds=(0.5, 0.75),
+                grasp_angle_thresholds=(10,),
+                segmentation_iou_thresholds=(0.5,),
+            )
+        self.assertEqual(scores["num_samples"], 2)
+        self.assertAlmostEqual(scores["iou"], 0.6, places=6)
+        self.assertEqual(scores["precision"], {"Pr@50": 0.5})
+        self.assertEqual(scores["j_index"], [0.5, 0.5])
+        self.assertEqual(scores["msr"], {1: 0.25, 5: 0.25})
+
     def test_evaluation_components_are_registered(self):
         self.assertIn("binary_segmentation", METRICS)
         self.assertIn("grasp_success", METRICS)
+        self.assertIn("grasp_threshold_grid", METRICS)
         self.assertIn("dense_grasp", POSTPROCESSORS)
 
 

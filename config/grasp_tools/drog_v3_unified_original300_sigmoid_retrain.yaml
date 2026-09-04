@@ -1,0 +1,63 @@
+_base_: drog.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+  grasp_size_factor: 300.0
+  grasp_height: 20.0
+  grasp_size_coordinate: original
+  dynamic_train_prompts: True
+  dynamic_prompt_seed: 2025
+
+MODEL:
+  architecture: drog
+
+TRAIN:
+  # Fresh unified V3 run. Quality and width both use the same bounded
+  # representation during training and inference.
+  grasp_quality_loss_activation: sigmoid
+  grasp_width_loss_activation: sigmoid
+  word_len: 32
+  sync_bn: False
+  amp: True
+  optimizer: adam
+  pin_memory: True
+  workers: 4
+  workers_val: 2
+  epochs: 36
+  milestones: [24, 32]
+  start_epoch: 0
+  batch_size: 8
+  batch_size_val: 4
+  base_lr: 0.0001
+  lr_decay: 0.1
+  lr_multi: 1
+  weight_decay: 0.0
+  max_norm: 1.0
+  manual_seed: 0
+  print_freq: 100
+  exp_name: drog_grasp_tools_v3_15k_unified_original300_sigmoid
+  output_folder: exp/grasp_tools
+  save_freq: 5
+  save_epochs: [5, 10]
+  weight:
+  resume:
+  evaluate: True
+  val_start_epoch: 11
+  val_freq: 1
+  use_grasp_masks: True
+
+Distributed:
+  dist_url: env://
+  world_size: 1
+  rank: 0
+
+TEST:
+  evaluation_protocol: toolrgs
+  grasp_topk: [1, 5]
+  grasp_iou_threshold: 0.25
+  grasp_angle_threshold: 30.0
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+  restore_grasp_size_scale: False
+  test_split: test
+  visualize: False

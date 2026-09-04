@@ -8,6 +8,7 @@ from .crog import CROG
 from .crogoff import CROGOFF
 from .darg import DARG
 from .drog import DROG
+from .droglr import DROGLR
 from .drogoff_transport import DROGOFFTransport as DROGOFF
 from .etrg import ETRG
 from .ggcnnclip import GGCNN_CLIP
@@ -23,6 +24,7 @@ MODELS.register_module(CROGOFF, name="crogoff")
 MODELS.register_module(DARG, name="darg", aliases=("darg_grasp",))
 MODELS.register_module(DETRIS, name="detris")
 MODELS.register_module(DROG, name="drog")
+MODELS.register_module(DROGLR, name="droglr", aliases=("drog_lr", "drog-lr"))
 MODELS.register_module(DROGOFF, name="drogoff")
 MODELS.register_module(ETRG, name="etrg", aliases=("etrg_a", "etrg_depth"))
 MODELS.register_module(GGCNN_CLIP, name="ggcnnclip", aliases=("ggcnn_clip",))
@@ -90,6 +92,11 @@ def build_segmenter(cfg):
 
 def build_drog(cfg):
     cfg.architecture = "drog"
+    return build_model(cfg)
+
+
+def build_droglr(cfg):
+    cfg.architecture = "droglr"
     return build_model(cfg)
 
 

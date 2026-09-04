@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import io
 import tempfile
 from pathlib import Path
@@ -28,8 +29,30 @@ from deployment.inference import (
 from deployment.qt import configure_pyqt5_plugins
 from deployment.robot import GraspCommand, LegacyTCPGraspClient, semantic_depth
 from deployment.weights import ensure_deployment_checkpoint
-from model.crog import grasp_width_for_loss
-from utils.config import resolve_grasp_size_activation
+from model.crog import grasp_quality_for_loss, grasp_width_for_loss
+from model.clip_grasp_fusion import TextVisualFusionFiLM
+from model.etrg.model import (
+    ETRG,
+    balanced_quality_smooth_l1,
+    grasp_quality_for_loss as etrg_grasp_quality_for_loss,
+    grasp_width_for_loss as etrg_grasp_width_for_loss,
+    masked_geometry_smooth_l1,
+)
+from model.ggcnnclip import (
+    GGCNN_CLIP,
+    GGCNNWithText,
+    balanced_quality_smooth_l1 as ggcnn_balanced_quality_smooth_l1,
+    grasp_quality_for_loss as ggcnn_grasp_quality_for_loss,
+    grasp_width_for_loss as ggcnn_grasp_width_for_loss,
+    masked_geometry_smooth_l1 as ggcnn_masked_geometry_smooth_l1,
+)
+from model.grconvnetclip import GenerativeResnetWithText
+from model.graspmamba import GraspMamba
+from utils.config import (
+    resolve_grasp_training_activation,
+    resolve_grasp_quality_activation,
+    resolve_grasp_size_activation,
+)
 from deploy_gui import (
     DEFAULT_SAMPLE_IMAGE,
     apply_camera_preset,
@@ -47,6 +70,121 @@ experiment_values = check_deployment_symbols["_experiment_values"]
 
 
 class DeploymentContractTest(unittest.TestCase):
+    def test_ggcnn_keeps_original_layers_and_uses_shared_bottleneck_film(self):
+        model = GGCNNWithText(input_channels=3, text_dim=16)
+        self.assertEqual(model.conv1.kernel_size, (9, 9))
+        self.assertEqual(model.conv1.stride, (3, 3))
+        self.assertEqual(model.conv2.kernel_size, (5, 5))
+        self.assertEqual(model.conv2.stride, (2, 2))
+        self.assertEqual(model.conv3.kernel_size, (3, 3))
+        self.assertEqual(model.conv3.stride, (2, 2))
+        self.assertIsInstance(model.fusion, TextVisualFusionFiLM)
+        self.assertEqual(model.fusion.gamma.out_features, 8)
+
+        outputs = model(torch.randn(2, 3, 416, 416), torch.randn(2, 16))
+        self.assertEqual(len(outputs), 4)
+        for output in outputs:
+            self.assertEqual(tuple(output.shape), (2, 1, 416, 416))
+
+    def test_clip_grasp_heads_share_the_same_film_implementation(self):
+        ggcnn = GGCNNWithText(input_channels=3, text_dim=16)
+        grconvnet = GenerativeResnetWithText(input_channels=3, text_dim=16)
+        self.assertIs(type(ggcnn.fusion), type(grconvnet.fusion))
+
+    def test_ggcnn_quality_loss_balances_sparse_sigmoid_pixels(self):
+        prediction = torch.zeros((1, 1, 4, 4), requires_grad=True)
+        target = torch.zeros_like(prediction)
+        target[..., 1, 2] = 1.0
+        loss = ggcnn_balanced_quality_smooth_l1(prediction, target)
+        loss.backward()
+        self.assertTrue(torch.isfinite(loss))
+        self.assertLess(prediction.grad[..., 1, 2].item(), 0.0)
+        self.assertGreater(prediction.grad[..., 0, 0].item(), 0.0)
+
+    def test_ggcnn_quality_and_width_training_contracts_are_sigmoid(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        expected = torch.sigmoid(raw)
+        self.assertTrue(torch.equal(ggcnn_grasp_quality_for_loss(raw), expected))
+        self.assertTrue(torch.equal(ggcnn_grasp_width_for_loss(raw), expected))
+        self.assertEqual(GGCNN_CLIP.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(GGCNN_CLIP.grasp_quality_decode_activation, "sigmoid")
+        self.assertEqual(GGCNN_CLIP.grasp_size_loss_activation, "sigmoid")
+        self.assertEqual(GGCNN_CLIP.grasp_size_decode_activation, "sigmoid")
+
+    def test_ggcnn_geometry_loss_ignores_background(self):
+        prediction = torch.tensor([[[[5.0, 2.0], [3.0, 4.0]]]])
+        target = torch.tensor([[[[0.0, 1.0], [0.0, 0.0]]]])
+        valid = torch.tensor([[[[False, True], [False, False]]]])
+        actual = ggcnn_masked_geometry_smooth_l1(prediction, target, valid)
+        expected = torch.nn.functional.smooth_l1_loss(
+            prediction[..., 0, 1], target[..., 0, 1]
+        )
+        self.assertTrue(torch.equal(actual, expected))
+
+    def test_quality_activation_must_match_checkpoint_metadata(self):
+        self.assertEqual(
+            resolve_grasp_quality_activation(
+                "sigmoid", checkpoint={"grasp_quality_activation": "sigmoid"}
+            ),
+            "sigmoid",
+        )
+        with self.assertRaisesRegex(ValueError, "conflicts with checkpoint metadata"):
+            resolve_grasp_quality_activation(
+                "clamp", checkpoint={"grasp_quality_activation": "sigmoid"}
+            )
+
+    def test_training_activation_selects_matching_inference_decoder(self):
+        self.assertEqual(
+            resolve_grasp_training_activation("raw", "auto", name="quality"),
+            ("raw", "clamp"),
+        )
+        self.assertEqual(
+            resolve_grasp_training_activation(
+                "sigmoid", "sigmoid", name="quality"
+            ),
+            ("sigmoid", "sigmoid"),
+        )
+        with self.assertRaisesRegex(ValueError, "train/inference activation mismatch"):
+            resolve_grasp_training_activation(
+                "raw", "sigmoid", name="quality"
+            )
+
+    def test_etrg_width_training_contract_is_sigmoid(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        expected = torch.sigmoid(raw)
+        self.assertTrue(torch.equal(etrg_grasp_width_for_loss(raw), expected))
+
+    def test_etrg_quality_training_contract_is_sigmoid(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        expected = torch.sigmoid(raw)
+        self.assertTrue(torch.equal(etrg_grasp_quality_for_loss(raw), expected))
+        self.assertEqual(ETRG.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(ETRG.grasp_quality_decode_activation, "sigmoid")
+
+    def test_etrg_quality_loss_balances_sparse_positive_pixels(self):
+        prediction = torch.zeros((1, 1, 4, 4), requires_grad=True)
+        target = torch.zeros_like(prediction)
+        target[..., 1, 2] = 1.0
+        loss = balanced_quality_smooth_l1(prediction, target)
+        loss.backward()
+        self.assertTrue(torch.isfinite(loss))
+        self.assertLess(prediction.grad[..., 1, 2].item(), 0.0)
+        self.assertGreater(prediction.grad[..., 0, 0].item(), 0.0)
+
+    def test_etrg_geometry_loss_ignores_background(self):
+        prediction = torch.tensor([[[[5.0, 2.0], [3.0, 4.0]]]])
+        target = torch.tensor([[[[0.0, 1.0], [0.0, 0.0]]]])
+        valid = torch.tensor([[[[False, True], [False, False]]]])
+        actual = masked_geometry_smooth_l1(prediction, target, valid)
+        expected = torch.nn.functional.smooth_l1_loss(
+            prediction[..., 0, 1], target[..., 0, 1]
+        )
+        self.assertTrue(torch.equal(actual, expected))
+
+    def test_etrg_rgb_forward_accepts_common_two_argument_contract(self):
+        signature = inspect.signature(ETRG.forward)
+        self.assertIsNone(signature.parameters["word"].default)
+
     def test_explicit_grasp_activation_must_match_checkpoint_metadata(self):
         self.assertEqual(
             resolve_grasp_size_activation(
@@ -303,6 +441,15 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertTrue(torch.all((bounded > 0.0) & (bounded < 1.0)))
         self.assertAlmostEqual(float(bounded[1]), 0.5)
 
+    def test_aligned_crog_quality_loss_uses_sigmoid_contract(self):
+        raw = torch.tensor([-2.0, 0.0, 2.0])
+        self.assertTrue(
+            torch.equal(grasp_quality_for_loss(raw, "raw"), raw)
+        )
+        bounded = grasp_quality_for_loss(raw, "sigmoid")
+        self.assertTrue(torch.all((bounded > 0.0) & (bounded < 1.0)))
+        self.assertAlmostEqual(float(bounded[1]), 0.5)
+
     def test_gui_preview_does_not_mirror_decoded_angle(self):
         rectangle = opencv_grasp_rectangle([640, 360, 120, 20, 35])
         self.assertEqual(rectangle, ((640.0, 360.0), (120.0, 20.0), 35.0))
@@ -414,8 +561,10 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(
             list(cfg["_model_profiles"]),
             [
-                "V3-DROG-OFF-V1",
-                "V3-CROG",
+                "V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)",
+                "V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)",
+                "V3-CROG (mSR@1 47.65%, J@1 59.38%)",
+                "V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)",
                 "drogoff-grasptools-v2-original300",
                 "crog-aligned-grasptools-v2-original300",
             ],
@@ -439,27 +588,59 @@ class DeploymentContractTest(unittest.TestCase):
             "6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2",
         )
         v3_v1 = activate_model_profile(
-            cfg, "V3-DROG-OFF-V1"
+            cfg, "V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)"
         )
         self.assertEqual(
             v3_v1["model"]["config"],
-            "config/grasp_tools/v3_drogoff_v1_grasp_tools_15k_original_scale.yaml",
+            "config/grasp_tools/v3_drogoff_v1_unified_original300_retrain.yaml",
         )
         self.assertEqual(
             v3_v1["model"]["checkpoint_sha256"],
-            "5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340",
+            "98f146b391b62d51e6b462f5e70324c786d141f23e34a0f08b9256965e2c7c7a",
         )
-        self.assertEqual(v3_v1["model"]["grasp_size_activation"], "sigmoid")
-        v3_crog = activate_model_profile(cfg, "V3-CROG")
+        self.assertEqual(v3_v1["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_v1["model"]["grasp_size_activation"], "auto")
+        v3_mamba = activate_model_profile(
+            cfg, "V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)"
+        )
+        self.assertEqual(
+            v3_mamba["model"]["config"],
+            "config/grasp_tools/graspmamba_v3_unified_original300_retrain.yaml",
+        )
+        self.assertEqual(
+            v3_mamba["model"]["checkpoint_sha256"],
+            "c3c6765172c8936fa71a3be53acd00c66d54a98e1cc75770d8f5c047e65fcb95",
+        )
+        self.assertEqual(v3_mamba["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_mamba["model"]["grasp_size_activation"], "auto")
+        self.assertEqual(GraspMamba.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(GraspMamba.grasp_size_loss_activation, "sigmoid")
+        v3_crog = activate_model_profile(
+            cfg, "V3-CROG (mSR@1 47.65%, J@1 59.38%)"
+        )
         self.assertEqual(
             v3_crog["model"]["config"],
-            "config/grasp_tools/v3_crog_grasp_tools_15k_original_scale.yaml",
+            "config/grasp_tools/v3_crog_unified_original300_retrain.yaml",
         )
         self.assertEqual(
             v3_crog["model"]["checkpoint_sha256"],
-            "2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f",
+            "a9f2164aa5e79b77b5e708d518bd0b8938802983fecf4672fa5a5f89b9d55266",
         )
-        self.assertEqual(v3_crog["model"]["grasp_size_activation"], "clamp")
+        self.assertEqual(v3_crog["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_crog["model"]["grasp_size_activation"], "auto")
+        v3_maple = activate_model_profile(
+            cfg, "V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)"
+        )
+        self.assertEqual(
+            v3_maple["model"]["config"],
+            "config/grasp_tools/maplegrasp_v3_stage2_unified_original300_retrain.yaml",
+        )
+        self.assertEqual(
+            v3_maple["model"]["checkpoint_sha256"],
+            "a5c394b4edcd8d88dcb8b0c4fa072a1de398afdaef9e1812d9169838034d7c03",
+        )
+        self.assertEqual(v3_maple["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_maple["model"]["grasp_size_activation"], "auto")
 
     def test_detector_live_inference_pipeline_needs_no_annotations(self):
         repo_root = Path(__file__).resolve().parents[1]

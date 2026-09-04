@@ -2,52 +2,48 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .crog_clip import build_model
+from .clip_grasp_fusion import TextVisualFusionFiLM
 
-class TextVisualFusionFiLM(nn.Module):
 
-    def __init__(self, vis_dim: int, text_dim: int, hidden_dim: int = 128):
-        """
-        Args:
-            vis_dim:   Number of channels in the visual feature map (C).
-            text_dim:  Dimension of the text embedding (D).
-            hidden_dim: Hidden size for the MLP that processes text.
-        """
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(text_dim, hidden_dim),
-            nn.ReLU(inplace=True)
-        )
-        self.gamma = nn.Linear(hidden_dim, vis_dim)
-        self.beta = nn.Linear(hidden_dim, vis_dim)
+def grasp_quality_for_loss(prediction: torch.Tensor) -> torch.Tensor:
+    """Use the same sigmoid quality space during training and inference."""
+    return torch.sigmoid(prediction)
 
-    def forward(self, feat, e_txt):
-        """
-        Args:
-            feat:  Tensor of shape (B, C, H, W) - visual feature map.
-            e_txt: Tensor of shape (B, D)       - text embedding.
 
-        Returns:
-            feat_fused: Tensor of shape (B, C, H, W).
-        """
-        B, C, H, W = feat.shape
+def grasp_width_for_loss(prediction: torch.Tensor) -> torch.Tensor:
+    """Use the same sigmoid width space during training and inference."""
+    return torch.sigmoid(prediction)
 
-        # Text → hidden representation
-        h = self.mlp(e_txt)        # (B, hidden_dim)
 
-        # Map hidden representation to per-channel gamma and beta
-        # Raw CLIP states can have a much larger magnitude than the shallow
-        # GG-CNN feature stream. Bound both FiLM branches so one batch cannot
-        # explode the activations and poison the optimizer with NaN gradients.
-        gamma = torch.tanh(self.gamma(h))      # (B, C)
-        beta = torch.tanh(self.beta(h))        # (B, C)
+def balanced_quality_smooth_l1(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    positive_threshold: float = 0.05,
+) -> torch.Tensor:
+    """Give sparse positive and background quality regions equal influence."""
+    target = target.to(dtype=prediction.dtype).clamp(0.0, 1.0)
+    error = F.smooth_l1_loss(
+        grasp_quality_for_loss(prediction), target, reduction="none"
+    )
+    positive = (target > float(positive_threshold)).to(error.dtype)
+    negative = 1.0 - positive
+    positive_count = positive.sum()
+    negative_count = negative.sum()
+    positive_loss = (error * positive).sum() / positive_count.clamp_min(1.0)
+    negative_loss = (error * negative).sum() / negative_count.clamp_min(1.0)
+    balanced = 0.5 * (positive_loss + negative_loss)
+    return torch.where(positive_count > 0, balanced, negative_loss)
 
-        # Reshape to broadcast over H and W
-        gamma = gamma.view(B, C, 1, 1)
-        beta = beta.view(B, C, 1, 1)
 
-        # FiLM transformation
-        feat_fused = feat * (1.0 + gamma) + beta
-        return feat_fused
+def masked_geometry_smooth_l1(
+    prediction: torch.Tensor,
+    target: torch.Tensor,
+    valid_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Regress grasp geometry only where a labelled grasp is present."""
+    error = F.smooth_l1_loss(prediction, target, reduction="none")
+    weight = valid_mask.to(error.dtype).expand_as(error)
+    return (error * weight).sum() / weight.sum().clamp_min(1.0)
 
 filter_sizes = [32, 16, 8, 8, 16, 32]
 kernel_sizes = [9, 5, 3, 3, 5, 9]
@@ -64,16 +60,29 @@ class GGCNNWithText(nn.Module):
       - Adding a compute_loss(..., e_txt) that matches the style of GraspModel.
     """
 
-    def __init__(self, input_channels: int = 4, text_dim: int = 512,
-                 dropout: bool = False, prob: float = 0.0):
+    def __init__(
+        self,
+        input_channels: int = 4,
+        text_dim: int = 512,
+        dropout: bool = False,
+        prob: float = 0.0,
+        quality_positive_threshold: float = 0.05,
+        geometry_mask_threshold: float = 1.0e-6,
+    ):
         """
         Args:
             input_channels: Number of input channels (e.g. 4 for RGB-D).
             text_dim:       Dimension of the text embedding (e.g. CLIP text dim).
-            dropout:        Unused here, kept for API compatibility.
-            prob:           Unused here, kept for API compatibility.
+            dropout:        Whether to apply output-head dropout.
+            prob:           Dropout probability when enabled.
         """
         super().__init__()
+        self.quality_positive_threshold = float(quality_positive_threshold)
+        self.geometry_mask_threshold = float(geometry_mask_threshold)
+        if not 0.0 <= self.quality_positive_threshold <= 1.0:
+            raise ValueError("quality_positive_threshold must be in [0, 1]")
+        if not 0.0 <= self.geometry_mask_threshold <= 1.0:
+            raise ValueError("geometry_mask_threshold must be in [0, 1]")
 
         # Encoder
         self.conv1 = nn.Conv2d(
@@ -106,9 +115,10 @@ class GGCNNWithText(nn.Module):
             padding=5, output_padding=1
         )
 
-        # Text-visual FiLM fusion: channel dim = filter_sizes[5] = 32
+        # Match GRConvNet-CLIP: fuse text at the encoder bottleneck, then let
+        # the untouched GG-CNN decoder reconstruct the spatial prediction.
         self.fusion = TextVisualFusionFiLM(
-            vis_dim=filter_sizes[5],
+            vis_dim=filter_sizes[2],
             text_dim=text_dim,
             hidden_dim=128
         )
@@ -118,6 +128,7 @@ class GGCNNWithText(nn.Module):
         self.cos_output = nn.Conv2d(filter_sizes[5], 1, kernel_size=2)
         self.sin_output = nn.Conv2d(filter_sizes[5], 1, kernel_size=2)
         self.width_output = nn.Conv2d(filter_sizes[5], 1, kernel_size=2)
+        self.dropout1 = nn.Dropout(p=prob if dropout else 0.0)
 
         # Weight initialization
         for m in self.modules():
@@ -139,17 +150,19 @@ class GGCNNWithText(nn.Module):
         x = F.relu(self.conv1(x_in))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
+
+        # Use the same shared bottleneck FiLM module and placement as
+        # GRConvNet-CLIP. The GG-CNN encoder/decoder layers remain original.
+        x = self.fusion(x, e_txt)
+
         x = F.relu(self.convt1(x))
         x = F.relu(self.convt2(x))
         x = F.relu(self.convt3(x))
 
-        # Text-conditioned FiLM fusion
-        x = self.fusion(x, e_txt)
-
-        pos_output = self.pos_output(x)
-        cos_output = self.cos_output(x)
-        sin_output = self.sin_output(x)
-        width_output = self.width_output(x)
+        pos_output = self.pos_output(self.dropout1(x))
+        cos_output = self.cos_output(self.dropout1(x))
+        sin_output = self.sin_output(self.dropout1(x))
+        width_output = self.width_output(self.dropout1(x))
 
         return pos_output, cos_output, sin_output, width_output
 
@@ -172,10 +185,19 @@ class GGCNNWithText(nn.Module):
         y_pos, y_cos, y_sin, y_width = yc
         pos_pred, cos_pred, sin_pred, width_pred = self(xc, e_txt)
 
-        p_loss = F.smooth_l1_loss(pos_pred, y_pos)
-        cos_loss = F.smooth_l1_loss(cos_pred, y_cos)
-        sin_loss = F.smooth_l1_loss(sin_pred, y_sin)
-        width_loss = F.smooth_l1_loss(width_pred, y_width)
+        p_loss = balanced_quality_smooth_l1(
+            pos_pred, y_pos, self.quality_positive_threshold
+        )
+        geometry_mask = y_width > self.geometry_mask_threshold
+        cos_loss = masked_geometry_smooth_l1(
+            cos_pred, y_cos, geometry_mask
+        )
+        sin_loss = masked_geometry_smooth_l1(
+            sin_pred, y_sin, geometry_mask
+        )
+        width_loss = masked_geometry_smooth_l1(
+            grasp_width_for_loss(width_pred), y_width, geometry_mask
+        )
 
         return {
             'loss': p_loss + cos_loss + sin_loss + width_loss,
@@ -229,7 +251,12 @@ class GGCNN_CLIP(nn.Module):
     This allows you to plug it directly into train_with_grasp / validate_with_grasp.
     """
 
-    grasp_size_loss_activation = "clamp"
+    grasp_quality_train_activation = "sigmoid"
+    grasp_quality_decode_activation = "sigmoid"
+    grasp_quality_loss_activation = "sigmoid"
+    grasp_width_loss_activation = "sigmoid"
+    grasp_size_decode_activation = "sigmoid"
+    grasp_size_loss_activation = "sigmoid"
 
     def __init__(self, cfg):
         """
@@ -262,7 +289,15 @@ class GGCNN_CLIP(nn.Module):
         # GG-CNN grasp head with text conditioning
         self.grasp_head = GGCNNWithText(
             input_channels=in_ch,
-            text_dim=text_dim
+            text_dim=text_dim,
+            dropout=getattr(cfg, "dropout", False),
+            prob=getattr(cfg, "dropout_prob", 0.0),
+            quality_positive_threshold=float(
+                getattr(cfg, "ggcnn_quality_positive_threshold", 0.05)
+            ),
+            geometry_mask_threshold=float(
+                getattr(cfg, "ggcnn_geometry_mask_threshold", 1.0e-6)
+            ),
         )
 
     def forward(
@@ -303,7 +338,6 @@ class GGCNN_CLIP(nn.Module):
         # backbone.encode_text(...) typically returns (word_feat, state).
         # We use 'state' as the sentence-level embedding.
         _, state = self.backbone.encode_text(word)   # state: (B, text_dim)
-        state = F.normalize(state.float(), dim=-1)
 
         # Run GG-CNN with text conditioning
         pos_pred, cos_pred, sin_pred, wid_pred = self.grasp_head(img, state)
@@ -326,10 +360,23 @@ class GGCNN_CLIP(nn.Module):
 
             # Compute regression losses for grasp maps.
             # Note: we treat pos_pred as quality prediction for training.
-            p_loss = F.smooth_l1_loss(pos_pred, grasp_qua_mask)
-            cos_loss = F.smooth_l1_loss(cos_pred, grasp_cos_mask)
-            sin_loss = F.smooth_l1_loss(sin_pred, grasp_sin_mask)
-            wid_loss = F.smooth_l1_loss(wid_pred, grasp_wid_mask)
+            p_loss = balanced_quality_smooth_l1(
+                pos_pred,
+                grasp_qua_mask,
+                self.grasp_head.quality_positive_threshold,
+            )
+            geometry_mask = (
+                grasp_wid_mask > self.grasp_head.geometry_mask_threshold
+            )
+            cos_loss = masked_geometry_smooth_l1(
+                cos_pred, grasp_cos_mask, geometry_mask
+            )
+            sin_loss = masked_geometry_smooth_l1(
+                sin_pred, grasp_sin_mask, geometry_mask
+            )
+            wid_loss = masked_geometry_smooth_l1(
+                grasp_width_for_loss(wid_pred), grasp_wid_mask, geometry_mask
+            )
 
             total_loss = p_loss + cos_loss + sin_loss + wid_loss
 

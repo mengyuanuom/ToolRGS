@@ -7,14 +7,33 @@ from .layers import Neck, Decoder, Projector
 from .fusion import Fusion
 from .dinov2.models.vision_transformer import vit_base,vit_large
 from .projector_builder import build_projector
+from .crog import grasp_quality_for_loss, grasp_width_for_loss
+from utils.config import resolve_grasp_training_activation
 from utils.pretrained import ensure_pretrained
 
 class DROG(nn.Module):
-    grasp_size_loss_activation = "clamp"
     def __init__(self, cfg):
         super().__init__()
         # Text Encoder
         self.use_grasp_masks = cfg.use_grasp_masks
+        (
+            self.grasp_quality_train_activation,
+            self.grasp_quality_decode_activation,
+        ) = resolve_grasp_training_activation(
+            getattr(cfg, "grasp_quality_loss_activation", "raw"),
+            getattr(cfg, "grasp_quality_activation", "auto"),
+            name="grasp quality",
+        )
+        (
+            self.grasp_width_loss_activation,
+            self.grasp_size_decode_activation,
+        ) = resolve_grasp_training_activation(
+            getattr(cfg, "grasp_width_loss_activation", "raw"),
+            getattr(cfg, "grasp_size_activation", "auto"),
+            name="grasp width",
+        )
+        self.grasp_quality_loss_activation = self.grasp_quality_decode_activation
+        self.grasp_size_loss_activation = self.grasp_size_decode_activation
 
         clip_pretrain = ensure_pretrained(cfg.clip_pretrain, "clip-vit-b16")
         clip_model = torch.jit.load(
@@ -121,10 +140,20 @@ class DROG(nn.Module):
                 weight = mask * 0.5 + 1
 
                 loss = F.binary_cross_entropy_with_logits(pred, mask, weight=weight)
-                grasp_qua_loss = F.smooth_l1_loss(grasp_qua_pred, grasp_qua_mask)
+                grasp_qua_loss = F.smooth_l1_loss(
+                    grasp_quality_for_loss(
+                        grasp_qua_pred, self.grasp_quality_train_activation
+                    ),
+                    grasp_qua_mask,
+                )
                 grasp_sin_loss = F.smooth_l1_loss(grasp_sin_pred, grasp_sin_mask)
                 grasp_cos_loss = F.smooth_l1_loss(grasp_cos_pred, grasp_cos_mask)
-                grasp_wid_loss = F.smooth_l1_loss(grasp_wid_pred, grasp_wid_mask)
+                grasp_wid_loss = F.smooth_l1_loss(
+                    grasp_width_for_loss(
+                        grasp_wid_pred, self.grasp_width_loss_activation
+                    ),
+                    grasp_wid_mask,
+                )
 
                 total_loss = loss + grasp_qua_loss + grasp_sin_loss + grasp_cos_loss + grasp_wid_loss
 

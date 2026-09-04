@@ -88,8 +88,8 @@ python tools/check_deployment.py \
 该命令不会打开相机、不会连接 TCP、不会发送机械臂指令。它会：
 
 1. 检查 Python/Qt/MMDetection 环境；
-2. 从配置的 GitHub Release 下载全部可选抓取权重（`V3-DROG-OFF-V1`、`V3-CROG`、DROG-OFF V2 与 aligned CROG V2）；
-3. 下载缺失的 CLIP ViT-B/16、CLIP RN50 和 DINOv2 预训练权重；
+2. 从配置的 GitHub Release 下载全部可选抓取权重（四个带统一测试分数的 V3 模型、DROG-OFF V2 与 aligned CROG V2）；
+3. 下载缺失的 CLIP ViT-B/16、CLIP RN50、DINOv2 和 MambaVision-T 预训练权重；
 4. 对配置了 Release URL 的权重做 SHA-256 校验；
 5. 下载并校验 22 类 Grasp-Tools Faster R-CNN 目标检测权重。
 
@@ -98,12 +98,15 @@ python tools/check_deployment.py \
 ```text
 weights/drogoff_grasp_tools_v2_original300_best_j1.pth
 weights/crog_aligned_grasp_tools_v2_original300_best_j1.pth
-weights/v3_drogoff_v1_grasp_tools_15k_original300_best_msr.pth
-weights/v3_crog_grasp_tools_15k_original300_best_msr.pth
+weights/v3_drogoff_v1_grasp_tools_15k_unified_original300_best_j1.pth
+weights/v3_mambagrasp_grasp_tools_15k_unified_original300_best_j1.pth
+weights/v3_crog_grasp_tools_15k_unified_original300_best_j1.pth
+weights/v3_maplegrasp_stage2_grasp_tools_15k_unified_original300_best_j1.pth
 weights/faster_rcnn_r50_fpn_grasp_tools_v2_best.pth
 pretrain/ViT-B-16.pt
 pretrain/RN50.pt
 pretrain/dinov2_vitb14_reg4_pretrain.pth
+pretrain/mambavision_tiny_1k.pth.tar
 ```
 
 抓取、CLIP、DINO 和 22 类 Faster R-CNN 权重均已配置自动下载。普通 `check`
@@ -128,13 +131,20 @@ python tools/check_deployment.py \
 **Detection Post-processing**，进入 **Grasping Points Detection** 时显示
 **Grasp Model & Post-processing**。抓取模型下拉框默认选中
 `config/deployment/lab.yaml` 的 `active_model`，也可以直接切换已配置的
-`V3-DROG-OFF-V1`、`V3-CROG`、DROG-OFF V2 与 aligned CROG V2。两个
-V3 名称均以前缀 `V3-` 开头并排在列表前面。切换模型只重载抓取网络，不会重启相机、检测器或
+`V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)`、
+`V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)`、
+`V3-CROG (mSR@1 47.65%, J@1 59.38%)`、
+`V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)`、DROG-OFF V2 与 aligned CROG V2。四个
+V3 名称均以前缀 `V3-` 开头并排在列表前面；括号中的指标均来自统一 V3 的 5029 样本 test split。
+切换模型只重载抓取网络，不会重启相机、检测器或
 机械臂连接。
 
-V3 模型的抓取尺寸激活方式随 profile 固定绑定，不能混用：
-`V3-DROG-OFF-V1` 使用 `sigmoid`，`V3-CROG` 使用 `clamp`。权重包元数据和
-GUI 配置会进行同样的绑定，避免推理时采用与训练不一致的解码方式。
+V3 模型的抓取质量/尺寸激活方式由训练配置决定，不能混用。GUI 不再按
+模型名称强制指定激活：四个 V3 GUI profile 的质量与尺寸解码均使用 `auto`，
+优先读取权重包中由训练配置写入的激活契约；旧权重缺少对应元数据时，回退到训练配置/模型契约。
+DROG-OFF V1、MambaGrasp 和 MapleGrasp Stage 2 均解析为质量/宽度
+`sigmoid`；当前 CROG 解析为质量 `sigmoid`、宽度
+`clamp`。因此不会因 GUI 名称或模型类别硬编码而错配训推激活。
 
 推荐按以下顺序切换：
 

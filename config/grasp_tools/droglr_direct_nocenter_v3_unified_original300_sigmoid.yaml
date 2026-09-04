@@ -1,0 +1,17 @@
+_base_: droglr_direct_v3_unified_original300_sigmoid.yaml
+
+MODEL:
+  architecture: droglr
+
+TRAIN:
+  # Ablation: direct independent side widths without a centerness head.
+  # Candidate ranking is sigmoid(quality) alone.
+  droglr_use_centerness: False
+  centerness_loss_weight: 0.0
+  exp_name: droglr_direct_nocenter_grasp_tools_v3_15k_unified_original300_sigmoid
+  weight:
+  resume:
+
+TEST:
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid

@@ -18,6 +18,11 @@ MODEL:
   architecture: drogoff
 
 TRAIN:
+  # Historical DROG-OFF trains quality in raw space and width after sigmoid.
+  # Child experiments may override either field; inference follows checkpoint
+  # metadata instead of the architecture name.
+  grasp_quality_loss_activation: raw
+  grasp_width_loss_activation: sigmoid
   version: multiple
   visual_adapter_dim: 128
   visual_adapter_layer: [1,3,5,7,9,11]

@@ -385,6 +385,25 @@ python evaluate.py \
   --checkpoint exp/grasp_tools/drogoff_grasp_tools/best_jindex_model.pth
 ```
 
+`evaluate.py` saves decoded, threshold-independent predictions by default under
+`<experiment>/evaluation_cache/`. The cache contains per-sample segmentation
+IoU, decoded top-k rectangles, targets, and cached prediction/target IoU plus
+angle differences. Recompute J@k or the configured IoU/angle mSR grid without
+loading the model or running CUDA inference:
+
+```bash
+python evaluate.py \
+  --config config/grasp_tools/drogoff.yaml \
+  --score-cache exp/grasp_tools/drogoff_grasp_tools/evaluation_cache/val_best_jindex_model_predictions.npz \
+  --opts TEST.grasp_iou_thresholds "[0.25, 0.50, 0.75]" \
+         TEST.grasp_angle_thresholds "[5.0, 10.0, 20.0, 30.0]"
+```
+
+Use `--prediction-cache PATH` to choose the cache path or
+`--no-save-predictions` to opt out. Cache-only scoring works without
+`--checkpoint` and writes a sibling `*_scores.tsv` file unless
+`--msr-output PATH` is supplied.
+
 ## Output contract
 
 Grasp-aware models return segmentation, quality, sine, cosine, and width maps.
@@ -469,11 +488,14 @@ On Linux the launcher automatically selects the active PyQt5 platform plugins,
 preventing the incompatible `cv2/qt/plugins` xcb path from taking over.
 
 Install `requirement-detector.txt`. The preflight downloads every selectable
-grasp checkpoint (including the `V3-DROG-OFF-V1` and `V3-CROG` best-mSR
-models), plus the published CLIP, DINO, and 22-class Grasp-Tools Faster R-CNN
-weights, to their configured paths and validates Release SHA-256 values
-automatically. The V3 profiles also pin the training-matched size decoder:
-`V3-DROG-OFF-V1` uses `sigmoid`, while `V3-CROG` uses `clamp`.
+grasp checkpoint, including the four score-suffixed unified-V3 GUI profiles
+(DROG-OFF V1, MambaGrasp, CROG, and MapleGrasp Stage 2), plus the published
+CLIP, DINO, MambaVision, and 22-class Grasp-Tools Faster R-CNN weights. It
+validates every configured Release SHA-256 value automatically. All four V3
+profiles use `auto` activation resolution from checkpoint metadata with a
+training-config/model-contract fallback so inference
+matches training: DROG-OFF V1, MambaGrasp, and MapleGrasp use sigmoid
+quality/size, while CROG uses sigmoid quality and clamp size.
 
 ```bash
 python tools/check_deployment.py --build-detector

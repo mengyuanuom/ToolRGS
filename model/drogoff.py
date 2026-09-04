@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 
 from .drog import DROG
+from .crog import grasp_quality_for_loss, grasp_width_for_loss
 from .native_adapter import (
     NativeDinoClipFusion,
     NativeFeaturePyramid,
@@ -12,13 +13,13 @@ from .native_adapter import (
     patch_text_alignment_loss,
 )
 from .projector_builder import build_projector
+from utils.config import resolve_grasp_training_activation
 
 
 class DROGOFF(DROG):
     """DINOv2/CLIP grasp model with optional Native V3 LoRA adaptation."""
 
     supports_offset = True
-    grasp_size_loss_activation = "sigmoid"
 
     def __init__(self, cfg):
         super().__init__(cfg)
@@ -32,6 +33,26 @@ class DROGOFF(DROG):
         self.short_side_loss_weight = float(
             getattr(cfg, "short_side_loss_weight", 1.0)
         )
+        (
+            self.grasp_quality_train_activation,
+            self.grasp_quality_decode_activation,
+        ) = resolve_grasp_training_activation(
+            getattr(cfg, "grasp_quality_loss_activation", "raw"),
+            getattr(cfg, "grasp_quality_activation", "auto"),
+            name="grasp quality",
+        )
+        (
+            self.grasp_width_loss_activation,
+            self.grasp_size_decode_activation,
+        ) = resolve_grasp_training_activation(
+            getattr(cfg, "grasp_width_loss_activation", "raw"),
+            getattr(cfg, "grasp_size_activation", "auto"),
+            name="grasp width",
+        )
+        # Keep legacy decode aliases while making the actual loss-space
+        # activations independently inspectable and checkpointed.
+        self.grasp_quality_loss_activation = self.grasp_quality_decode_activation
+        self.grasp_size_loss_activation = self.grasp_size_decode_activation
         self.native_variant = str(getattr(cfg, "native_variant", "")).strip().lower()
         self.alignment_loss_weight = 0.0
         if self.native_variant:
@@ -226,15 +247,24 @@ class DROGOFF(DROG):
 
         seg_weight = mask * 0.5 + 1.0
         seg_loss = F.binary_cross_entropy_with_logits(seg, mask, weight=seg_weight)
-        qua_loss = F.smooth_l1_loss(qua, grasp_qua_mask)
+        qua_loss = F.smooth_l1_loss(
+            grasp_quality_for_loss(qua, self.grasp_quality_train_activation),
+            grasp_qua_mask,
+        )
         sin_loss = F.smooth_l1_loss(sin, grasp_sin_mask)
         cos_loss = F.smooth_l1_loss(cos, grasp_cos_mask)
         width_loss = F.smooth_l1_loss(
-            torch.sigmoid(width), grasp_wid_mask
+            grasp_width_for_loss(width, self.grasp_width_loss_activation),
+            grasp_wid_mask,
         )
 
         short_side_loss = (
-            F.smooth_l1_loss(torch.sigmoid(short_side), grasp_short_mask)
+            F.smooth_l1_loss(
+                grasp_width_for_loss(
+                    short_side, self.grasp_width_loss_activation
+                ),
+                grasp_short_mask,
+            )
             if self.predicts_grasp_short_side
             else None
         )

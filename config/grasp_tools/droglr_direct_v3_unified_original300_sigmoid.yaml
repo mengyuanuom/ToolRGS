@@ -1,0 +1,17 @@
+_base_: droglr_v3_unified_original300_sigmoid_retrain.yaml
+
+MODEL:
+  architecture: droglr
+
+TRAIN:
+  # Independently predict sigmoid-bounded left/right widths.  Geometry decode
+  # preserves their ratio and caps the combined original-image width at 300 px.
+  droglr_parameterization: direct
+  droglr_max_total_width: 300.0
+  exp_name: droglr_direct_grasp_tools_v3_15k_unified_original300_sigmoid
+  weight:
+  resume:
+
+TEST:
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid

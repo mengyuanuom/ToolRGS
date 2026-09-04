@@ -1,0 +1,14 @@
+_base_: v3_crog_unified_original300_retrain.yaml
+
+TRAIN:
+  # Quality and width losses both consume sigmoid-decoded probabilities.
+  grasp_quality_loss_activation: sigmoid
+  grasp_width_loss_activation: sigmoid
+  exp_name: crog_grasp_tools_v3_15k_unified_original300_sigmoid
+  weight:
+  resume:
+
+TEST:
+  # Bind inference to the same activations recorded in checkpoint metadata.
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid

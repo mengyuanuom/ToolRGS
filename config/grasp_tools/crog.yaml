@@ -11,6 +11,10 @@ DATA:
 MODEL:
   architecture: crog
 TRAIN:
+  # The base training contract is explicit; model names do not select
+  # inference activations. Raw regression is decoded with clamp.
+  grasp_quality_loss_activation: raw
+  grasp_width_loss_activation: raw
   # Base Arch
   clip_pretrain: pretrain/RN50.pt
   version: multiple

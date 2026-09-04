@@ -1,0 +1,26 @@
+_base_: drog_v3_unified_original300_sigmoid_retrain.yaml
+
+MODEL:
+  architecture: droglr
+
+TRAIN:
+  # DROG backbone with bounded total width and a learned left/right split.
+  droglr_head_dim: 256
+  mask_guidance_strength: 0.5
+  droglr_offset_size_factor: 448.0
+  droglr_quality_positive_threshold: 0.05
+  seg_loss_weight: 1.0
+  quality_loss_weight: 1.0
+  centerness_loss_weight: 0.5
+  lr_width_loss_weight: 2.0
+  angle_loss_weight: 1.0
+  angle_unit_loss_weight: 0.1
+  exp_name: droglr_grasp_tools_v3_15k_unified_original300_sigmoid
+  weight:
+  resume:
+
+TEST:
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+  offset_decode_mode: radius
+  offset_resample_geometry: True

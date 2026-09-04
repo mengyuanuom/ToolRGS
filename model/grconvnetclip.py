@@ -2,26 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .crog_clip import build_model
-
-# 你之前写好的 FiLM 模块，直接复用
-class TextVisualFusionFiLM(nn.Module):
-    def __init__(self, vis_dim: int, text_dim: int, hidden_dim: int = 128):
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Linear(text_dim, hidden_dim),
-            nn.ReLU(inplace=True)
-        )
-        self.gamma = nn.Linear(hidden_dim, vis_dim)
-        self.beta = nn.Linear(hidden_dim, vis_dim)
-
-    def forward(self, feat, e_txt):
-        # feat: (B, C, H, W), e_txt: (B, D)
-        B, C, H, W = feat.shape
-        h = self.mlp(e_txt)              # (B, hidden_dim)
-        gamma = self.gamma(h).view(B, C, 1, 1)
-        beta  = self.beta(h).view(B, C, 1, 1)
-        return feat * (1.0 + gamma) + beta
-
+from .clip_grasp_fusion import TextVisualFusionFiLM
 
 class ResidualBlock(nn.Module):
     # 如果你原来是从 inference.models.grasp_model 里 import 的 ResidualBlock，
@@ -150,10 +131,10 @@ class GenerativeResnetWithText(nn.Module):
         y_pos, y_cos, y_sin, y_width = yc
         pos_pred, cos_pred, sin_pred, width_pred = self(xc, e_txt)
 
-        p_loss = F.smooth_l1_loss(pos_pred, y_pos)
+        p_loss = F.smooth_l1_loss(torch.sigmoid(pos_pred), y_pos)
         cos_loss = F.smooth_l1_loss(cos_pred, y_cos)
         sin_loss = F.smooth_l1_loss(sin_pred, y_sin)
-        width_loss = F.smooth_l1_loss(width_pred, y_width)
+        width_loss = F.smooth_l1_loss(torch.sigmoid(width_pred), y_width)
 
         return {
             "loss": p_loss + cos_loss + sin_loss + width_loss,
@@ -182,7 +163,8 @@ class GenerativeResnetWithText(nn.Module):
 
 
 class GenerativeResnet_CLIP(nn.Module):
-    grasp_size_loss_activation = "clamp"
+    grasp_quality_loss_activation = "sigmoid"
+    grasp_size_loss_activation = "sigmoid"
 
     def __init__(self, cfg):
         super().__init__()
@@ -242,10 +224,13 @@ class GenerativeResnet_CLIP(nn.Module):
                 grasp_cos_mask = F.interpolate(grasp_cos_mask, pos_pred.shape[-2:], mode='nearest').detach()
                 grasp_wid_mask = F.interpolate(grasp_wid_mask, pos_pred.shape[-2:], mode='nearest').detach()
 
-            p_loss   = F.smooth_l1_loss(qua_pred, grasp_qua_mask)
+            # Quality and width are bounded identically in training and
+            # inference: losses see sigmoid-decoded values, while validation
+            # applies the configured sigmoid once to the returned logits.
+            p_loss   = F.smooth_l1_loss(torch.sigmoid(qua_pred), grasp_qua_mask)
             cos_loss = F.smooth_l1_loss(cos_pred, grasp_cos_mask)
             sin_loss = F.smooth_l1_loss(sin_pred, grasp_sin_mask)
-            wid_loss = F.smooth_l1_loss(wid_pred, grasp_wid_mask)
+            wid_loss = F.smooth_l1_loss(torch.sigmoid(wid_pred), grasp_wid_mask)
 
             total_loss = p_loss + cos_loss + sin_loss + wid_loss
 

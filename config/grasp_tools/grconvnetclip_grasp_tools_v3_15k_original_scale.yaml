@@ -1,0 +1,30 @@
+_base_: grconvnetclip.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+  grasp_size_factor: 300.0
+  grasp_height: 20.0
+  grasp_size_coordinate: original
+
+TRAIN:
+  word_len: 32
+  workers: 4
+  workers_val: 2
+  epochs: 36
+  milestones: [30]
+  batch_size: 32
+  batch_size_val: 32
+  exp_name: grconvnetclip_grasp_tools_v3_15k_original300_bs32_sigmoid
+  save_freq: 5
+  val_start_epoch: 11
+  val_freq: 1
+
+TEST:
+  evaluation_protocol: crog_legacy
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+  grasp_iou_thresholds: [0.25, 0.50, 0.75]
+  grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]
+  restore_grasp_size_scale: True
+  filter_grasps_by_segmentation: False
+  visualize: False

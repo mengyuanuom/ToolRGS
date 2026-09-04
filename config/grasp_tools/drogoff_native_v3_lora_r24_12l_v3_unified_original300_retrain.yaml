@@ -1,0 +1,33 @@
+_base_: drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_eval.yaml
+
+DATA:
+  # Use the same uncropped original-coordinate width labels as every unified
+  # GraspTools V3 experiment.
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+  grasp_size_factor: 300.0
+  grasp_height: 20.0
+  grasp_size_coordinate: original
+
+TRAIN:
+  # Fresh single-3090 run of the original rank-24, 12-layer, 24-epoch recipe.
+  # The earlier directory mixed raw-quality training with sigmoid inference;
+  # keep it untouched and start a clean, auditable activation contract.
+  exp_name: drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_unified_original300_sigmoid_consistent
+  grasp_quality_loss_activation: sigmoid
+  grasp_width_loss_activation: sigmoid
+  val_start_epoch: 11
+  val_freq: 1
+  weight:
+  resume:
+
+Distributed:
+  world_size: 1
+
+TEST:
+  evaluation_protocol: toolrgs
+  grasp_topk: [1, 5]
+  grasp_iou_threshold: 0.25
+  grasp_angle_threshold: 30.0
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+  restore_grasp_size_scale: False

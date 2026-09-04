@@ -1,0 +1,56 @@
+_base_: ./drogoff_v2_original_scale.yaml
+
+# Exact standalone-evaluation profile reconstructed from the completed
+# native-V3 LoRA rank-24, 12-layer Grasp-Tools V3 experiment log.
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v3_15k
+  offset_version: v2
+  offset_target_stride: 4
+  offset_weight_floor: 0.25
+
+MODEL:
+  native_variant: v3
+  offset_head: lightweight
+  offset_hidden_dim: 64
+
+TRAIN:
+  visual_adapter_layer: []
+  txtual_adapter_layer: []
+  word_len: 32
+  sync_bn: False
+  amp: True
+  epochs: 24
+  milestones: [20]
+  batch_size: 4
+  batch_size_val: 2
+  max_norm: 1.0
+  exp_name: drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_e24_2x3090_bs8
+  offset_loss_weight: 0.1
+
+  native_visual_layers: [2, 5, 8, 11]
+  native_text_layers: [2, 5, 8, 11]
+  native_visual_lora_layers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  native_text_lora_layers: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+  native_visual_dim: 768
+  native_text_adapter_dim: 64
+  native_cross_dim: 256
+  native_cross_heads: 8
+  native_adapter_dropout: 0.05
+  native_lora_rank: 24
+  native_lora_alpha: 48.0
+  native_lora_dropout: 0.05
+  native_pyramid_dim: 192
+  native_alignment_dim: 256
+  native_alignment_loss_weight: 0.2
+  native_input_is_clip_normalized: True
+
+Distributed:
+  world_size: 2
+
+TEST:
+  evaluation_protocol: crog_legacy
+  grasp_iou_thresholds: [0.25, 0.5, 0.75]
+  grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]
+  offset_decode_mode: grasp_relative
+  offset_resample_geometry: False
+

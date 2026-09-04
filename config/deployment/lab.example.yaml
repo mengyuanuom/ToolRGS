@@ -2,14 +2,15 @@
 # The GUI can switch profiles without restarting the camera/robot layer.
 active_model: drogoff-grasptools-v2-original300
 model_profiles:
-  V3-DROG-OFF-V1:
-    config: config/grasp_tools/v3_drogoff_v1_grasp_tools_15k_original_scale.yaml
-    checkpoint: weights/v3_drogoff_v1_grasp_tools_15k_original300_best_msr.pth
-    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_drogoff_v1_grasp_tools_15k_original300_20260825_epoch24_best_msr_inference.pth
-    checkpoint_sha256: 5f15b5f59e783b9daf3b34bf1d467274591c15fc6f590c36653f128b90dff340
+  "V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)":
+    config: config/grasp_tools/v3_drogoff_v1_unified_original300_retrain.yaml
+    checkpoint: weights/v3_drogoff_v1_grasp_tools_15k_unified_original300_best_j1.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_drogoff_v1_grasp_tools_15k_unified_original300_20260829_epoch23_best_j1_inference.pth
+    checkpoint_sha256: 98f146b391b62d51e6b462f5e70324c786d141f23e34a0f08b9256965e2c7c7a
     device: cuda:0
     prompt: Grasp the screwdriver
-    grasp_size_activation: sigmoid
+    grasp_quality_activation: auto
+    grasp_size_activation: auto
     use_mask_postprocessing: true
     mask_threshold: 0.35
     mask_expand_px: 0
@@ -25,14 +26,63 @@ model_profiles:
     gate_quality_by_mask: true
     scale_grasp_to_source: true
     overrides: {}
-  V3-CROG:
-    config: config/grasp_tools/v3_crog_grasp_tools_15k_original_scale.yaml
-    checkpoint: weights/v3_crog_grasp_tools_15k_original300_best_msr.pth
-    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_crog_grasp_tools_15k_original300_20260823_epoch36_best_msr_clamp_inference.pth
-    checkpoint_sha256: 2d1270024beedde710b8a78b83c83591d3166debed479ad20450a88b80530a4f
+  "V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)":
+    config: config/grasp_tools/graspmamba_v3_unified_original300_retrain.yaml
+    checkpoint: weights/v3_mambagrasp_grasp_tools_15k_unified_original300_best_j1.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_mambagrasp_grasp_tools_15k_unified_original300_20260830_epoch20_best_j1_inference.pth
+    checkpoint_sha256: c3c6765172c8936fa71a3be53acd00c66d54a98e1cc75770d8f5c047e65fcb95
     device: cuda:0
     prompt: Grasp the screwdriver
-    grasp_size_activation: clamp
+    grasp_quality_activation: auto
+    grasp_size_activation: auto
+    use_mask_postprocessing: true
+    mask_threshold: 0.35
+    mask_expand_px: 0
+    quality_threshold: 0.40
+    num_grasps: 1
+    postprocessor:
+      type: dense_grasp
+      min_distance: 2
+      width_factor: 300.0
+      grasp_height: 20.0
+      size_coordinate: original
+    filter_grasps_by_mask: true
+    gate_quality_by_mask: true
+    scale_grasp_to_source: true
+    overrides: {}
+  "V3-CROG (mSR@1 47.65%, J@1 59.38%)":
+    config: config/grasp_tools/v3_crog_unified_original300_retrain.yaml
+    checkpoint: weights/v3_crog_grasp_tools_15k_unified_original300_best_j1.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_crog_grasp_tools_15k_unified_original300_20260831_epoch19_best_j1_inference.pth
+    checkpoint_sha256: a9f2164aa5e79b77b5e708d518bd0b8938802983fecf4672fa5a5f89b9d55266
+    device: cuda:0
+    prompt: Grasp the screwdriver
+    grasp_quality_activation: auto
+    grasp_size_activation: auto
+    use_mask_postprocessing: true
+    mask_threshold: 0.35
+    mask_expand_px: 0
+    quality_threshold: 0.40
+    num_grasps: 1
+    postprocessor:
+      type: dense_grasp
+      min_distance: 2
+      width_factor: 300.0
+      grasp_height: 20.0
+      size_coordinate: original
+    filter_grasps_by_mask: true
+    gate_quality_by_mask: true
+    scale_grasp_to_source: true
+    overrides: {}
+  "V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)":
+    config: config/grasp_tools/maplegrasp_v3_stage2_unified_original300_retrain.yaml
+    checkpoint: weights/v3_maplegrasp_stage2_grasp_tools_15k_unified_original300_best_j1.pth
+    checkpoint_url: https://github.com/mengyuanuom/ToolRGS/releases/download/grasp-tools-v3-weights/v3_maplegrasp_stage2_grasp_tools_15k_unified_original300_20260830_epoch16_best_j1_inference.pth
+    checkpoint_sha256: a5c394b4edcd8d88dcb8b0c4fa072a1de398afdaef9e1812d9169838034d7c03
+    device: cuda:0
+    prompt: Grasp the screwdriver
+    grasp_quality_activation: auto
+    grasp_size_activation: auto
     use_mask_postprocessing: true
     mask_threshold: 0.35
     mask_expand_px: 0

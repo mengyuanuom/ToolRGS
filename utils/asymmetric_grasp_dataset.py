@@ -40,6 +40,12 @@ class AsymmetricGraspDataset(Dataset):
             rectangles,
             sample["mask"].shape[-2:],
             size_factor=self.size_factor,
+            size_rectangles=(
+                sample.get("grasps", ())
+                if str(getattr(self.dataset, "grasp_size_coordinate", "canvas"))
+                == "original"
+                else None
+            ),
         )
         sample = dict(sample)
         sample["grasp_masks"] = dict(sample["grasp_masks"])

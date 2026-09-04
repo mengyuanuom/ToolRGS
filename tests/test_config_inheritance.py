@@ -1,14 +1,305 @@
+import glob
 from pathlib import Path
 import tempfile
 import unittest
 
-from utils.config import load_cfg_from_cfg_file, merge_cfg_from_list
+from utils.config import (
+    load_cfg_from_cfg_file,
+    merge_cfg_from_list,
+    resolve_grasp_training_activation,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class ConfigInheritanceTest(unittest.TestCase):
+    def test_training_activation_contract_rejects_mismatched_inference(self):
+        self.assertEqual(
+            resolve_grasp_training_activation("raw", "auto", name="quality"),
+            ("raw", "clamp"),
+        )
+        self.assertEqual(
+            resolve_grasp_training_activation(
+                "sigmoid", "sigmoid", name="quality"
+            ),
+            ("sigmoid", "sigmoid"),
+        )
+        with self.assertRaisesRegex(ValueError, "train/inference activation mismatch"):
+            resolve_grasp_training_activation("raw", "sigmoid", name="quality")
+
+    def test_all_grasp_tools_v3_profiles_share_original_300_size_contract(self):
+        matched = []
+        for path in glob.glob(
+            str(ROOT / "config" / "grasp_tools" / "*.yaml")
+        ):
+            cfg = load_cfg_from_cfg_file(path)
+            if "aug_graspall_v3_15k" not in str(getattr(cfg, "root_path", "")):
+                continue
+            matched.append(path)
+            self.assertEqual(cfg.grasp_size_coordinate, "original", path)
+            self.assertEqual(cfg.grasp_size_factor, 300.0, path)
+        self.assertGreaterEqual(len(matched), 9)
+
+    def test_grasp_tools_v3_graspmamba_profile_uses_sigmoid_contract(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "graspmamba_grasp_tools_v3_15k_original_scale.yaml"
+        )
+        self.assertEqual(cfg.architecture, "graspmamba")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.word_len, 32)
+        self.assertEqual(cfg.batch_size, 8)
+        self.assertEqual(cfg.base_lr, 0.0001)
+        self.assertFalse(cfg.amp)
+        self.assertEqual(cfg.epochs, 36)
+
+    def test_grasp_tools_v3_ggcnn_profile_uses_clamp_contract(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "ggcnnclip_grasp_tools_v3_15k_original_scale.yaml"
+        )
+        self.assertEqual(cfg.architecture, "ggcnnclip")
+        self.assertEqual(cfg.grasp_size_activation, "clamp")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.word_len, 32)
+        self.assertEqual(cfg.batch_size, 32)
+        self.assertEqual(cfg.epochs, 36)
+
+    def test_grasp_tools_v3_grconvnetclip_profile_uses_sigmoid_contract(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "grconvnetclip_grasp_tools_v3_15k_original_scale.yaml"
+        )
+        self.assertEqual(cfg.architecture, "grconvnetclip")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.word_len, 32)
+        self.assertEqual(cfg.batch_size, 32)
+        self.assertEqual(cfg.epochs, 36)
+
+    def test_crog_unified_v3_sigmoid_profile_is_fresh_and_consistent(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "v3_crog_unified_original300_sigmoid_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "crog")
+        self.assertEqual(
+            cfg.exp_name,
+            "crog_grasp_tools_v3_15k_unified_original300_sigmoid",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.epochs, 36)
+        self.assertEqual(cfg.batch_size, 32)
+
+    def test_grconvnetclip_unified_v3_profile_is_a_fresh_toolrgs_run(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "grconvnetclip_v3_unified_original300_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "grconvnetclip")
+        self.assertEqual(
+            cfg.exp_name,
+            "grconvnetclip_grasp_tools_v3_15k_unified_original300",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.batch_size, 32)
+        self.assertEqual(cfg.epochs, 36)
+
+    def test_ggcnn_unified_v3_profile_is_sigmoid_and_geometry_masked(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "ggcnnclip_v3_unified_original300_sigmoid_masked_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "ggcnnclip")
+        self.assertEqual(
+            cfg.exp_name,
+            "ggcnnclip_grasp_tools_v3_15k_unified_original300_sigmoid_masked",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.ggcnn_quality_positive_threshold, 0.05)
+        self.assertEqual(cfg.ggcnn_geometry_mask_threshold, 0.000001)
+        self.assertEqual(cfg.base_lr, 0.0001)
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.batch_size, 32)
+        self.assertEqual(cfg.batch_size_val, 32)
+        self.assertEqual(cfg.epochs, 36)
+
+    def test_etrg_unified_v3_profile_is_sigmoid_and_geometry_masked(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "etrg_r50_rgb_v3_unified_original300_sigmoid_masked_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "etrg")
+        self.assertEqual(
+            cfg.exp_name,
+            "etrg_r50_rgb_grasp_tools_v3_15k_unified_original300_sigmoid_masked_bs16",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.etrg_quality_positive_threshold, 0.05)
+        self.assertEqual(cfg.etrg_geometry_mask_threshold, 0.000001)
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.batch_size, 16)
+        self.assertEqual(cfg.batch_size_val, 16)
+        self.assertEqual(cfg.epochs, 36)
+
+    def test_lgd_unified_v3_profile_matches_the_common_data_contract(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "lgd_v3_unified_original300_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "lgd")
+        self.assertEqual(
+            cfg.exp_name, "lgd_grasp_tools_v3_15k_unified_original300"
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "clamp")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.word_len, 32)
+        self.assertEqual(cfg.batch_size, 16)
+        self.assertEqual(cfg.epochs, 36)
+
+    def test_native_v3_lora_unified_profile_is_fresh_and_uncropped(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "drogoff_native_v3_lora_r24_12l_v3_unified_original300_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "drogoff")
+        self.assertEqual(cfg.native_variant, "v3")
+        self.assertEqual(cfg.native_lora_rank, 24)
+        self.assertEqual(cfg.native_visual_lora_layers, list(range(12)))
+        self.assertEqual(cfg.native_text_lora_layers, list(range(12)))
+        self.assertEqual(
+            cfg.exp_name,
+            "drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_unified_original300_sigmoid_consistent",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.epochs, 24)
+        self.assertEqual(cfg.batch_size, 4)
+        self.assertEqual(cfg.world_size, 1)
+
+    def test_drog_unified_v3_profile_is_fresh_and_sigmoid_consistent(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "drog_v3_unified_original300_sigmoid_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "drog")
+        self.assertEqual(
+            cfg.exp_name,
+            "drog_grasp_tools_v3_15k_unified_original300_sigmoid",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.evaluation_protocol, "toolrgs")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertFalse(cfg.restore_grasp_size_scale)
+        self.assertEqual(cfg.word_len, 32)
+        self.assertEqual(cfg.batch_size, 8)
+        self.assertEqual(cfg.epochs, 36)
+        self.assertEqual(cfg.world_size, 1)
+
+    def test_droglr_unified_v3_profile_uses_original_size_and_lr_offset(self):
+        cfg = load_cfg_from_cfg_file(
+            ROOT
+            / "config"
+            / "grasp_tools"
+            / "droglr_v3_unified_original300_sigmoid_retrain.yaml"
+        )
+        self.assertEqual(cfg.architecture, "droglr")
+        self.assertEqual(
+            cfg.exp_name,
+            "droglr_grasp_tools_v3_15k_unified_original300_sigmoid",
+        )
+        self.assertIsNone(cfg.weight)
+        self.assertIsNone(cfg.resume)
+        self.assertEqual(cfg.grasp_quality_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_width_loss_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_quality_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_activation, "sigmoid")
+        self.assertEqual(cfg.grasp_size_coordinate, "original")
+        self.assertEqual(cfg.grasp_size_factor, 300.0)
+        self.assertEqual(cfg.droglr_offset_size_factor, 448.0)
+        self.assertTrue(cfg.offset_resample_geometry)
+        self.assertEqual(cfg.batch_size, 8)
+        self.assertEqual(cfg.epochs, 36)
+
     def test_etrg_experiment_composes_four_base_configs(self):
         cfg = load_cfg_from_cfg_file(
             ROOT / "configs" / "etrg" / "etrg_r50_ocid_vlg.yaml"

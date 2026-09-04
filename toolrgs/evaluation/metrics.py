@@ -85,3 +85,52 @@ class GraspSuccessMetric:
             f"J@{value}": self.correct[value] / max(1, self.total[value])
             for value in self.topk
         }
+
+
+@METRICS.register_module(name="grasp_threshold_grid")
+class GraspThresholdGridMetric:
+    """Aggregate top-k grasp success over an IoU/angle threshold grid."""
+
+    def __init__(self, iou_thresholds, angle_thresholds, topk=(1, 5)):
+        self.iou_thresholds = tuple(float(value) for value in iou_thresholds)
+        self.angle_thresholds = tuple(float(value) for value in angle_thresholds)
+        self.topk = tuple(int(value) for value in topk)
+        if not self.iou_thresholds or not self.angle_thresholds:
+            raise ValueError("The grasp threshold grid cannot be empty")
+        self.threshold_pairs = tuple(
+            (iou, angle)
+            for iou in self.iou_thresholds
+            for angle in self.angle_thresholds
+        )
+        self.reset()
+
+    def reset(self):
+        keys = (
+            (iou, angle, topk)
+            for iou, angle in self.threshold_pairs
+            for topk in self.topk
+        )
+        self.correct = {key: 0.0 for key in keys}
+        self.total = {key: 0 for key in self.correct}
+
+    def update(self, iou_threshold, angle_threshold, topk, success):
+        key = (float(iou_threshold), float(angle_threshold), int(topk))
+        if key not in self.correct:
+            raise KeyError(f"Threshold-grid key was not configured: {key}")
+        self.correct[key] += float(success)
+        self.total[key] += 1
+
+    def compute(self):
+        rows = []
+        for iou, angle in self.threshold_pairs:
+            values = {
+                topk: self.correct[(iou, angle, topk)]
+                / max(1, self.total[(iou, angle, topk)])
+                for topk in self.topk
+            }
+            rows.append({"iou": iou, "angle": angle, "values": values})
+        msr = {
+            topk: sum(row["values"][topk] for row in rows) / len(rows)
+            for topk in self.topk
+        }
+        return {"rows": rows, "msr": msr}
