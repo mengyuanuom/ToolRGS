@@ -189,9 +189,23 @@ class MapleGrasp(nn.Module):
         self.align_grasp_size_loss = bool(
             getattr(cfg, "align_grasp_size_loss", False)
         )
-        self.grasp_size_loss_activation = (
-            "sigmoid" if self.align_grasp_size_loss else None
+        self.align_grasp_quality_loss = bool(
+            getattr(cfg, "align_grasp_quality_loss", False)
         )
+        self.grasp_quality_train_activation = (
+            "sigmoid" if self.align_grasp_quality_loss else "raw"
+        )
+        self.grasp_quality_loss_activation = (
+            self.grasp_quality_train_activation
+        )
+        self.grasp_quality_decode_activation = (
+            self.grasp_quality_train_activation
+        )
+        self.grasp_width_loss_activation = (
+            "sigmoid" if self.align_grasp_size_loss else "raw"
+        )
+        self.grasp_size_loss_activation = self.grasp_width_loss_activation
+        self.grasp_size_decode_activation = self.grasp_width_loss_activation
         if self.stage1 == self.stage2:
             raise ValueError(
                 "MapleGrasp requires exactly one of stage1 or stage2 to be True"
@@ -316,9 +330,15 @@ class MapleGrasp(nn.Module):
         segmentation_loss = F.binary_cross_entropy_with_logits(
             outputs[0], targets[0], weight=targets[0] * 0.5 + 1.0
         )
+        quality_prediction = (
+            torch.sigmoid(outputs[1])
+            if self.align_grasp_quality_loss
+            else outputs[1]
+        )
         grasp_losses = [
-            F.smooth_l1_loss(outputs[index], targets[index])
-            for index in range(1, 4)
+            F.smooth_l1_loss(quality_prediction, targets[1]),
+            F.smooth_l1_loss(outputs[2], targets[2]),
+            F.smooth_l1_loss(outputs[3], targets[3]),
         ]
         size_losses = [
             F.smooth_l1_loss(

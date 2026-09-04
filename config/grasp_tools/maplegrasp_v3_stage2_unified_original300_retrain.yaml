@@ -3,7 +3,7 @@ _base_: maplegrasp_v3_stage2.yaml
 TRAIN:
   # Stage 1 is segmentation-only and remains a valid initializer.  The grasp
   # head itself starts fresh in this new experiment directory.
-  exp_name: maplegrasp_stage2_grasp_tools_v3_15k_unified_original300
+  exp_name: maplegrasp_stage2_grasp_tools_v3_15k_unified_original300_sigmoid_consistent
   resume:
 
 TEST:
