@@ -1,0 +1,26 @@
+_base_: v3_drogoff_v1_unified_original300_retrain.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v4_dense_15k
+
+TRAIN:
+  # Largest single-RTX-3090 batch already validated for the DrogOff V1 graph.
+  batch_size: 8
+  batch_size_val: 8
+  epochs: 12
+  milestones: [10]
+  save_freq: 1
+  save_epochs: [5, 10, 12]
+  val_start_epoch: 10
+  val_freq: 1
+  grasp_quality_loss_activation: sigmoid
+  grasp_width_loss_activation: sigmoid
+  exp_name: drogoff_v1_grasp_tools_v4_dense_15k_sigmoid_e12_bs8
+  weight:
+  resume:
+
+TEST:
+  test_batch_size: 8
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+
