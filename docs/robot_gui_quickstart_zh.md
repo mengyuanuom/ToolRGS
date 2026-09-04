@@ -98,7 +98,7 @@ python tools/check_deployment.py \
 ```text
 weights/drogoff_grasp_tools_v2_original300_best_j1.pth
 weights/crog_aligned_grasp_tools_v2_original300_best_j1.pth
-weights/v3_drogoff_v2_grasp_tools_15k_original300_best_msr.pth
+weights/v3_drogoff_v1_grasp_tools_15k_unified_original300_best_j1.pth
 weights/v3_mambagrasp_grasp_tools_15k_unified_original300_best_j1.pth
 weights/v3_crog_grasp_tools_15k_unified_original300_best_j1.pth
 weights/v3_maplegrasp_stage2_grasp_tools_15k_unified_original300_best_j1.pth
@@ -131,7 +131,7 @@ python tools/check_deployment.py \
 **Detection Post-processing**，进入 **Grasping Points Detection** 时显示
 **Grasp Model & Post-processing**。抓取模型下拉框默认选中
 `config/deployment/lab.yaml` 的 `active_model`，也可以直接切换已配置的
-`V3-DROG-OFF-V2 (mSR@1 49.88%, J@1 58.94%)`、
+`V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)`、
 `V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)`、
 `V3-CROG (mSR@1 47.65%, J@1 59.38%)`、
 `V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)`、DROG-OFF V2 与 aligned CROG V2。四个
@@ -142,8 +142,8 @@ V3 名称均以前缀 `V3-` 开头并排在列表前面；括号中的指标均�
 V3 模型的抓取质量/尺寸激活方式由训练配置决定，不能混用。GUI 不再按
 模型名称强制指定激活：四个 V3 GUI profile 的质量与尺寸解码均使用 `auto`，
 优先读取权重包中由训练配置写入的激活契约；旧权重缺少对应元数据时，回退到训练配置/模型契约。
-DROG-OFF V2 解析为质量 `clamp`、宽度 `sigmoid`；MambaGrasp 和 MapleGrasp
-Stage 2 均解析为质量/宽度 `sigmoid`；当前 CROG 解析为质量 `sigmoid`、宽度
+DROG-OFF V1、MambaGrasp 和 MapleGrasp Stage 2 均解析为质量/宽度
+`sigmoid`；当前 CROG 解析为质量 `sigmoid`、宽度
 `clamp`。因此不会因 GUI 名称或模型类别硬编码而错配训推激活。
 
 推荐按以下顺序切换：

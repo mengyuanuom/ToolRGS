@@ -561,7 +561,7 @@ class DeploymentContractTest(unittest.TestCase):
         self.assertEqual(
             list(cfg["_model_profiles"]),
             [
-                "V3-DROG-OFF-V2 (mSR@1 49.88%, J@1 58.94%)",
+                "V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)",
                 "V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)",
                 "V3-CROG (mSR@1 47.65%, J@1 59.38%)",
                 "V3-MapleGrasp-Stage2 (mSR@1 43.44%, J@1 58.38%)",
@@ -587,19 +587,19 @@ class DeploymentContractTest(unittest.TestCase):
             crog["model"]["checkpoint_sha256"],
             "6b2f1059448d5c4fc7486c5c66e51929acaf12bafeb827bb759f2e8f941935e2",
         )
-        v3_v2 = activate_model_profile(
-            cfg, "V3-DROG-OFF-V2 (mSR@1 49.88%, J@1 58.94%)"
+        v3_v1 = activate_model_profile(
+            cfg, "V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)"
         )
         self.assertEqual(
-            v3_v2["model"]["config"],
-            "config/grasp_tools/drogoff_v2_grasp_tools_v3_15k_eval.yaml",
+            v3_v1["model"]["config"],
+            "config/grasp_tools/v3_drogoff_v1_unified_original300_retrain.yaml",
         )
         self.assertEqual(
-            v3_v2["model"]["checkpoint_sha256"],
-            "e28f4923b9958bfcca5d738f0a3b60fcdcc439be1b14e3213fed88c1adbf8422",
+            v3_v1["model"]["checkpoint_sha256"],
+            "98f146b391b62d51e6b462f5e70324c786d141f23e34a0f08b9256965e2c7c7a",
         )
-        self.assertEqual(v3_v2["model"]["grasp_quality_activation"], "auto")
-        self.assertEqual(v3_v2["model"]["grasp_size_activation"], "auto")
+        self.assertEqual(v3_v1["model"]["grasp_quality_activation"], "auto")
+        self.assertEqual(v3_v1["model"]["grasp_size_activation"], "auto")
         v3_mamba = activate_model_profile(
             cfg, "V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)"
         )

@@ -114,14 +114,13 @@ ToolRGS validates that digest before loading the checkpoint.
 The four unified Grasp-Tools V3 profiles are deliberately named and ordered
 first in the GUI. Every name includes comparable full-test mSR@1 and J@1
 scores, so operators can distinguish checkpoints without consulting a
-separate benchmark table. The V2 DROG-OFF profile provides the epoch-30
-best-mSR checkpoint. The unified 5,029-sample test cache reports J@1 `58.94`,
-J@5 `59.67`, mean multi-threshold J@1 `49.88`, and mean multi-threshold J@5
-`52.64`.
+separate benchmark table. `V3-DROG-OFF-V1 (mSR@1 55.08%, J@1 61.21%)`
+provides the unified-V3 epoch-23 best-J@1 checkpoint. The unified 5,029-sample
+test cache reports J@5 `61.80` and mean multi-threshold J@5 `58.11`.
 Its Release asset is
-`v3_drogoff_v2_grasp_tools_15k_original300_20260826_epoch30_best_msr_inference.pth`
-(`706385554` bytes), with SHA-256
-`e28f4923b9958bfcca5d738f0a3b60fcdcc439be1b14e3213fed88c1adbf8422`.
+`v3_drogoff_v1_grasp_tools_15k_unified_original300_20260829_epoch23_best_j1_inference.pth`
+(`717892286` bytes), with SHA-256
+`98f146b391b62d51e6b462f5e70324c786d141f23e34a0f08b9256965e2c7c7a`.
 
 `V3-MambaGrasp (mSR@1 53.62%, J@1 60.97%)` provides the unified-V3 epoch-20 best-J@1 checkpoint. The
 independent test cache reports J@1 `60.97`, J@5 `61.15`, mean multi-threshold
@@ -146,9 +145,9 @@ epoch-16 best-J@1 Stage-2 checkpoint. The independent test cache reports J@5
 All four assets contain only inference state plus checkpoint metadata;
 optimizer and scheduler state are deliberately omitted. Every GUI profile uses
 `auto`: quality/size decoding is resolved from checkpoint metadata first and
-then the training-config/model contract when legacy metadata is absent. DROG-OFF V2 resolves to clamp
-quality plus sigmoid size; MambaGrasp and MapleGrasp resolve to sigmoid quality
-plus sigmoid size; CROG resolves to sigmoid quality plus clamp size.
+then the training-config/model contract when legacy metadata is absent.
+DROG-OFF V1, MambaGrasp, and MapleGrasp resolve to sigmoid quality plus sigmoid
+size; CROG resolves to sigmoid quality plus clamp size.
 Selecting any profile downloads and verifies it on demand; running the
 preflight downloads all of them in advance with the other selectable profiles.
 

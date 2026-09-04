@@ -489,14 +489,13 @@ preventing the incompatible `cv2/qt/plugins` xcb path from taking over.
 
 Install `requirement-detector.txt`. The preflight downloads every selectable
 grasp checkpoint, including the four score-suffixed unified-V3 GUI profiles
-(DROG-OFF V2, MambaGrasp, CROG, and MapleGrasp Stage 2), plus the published
+(DROG-OFF V1, MambaGrasp, CROG, and MapleGrasp Stage 2), plus the published
 CLIP, DINO, MambaVision, and 22-class Grasp-Tools Faster R-CNN weights. It
 validates every configured Release SHA-256 value automatically. All four V3
 profiles use `auto` activation resolution from checkpoint metadata with a
 training-config/model-contract fallback so inference
-matches training: DROG-OFF V2 uses clamp quality and sigmoid size, MambaGrasp
-and MapleGrasp use sigmoid quality/size, and CROG uses sigmoid quality and clamp
-size.
+matches training: DROG-OFF V1, MambaGrasp, and MapleGrasp use sigmoid
+quality/size, while CROG uses sigmoid quality and clamp size.
 
 ```bash
 python tools/check_deployment.py --build-detector
