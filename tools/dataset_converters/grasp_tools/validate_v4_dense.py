@@ -14,10 +14,10 @@ from typing import Any, Dict
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("dataset_dir", type=Path)
-    parser.add_argument("--objects-min", type=int, default=8)
-    parser.add_argument("--objects-max", type=int, default=10)
-    parser.add_argument("--scale-min", type=float, default=0.4)
-    parser.add_argument("--scale-max", type=float, default=0.8)
+    parser.add_argument("--objects-min", type=int, default=10)
+    parser.add_argument("--objects-max", type=int, default=12)
+    parser.add_argument("--scale-min", type=float, default=0.3)
+    parser.add_argument("--scale-max", type=float, default=0.6)
     parser.add_argument("--angle-bins", type=int, default=24)
     parser.add_argument(
         "--max-category-imbalance",
