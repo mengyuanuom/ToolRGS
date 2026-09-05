@@ -1,0 +1,33 @@
+_base_: maplegrasp_v3_stage2_unified_original300_retrain.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v4_dense_15k
+
+TRAIN:
+  # Initialize only from the completed V4 Stage 1 best-IoU checkpoint.
+  stage1: False
+  stage2: True
+  batch_size: 8
+  batch_size_val: 8
+  epochs: 12
+  milestones: [10]
+  save_freq: 1
+  save_epochs: [5, 10, 12]
+  val_start_epoch: 5
+  val_freq: 1
+  grasp_quality_loss_activation: sigmoid
+  grasp_width_loss_activation: sigmoid
+  weight: exp/grasp_tools/maplegrasp_stage1_grasp_tools_v4_dense_15k_e12_bs8/best_iou_model.pth
+  resume:
+  exp_name: maplegrasp_stage2_grasp_tools_v4_dense_15k_sigmoid_e12_bs8
+
+TEST:
+  evaluation_protocol: toolrgs
+  test_batch_size: 8
+  grasp_topk: [1, 5]
+  grasp_iou_threshold: 0.25
+  grasp_angle_threshold: 30.0
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+  restore_grasp_size_scale: False
+

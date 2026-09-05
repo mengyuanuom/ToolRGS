@@ -1,0 +1,31 @@
+_base_: maplegrasp_v3_stage1.yaml
+
+DATA:
+  root_path: ./datasets/grasp-tools/aug_graspall_v4_dense_15k
+
+TRAIN:
+  # V4 Stage 1 learns only the language-conditioned object mask.
+  stage1: True
+  stage2: False
+  batch_size: 8
+  batch_size_val: 8
+  epochs: 12
+  milestones: [10]
+  save_freq: 1
+  save_epochs: [5, 10, 12]
+  val_start_epoch: 5
+  val_freq: 1
+  exp_name: maplegrasp_stage1_grasp_tools_v4_dense_15k_e12_bs8
+  weight:
+  resume:
+
+TEST:
+  evaluation_protocol: toolrgs
+  test_batch_size: 8
+  grasp_topk: [1, 5]
+  grasp_iou_threshold: 0.25
+  grasp_angle_threshold: 30.0
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+  restore_grasp_size_scale: False
+
