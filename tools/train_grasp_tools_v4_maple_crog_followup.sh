@@ -4,7 +4,13 @@ set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-PYTHON_BIN="${TOOLRGS_PYTHON:-python}"
+if [[ -n "${TOOLRGS_PYTHON:-}" ]]; then
+  PYTHON_BIN="$TOOLRGS_PYTHON"
+elif [[ -x "/home/aorus/anaconda3/envs/graspmamba/bin/python" ]]; then
+  PYTHON_BIN="/home/aorus/anaconda3/envs/graspmamba/bin/python"
+else
+  PYTHON_BIN="python3"
+fi
 POLL_SECONDS="${GPU_POLL_SECONDS:-60}"
 STATE_DIR="${V4_FOLLOWUP_STATE_DIR:-$ROOT/exp/grasp_tools/.v4_maple_crog_followup}"
 STAGE1_STARTED="$STATE_DIR/maple_stage1_started"
@@ -153,4 +159,3 @@ case "${1:-schedule}" in
   crog) run_crog ;;
   *) echo "usage: $0 [schedule|maple|crog]" >&2; exit 2 ;;
 esac
-
