@@ -11,7 +11,7 @@ TRAIN:
   milestones: [10]
   save_freq: 1
   save_epochs: [5, 10, 12]
-  val_start_epoch: 10
+  val_start_epoch: 5
   val_freq: 1
   exp_name: crog_grasp_tools_v4_dense_15k_sigmoid_e12_bs32
   weight:
@@ -19,4 +19,3 @@ TRAIN:
 
 TEST:
   test_batch_size: 32
-
