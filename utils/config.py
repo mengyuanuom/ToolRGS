@@ -99,7 +99,7 @@ def _deep_merge(base, override):
 def _load_with_bases(path, stack=()):
     path = Path(path).expanduser().resolve()
     if path in stack:
-        chain = " -> ".join(str(item) for item in (*stack, path))
+        chain = " -> ".join(str(item) for item in stack + (path,))
         raise ValueError(f"Circular config inheritance detected: {chain}")
     if not path.is_file() or path.suffix.lower() not in {".yaml", ".yml"}:
         raise FileNotFoundError(f"Config YAML not found: {path}")
