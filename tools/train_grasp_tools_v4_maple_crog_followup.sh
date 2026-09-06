@@ -12,6 +12,7 @@ else
   PYTHON_BIN="python3"
 fi
 POLL_SECONDS="${GPU_POLL_SECONDS:-60}"
+FREE_CONFIRMATIONS="${GPU_FREE_CONFIRMATIONS:-2}"
 STATE_DIR="${V4_FOLLOWUP_STATE_DIR:-$ROOT/exp/grasp_tools/.v4_maple_crog_followup}"
 STAGE1_STARTED="$STATE_DIR/maple_stage1_started"
 CROG_STARTED="$STATE_DIR/crog_started"
@@ -32,16 +33,27 @@ gpu_uuid() {
 wait_for_gpu() {
   local gpu_id="$1"
   local uuid
+  local free_checks=0
   uuid="$(gpu_uuid "$gpu_id")"
   if [[ -z "$uuid" ]]; then
     echo "[error] physical GPU $gpu_id was not found" >&2
     return 1
   fi
-  while nvidia-smi \
-    --query-compute-apps=gpu_uuid --format=csv,noheader,nounits 2>/dev/null \
-    | grep -Fx "$uuid" >/dev/null; do
-    echo "[wait] physical GPU $gpu_id ($uuid) is occupied"
-    sleep "$POLL_SECONDS"
+  while (( free_checks < FREE_CONFIRMATIONS )); do
+    if nvidia-smi \
+      --query-compute-apps=gpu_uuid --format=csv,noheader,nounits 2>/dev/null \
+      | grep -Fx "$uuid" >/dev/null; then
+      free_checks=0
+      echo "[wait] physical GPU $gpu_id ($uuid) is occupied"
+    else
+      ((free_checks += 1))
+      if (( free_checks < FREE_CONFIRMATIONS )); then
+        echo "[confirm] physical GPU $gpu_id ($uuid) appears free; checking again before launch"
+      fi
+    fi
+    if (( free_checks < FREE_CONFIRMATIONS )); then
+      sleep "$POLL_SECONDS"
+    fi
   done
   echo "[ready] physical GPU $gpu_id ($uuid) is free"
 }
