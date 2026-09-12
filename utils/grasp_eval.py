@@ -303,46 +303,8 @@ def detect_grasps(grasp_quality_mask, grasp_sin_mask, grasp_cos_mask, grasp_wid_
 
 
 def calculate_iou(rect_p, rect_gt, shape=(720, 1280), angle_threshold=30):
-    if abs(rect_p[4] - rect_gt[4]) > angle_threshold and abs(rect_p[4] + rect_gt[4]) > angle_threshold:
-        return 0
-    
-    center_x, center_y, w_rect, h_rect, theta, _ = rect_gt
-    gt_r_rect = ((center_x, center_y), (w_rect, h_rect), -theta)
-    gt_box = cv2.boxPoints(gt_r_rect)
-    gt_box = np.intp(gt_box)
-    rr1, cc1 = polygon(gt_box[:, 0], gt_box[:,1], shape)
-
-    mask_rr = rr1 < shape[1]
-    rr1 = rr1[mask_rr]
-    cc1 = cc1[mask_rr]
-
-    mask_cc = cc1 < shape[0]
-    cc1 = cc1[mask_cc]
-    rr1 = rr1[mask_cc]
-
-    center_x, center_y, w_rect, h_rect, theta = rect_p
-    p_r_rect = ((center_x, center_y), (w_rect, h_rect), -theta)
-    p_box = cv2.boxPoints(p_r_rect)
-    p_box = np.intp(p_box)
-    rr2, cc2 = polygon(p_box[:, 0], p_box[:,1], shape)
-
-    mask_rr = rr2 < shape[1]
-    rr2 = rr2[mask_rr]
-    cc2 = cc2[mask_rr]
-
-    mask_cc = cc2 < shape[0]
-    cc2 = cc2[mask_cc]
-    rr2 = rr2[mask_cc]
-
-    pixels1 = np.unique(np.ravel_multi_index((cc1, rr1), shape))
-    pixels2 = np.unique(np.ravel_multi_index((cc2, rr2), shape))
-    intersection = np.intersect1d(
-        pixels1, pixels2, assume_unique=True
-    ).size
-    union = pixels1.size + pixels2.size - intersection
-    if union <= 0:
-        return 0
-    return intersection / union
+    from utils.grasp_raster import rectangle_iou
+    return rectangle_iou(rect_p, rect_gt, shape, angle_threshold)
 
 
 def calculate_max_iou(rects_p, rects_gt):
@@ -364,6 +326,7 @@ def calculate_jacquard_index(
     angle_threshold=30.0,
     target_width_cap=100.0,
     target_height=20.0,
+    shape=(720, 1280),
 ):
     grasp_preds = np.asarray(grasp_preds)
     grasp_targets = np.asarray(grasp_targets).copy()
@@ -377,7 +340,7 @@ def calculate_jacquard_index(
     for rect_gt in grasp_targets:
         for rect_p in grasp_preds:
             if calculate_iou(
-                rect_p, rect_gt, angle_threshold=float(angle_threshold)
+                rect_p, rect_gt, shape=shape, angle_threshold=float(angle_threshold)
             ) > iou_threshold:
                 return 1
     return 0
@@ -388,35 +351,12 @@ def calculate_grasp_matches(
     grasp_targets,
     target_width_cap=100.0,
     target_height=20.0,
+    shape=(720, 1280),
 ):
     """Cache geometry shared by every IoU/angle threshold-grid cell."""
 
-    grasp_preds = np.asarray(grasp_preds)
-    grasp_targets = np.asarray(grasp_targets).copy()
-    if grasp_preds.size == 0 or grasp_targets.size == 0:
-        return []
-    grasp_preds = grasp_preds.reshape(-1, 5)
-    grasp_targets = grasp_targets.reshape(-1, 6)
-    grasp_targets[:, 3] = float(target_height)
-    if target_width_cap is not None:
-        grasp_targets[:, 2] = np.clip(
-            grasp_targets[:, 2], 0, float(target_width_cap)
-        )
-
-    matches = []
-    for prediction_index, rect_p in enumerate(grasp_preds):
-        for rect_gt in grasp_targets:
-            angle_error = min(
-                abs(float(rect_p[4]) - float(rect_gt[4])),
-                abs(float(rect_p[4]) + float(rect_gt[4])),
-            )
-            # Preserve calculate_iou's legacy NaN comparison behavior: both
-            # angle-rejection comparisons are false for NaN, so it proceeds.
-            if not np.isfinite(angle_error):
-                angle_error = 0.0
-            iou = calculate_iou(rect_p, rect_gt, angle_threshold=float("inf"))
-            matches.append((prediction_index, float(iou), angle_error))
-    return matches
+    from utils.grasp_raster import grasp_matches
+    return grasp_matches(grasp_preds, grasp_targets, target_width_cap, target_height, shape)
 
 
 def calculate_jacquard_from_matches(

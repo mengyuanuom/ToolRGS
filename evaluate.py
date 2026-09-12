@@ -27,6 +27,8 @@ def parse_args():
         help="Model config (required for inference, optional for cache scoring)",
     )
     parser.add_argument("--checkpoint")
+    parser.add_argument('--image-shape',nargs=2,type=int,metavar=('HEIGHT','WIDTH'),
+                        help='Verified original image bounds for rescoring old caches without image_hw')
     parser.add_argument("--split", help="Evaluation split override")
     parser.add_argument(
         "--prediction-cache",
@@ -69,6 +71,7 @@ def parse_args():
         cfg = config.merge_cfg_from_list(cfg, cli.opts)
     cfg.resume = cli.checkpoint
     cfg.score_cache = cli.score_cache
+    cfg.image_shape = cli.image_shape
     cfg.prediction_cache = cli.prediction_cache
     cfg.save_predictions = bool(cli.save_predictions and not cli.score_cache)
     cfg.collect_predictions = cfg.save_predictions
@@ -120,6 +123,7 @@ def _score_kwargs(cfg):
             getattr(cfg, "grasp_angle_thresholds", (5.0, 10.0, 20.0, 30.0))
         ),
         "segmentation_iou_thresholds": _segmentation_iou_thresholds(cfg),
+        "image_shape": getattr(cfg,'image_shape',None),
     }
 
 

@@ -301,6 +301,7 @@ class GraspValLoop(BaseLoop):
                                 "matches": np.empty((0, 3), dtype=np.float32),
                                 "target_width_cap": self.postprocessor.width_factor,
                                 "target_height": self.postprocessor.grasp_height,
+                                "image_hw": original_hw,
                             }
                         )
                 self.state.result = result
@@ -456,6 +457,7 @@ class GraspValLoop(BaseLoop):
                         target_six,
                         target_width_cap=target_width_cap,
                         target_height=self.postprocessor.grasp_height,
+                        shape=original_hw,
                     )
                 for topk in self.topk:
                     if matches is None:
@@ -470,6 +472,7 @@ class GraspValLoop(BaseLoop):
                             ),
                             target_width_cap=target_width_cap,
                             target_height=self.postprocessor.grasp_height,
+                            shape=original_hw,
                         )
                     else:
                         success = calculate_jacquard_from_matches(
@@ -515,6 +518,7 @@ class GraspValLoop(BaseLoop):
                             ).reshape(-1, 3),
                             "target_width_cap": target_width_cap,
                             "target_height": self.postprocessor.grasp_height,
+                            "image_hw": original_hw,
                         }
                     )
 

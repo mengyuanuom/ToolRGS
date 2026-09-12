@@ -3,11 +3,13 @@
 import json
 import os
 import tempfile
+import warnings
 
 import numpy as np
 
 from toolrgs.evaluation.metrics import GraspThresholdGridMetric
 from utils.grasp_eval import calculate_jacquard_from_matches
+from utils.grasp_raster import GEOMETRY_VERSION, grasp_matches
 
 
 PREDICTION_CACHE_VERSION = 1
@@ -39,6 +41,8 @@ def save_prediction_cache(path, records, metadata=None):
     metadata = dict(metadata or {})
     metadata["format_version"] = PREDICTION_CACHE_VERSION
     metadata["num_samples"] = len(records)
+    if records and all('image_hw' in r for r in records):
+        metadata['geometry_version'] = GEOMETRY_VERSION
     rectangle_offsets, rectangles = _flatten_records(
         records, "rectangles", 5, np.float32
     )
@@ -64,6 +68,8 @@ def save_prediction_cache(path, records, metadata=None):
             [record["target_height"] for record in records], dtype=np.float32
         ),
     }
+    if records and all('image_hw' in r for r in records):
+        arrays['image_hw'] = np.asarray([r['image_hw'] for r in records],dtype=np.int64)
     path = os.path.abspath(path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     temporary = tempfile.NamedTemporaryFile(
@@ -117,9 +123,13 @@ def score_prediction_cache(
     grasp_iou_thresholds=(0.25, 0.50, 0.75),
     grasp_angle_thresholds=(5.0, 10.0, 20.0, 30.0),
     segmentation_iou_thresholds=(0.5, 0.6, 0.7, 0.8, 0.9),
+    image_shape=None,
 ):
     """Score a decoded prediction cache without loading a model or CUDA."""
 
+    if cache['metadata'].get('geometry_version') != GEOMETRY_VERSION:
+        warnings.warn('Rebuilding obsolete cached IoUs from decoded rectangles; no model inference.',RuntimeWarning)
+        rebuild_cache_geometry(cache, image_shape=image_shape)
     topk = tuple(int(value) for value in topk)
     cached_max_topk = int(cache["metadata"].get("max_topk", 0))
     if topk and max(topk) > cached_max_topk:
@@ -178,6 +188,36 @@ def score_prediction_cache(
         "msr": grid_results["msr"],
         "metadata": cache["metadata"],
     }
+
+
+def rebuild_cache_geometry(cache, image_shape=None):
+    """Invalidate old IoU/angle matches, preserving all predictions and targets.
+
+    Old caches did not store image bounds: require an explicit audited shape
+    instead of guessing the dimensions from predicted coordinates.
+    """
+    n=len(cache['segmentation_iou'])
+    shapes=cache.get('image_hw')
+    if shapes is None:
+        if image_shape is None:
+            raise ValueError('Old cache lacks image_hw. Supply the verified original image_shape=(H,W).')
+        shapes=np.tile(np.asarray(image_shape,dtype=np.int64),(n,1))
+    if shapes.shape != (n,2) or np.any(shapes<=0):
+        raise ValueError('Invalid image_hw in prediction cache')
+    blocks=[]
+    offsets=[0]
+    for i in range(n):
+        p=cache['rectangles'][cache['rectangle_offsets'][i]:cache['rectangle_offsets'][i+1]]
+        t=cache['targets'][cache['target_offsets'][i]:cache['target_offsets'][i+1]]
+        matches=np.asarray(grasp_matches(p,t,float(cache['target_width_cap'][i]),
+                                        float(cache['target_height'][i]),tuple(shapes[i])),dtype=np.float32).reshape(-1,3)
+        blocks.append(matches)
+        offsets.append(offsets[-1]+len(matches))
+    cache['matches']=np.concatenate(blocks) if blocks else np.empty((0,3),dtype=np.float32)
+    cache['match_offsets']=np.asarray(offsets,dtype=np.int64)
+    cache['image_hw']=shapes
+    cache['metadata']=dict(cache['metadata'],geometry_version=GEOMETRY_VERSION)
+    return cache
 
 
 def write_score_summary(path, scores):
