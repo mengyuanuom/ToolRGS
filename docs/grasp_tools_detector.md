@@ -1,7 +1,7 @@
 # Grasp-Tools Faster R-CNN detector
 
-This pipeline trains the GUI object detector with MMDetection rather than the
-old unrelated `epoch_48_13.pth` checkpoint.
+This pipeline trains and deploys the 22-class Grasp-Tools V2 GUI object
+detector with MMDetection.
 
 ## Dataset contract
 
