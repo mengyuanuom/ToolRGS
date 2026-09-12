@@ -1,0 +1,2746 @@
+[
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/drogoff_v1_grasp_tools_v3_15k_unified_original300/evaluation_cache/test_best_j1_model_predictions_ec5db6c.npz",
+    "metadata": {
+      "architecture": "drogoff",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/drogoff_v1_grasp_tools_v3_15k_unified_original300/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788037935848460333,
+      "checkpoint_size": 952745222,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/v3_drogoff_v1_unified_original300_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "45c74d65d12730b74ab335df8b8e2fd55f58813630fa93784c8e9eaf8a5428ab",
+    "prediction_sha256": "e9517ac08d475412a87c2df175beebf506d617867b563bed715beb08c29cd5ad",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 61.2050109365679,
+      "J5": 61.80155100417578,
+      "mSR1": 55.075561741897,
+      "mSR5": 58.10797375223704,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 57.46669317955856,
+          "J5": 59.73354543646848
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 60.151123483794,
+          "J5": 60.98627957844502
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 61.00616424736528,
+          "J5": 61.64247365281368
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 61.2050109365679,
+          "J5": 61.80155100417578
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 56.253728375422554,
+          "J5": 59.3557367269835
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 59.53469874726586,
+          "J5": 60.70789421356134
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 60.13123881487373,
+          "J5": 61.165241598727384
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 60.17100815271426,
+          "J5": 61.18512626764764
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 45.17796778683635,
+          "J5": 52.07794790216743
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 46.550009942334455,
+          "J5": 52.85344999005767
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 46.62954861801551,
+          "J5": 52.89321932789819
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 46.62954861801551,
+          "J5": 52.89321932789819
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 99.12507456750845,
+      "J5": 99.22449791210977,
+      "mSR1": 87.80241267316232,
+      "mSR5": 92.45542520050374,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 91.6285543845695,
+          "J5": 95.32710280373831
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 96.65937562139591,
+          "J5": 97.37522370252535
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 98.64784251342216,
+          "J5": 98.90634320938557
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 99.12507456750845,
+          "J5": 99.22449791210977
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 89.97812686418771,
+          "J5": 94.77033207397096
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 95.74468085106383,
+          "J5": 97.19626168224299
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 97.17637701332272,
+          "J5": 98.30980314177768
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 97.23603102008352,
+          "J5": 98.32968781069795
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 70.29230463312786,
+          "J5": 81.70610459335852
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 72.3404255319149,
+          "J5": 82.75999204613244
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 72.40007953867568,
+          "J5": 82.7798767150527
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 72.40007953867568,
+          "J5": 82.7798767150527
+        }
+      ]
+    },
+    "missing_predictions": 0,
+    "seconds": 55.89023423194885,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/drogoff_v1_grasp_tools_v3_15k_unified_original300_45c74d65d1"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/graspmamba_grasp_tools_v3_15k_unified_original300/evaluation_cache/test_best_j1_model_predictions_ec5db6c.npz",
+    "metadata": {
+      "architecture": "graspmamba",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/graspmamba_grasp_tools_v3_15k_unified_original300/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788080557846685312,
+      "checkpoint_size": 822231056,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/graspmamba_v3_unified_original300_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "907e0d477e61788effa5c7cda9a65600f60fdb5cf6b5ff01c428d4c561d291c8",
+    "prediction_sha256": "0e9b24d7746660f3e0806d23d9df746271c37998df000cdf10958a557f5ac3d5",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 60.96639490952476,
+      "J5": 61.145356929807114,
+      "mSR1": 53.617352687744415,
+      "mSR5": 55.68535825545172,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 56.27361304434281,
+          "J5": 56.77072976734937
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 59.65400676078744,
+          "J5": 59.91250745675084
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 60.628355537880296,
+          "J5": 60.84708689600318
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 60.96639490952476,
+          "J5": 61.145356929807114
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 55.19984092264863,
+          "J5": 56.233843706502284
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 58.83873533505667,
+          "J5": 59.3557367269835
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 59.55458341618613,
+          "J5": 59.992046132431895
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 59.63412209186717,
+          "J5": 60.09146947703321
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 41.99642075959436,
+          "J5": 47.30562736130444
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 43.46788625969378,
+          "J5": 48.757208192483596
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 43.58719427321535,
+          "J5": 48.89640087492543
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 43.607078942135615,
+          "J5": 48.916285543845696
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 99.3636905945516,
+      "J5": 99.40345993239212,
+      "mSR1": 87.25061311062505,
+      "mSR5": 90.38410552130972,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 90.79339828991847,
+          "J5": 91.68820839133028
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 96.44064426327301,
+          "J5": 96.71902962815669
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 98.60807317558162,
+          "J5": 98.68761185126267
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 99.3636905945516,
+          "J5": 99.40345993239212
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 89.65997216146351,
+          "J5": 91.11155299264267
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 95.98329687810698,
+          "J5": 96.44064426327301
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 97.51441638496719,
+          "J5": 97.81268641877112
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 97.75303241201034,
+          "J5": 98.05130244581429
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 68.3634917478624,
+          "J5": 76.81447603897395
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 70.7496520182939,
+          "J5": 79.20063630940545
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 70.88884470073573,
+          "J5": 79.33982899184728
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 70.88884470073573,
+          "J5": 79.33982899184728
+        }
+      ]
+    },
+    "missing_predictions": 21,
+    "seconds": 56.025737047195435,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/graspmamba_grasp_tools_v3_15k_unified_original300_907e0d477e"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/crog_grasp_tools_v3_15k_unified_original300/evaluation_cache/test_best_j1_model_predictions_ec5db6c.npz",
+    "metadata": {
+      "architecture": "crog",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/crog_grasp_tools_v3_15k_unified_original300/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788014405603680627,
+      "checkpoint_size": 1766264066,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/v3_crog_unified_original300_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "836dd4df41e0ada2bb1297561f283f5fc44fcd867bd93413045a3a9e11e0deea",
+    "prediction_sha256": "de784ab8e102ec4954fc3d58ca9f323013b33b77c7cc89686063b15d6e9e7b1e",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 59.37562139590376,
+      "J5": 59.63412209186717,
+      "mSR1": 47.64863790017896,
+      "mSR5": 50.47226088685624,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 52.674487969775306,
+          "J5": 53.72837542254921
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 57.82461722012329,
+          "J5": 58.18254126068801
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 58.99781268641877,
+          "J5": 59.29608272022271
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 59.37562139590376,
+          "J5": 59.63412209186717
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 50.72579041558958,
+          "J5": 52.49552594949294
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 55.45834161861205,
+          "J5": 56.392921057864385
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 56.074766355140184,
+          "J5": 56.969576456552
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 56.13442036190097,
+          "J5": 57.029230463312786
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 30.045734738516604,
+          "J5": 36.66732948896401
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 31.4774309007755,
+          "J5": 38.39729568502685
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 31.497315569695765,
+          "J5": 38.437065022867365
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 31.497315569695765,
+          "J5": 38.437065022867365
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 97.67349373632929,
+      "J5": 97.75303241201034,
+      "mSR1": 76.19473719095912,
+      "mSR5": 80.42520050374493,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 85.28534499900576,
+          "J5": 86.99542652614835
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 94.05448399284153,
+          "J5": 94.2732153509644
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 96.67926029031617,
+          "J5": 96.79856830383774
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 97.67349373632929,
+          "J5": 97.75303241201034
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 81.38794989063433,
+          "J5": 84.07238019486975
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 89.67985683038377,
+          "J5": 91.03201431696162
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 91.05189898588189,
+          "J5": 92.3642871346192
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 91.21097633724399,
+          "J5": 92.50347981706103
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 45.19785245575661,
+          "J5": 55.33903360509047
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 47.345396699144956,
+          "J5": 57.9240405647246
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 47.38516603698548,
+          "J5": 58.02346390932591
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 47.38516603698548,
+          "J5": 58.02346390932591
+        }
+      ]
+    },
+    "missing_predictions": 0,
+    "seconds": 56.145939111709595,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/crog_grasp_tools_v3_15k_unified_original300_836dd4df41"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/maplegrasp_stage2_grasp_tools_v3_15k_unified_original300/evaluation_cache/test_best_j1_model_predictions_ec5db6c.npz",
+    "metadata": {
+      "architecture": "maplegrasp",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/maplegrasp_stage2_grasp_tools_v3_15k_unified_original300/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788081077816923529,
+      "checkpoint_size": 1766266514,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/maplegrasp_v3_stage2_unified_original300_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "b234f3f806b126bdae116aa8457501fb15cfeeabc75cbff3863172a4dc283b22",
+    "prediction_sha256": "17729daf329a80ceaa556db3f09e8fb58f2c4288a69e2b19e8823635d7022cc3",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 58.38138794989064,
+      "J5": 58.67965798369457,
+      "mSR1": 43.43805925631339,
+      "mSR5": 45.9418704845231,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 48.71743885464307,
+          "J5": 50.546828395307216
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 56.83038377411016,
+          "J5": 57.446808510638306
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 58.18254126068801,
+          "J5": 58.520580632332475
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 58.38138794989064,
+          "J5": 58.67965798369457
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 45.75462318552396,
+          "J5": 48.00159077351362
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 53.56929807118711,
+          "J5": 54.84191688208392
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 54.4243388347584,
+          "J5": 55.478226287532316
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 54.46410817259893,
+          "J5": 55.49811095645257
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 21.515211771724,
+          "J5": 26.446609663949094
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 23.12586995426526,
+          "J5": 28.614038576257705
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 23.145754623185525,
+          "J5": 28.614038576257705
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 23.145754623185525,
+          "J5": 28.614038576257705
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 95.76456551998409,
+      "J5": 95.96341220918671,
+      "mSR1": 68.94843242526677,
+      "mSR5": 73.03638894412408,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 78.06721018095048,
+          "J5": 80.89083316762776
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 92.32451779677868,
+          "J5": 93.13978922250945
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 94.88964008749254,
+          "J5": 95.24756412805728
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 95.76456551998409,
+          "J5": 95.96341220918671
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 72.28077152515411,
+          "J5": 76.27758997812687
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 86.18015510041758,
+          "J5": 88.28793000596539
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 87.94989063432094,
+          "J5": 89.62020282362299
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 88.02942931000199,
+          "J5": 89.69974149930404
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 31.13939152913104,
+          "J5": 39.51083714456154
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 33.5454364684828,
+          "J5": 42.573076158281964
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 33.605090475243586,
+          "J5": 42.61284549612249
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 33.605090475243586,
+          "J5": 42.61284549612249
+        }
+      ]
+    },
+    "missing_predictions": 0,
+    "seconds": 56.04084277153015,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/maplegrasp_stage2_grasp_tools_v3_15k_unified_original300_b234f3f806"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/crog_sigmoid/predictions.npz",
+    "metadata": {
+      "architecture": "crog",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/crog_grasp_tools_v3_15k_unified_original300_sigmoid/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788182547420385945,
+      "checkpoint_size": 1766264066,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/v3_crog_unified_original300_sigmoid_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "f64df310fc3da4b4728dff4d7eb7c22801dee77370b21e6178d8d88d2c19a843",
+    "prediction_sha256": "66806ddc3bd0ea2f305f2812227e669e6f1c4c2645ca6fa89e9351f521310b06",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 59.69377609862796,
+      "J5": 60.09146947703321,
+      "mSR1": 49.211241466162924,
+      "mSR5": 51.91721349506198,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 54.543646848279984,
+          "J5": 56.15430503082124
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 58.65977331477431,
+          "J5": 59.23642871346192
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 59.455160071584814,
+          "J5": 59.93239212567111
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 59.69377609862796,
+          "J5": 60.09146947703321
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 52.41598727381189,
+          "J5": 54.523762179359714
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 56.69119109166832,
+          "J5": 57.62577053092066
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 57.20819248359514,
+          "J5": 58.02346390932591
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 57.24796182143568,
+          "J5": 58.0831179160867
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 32.78981904951282,
+          "J5": 39.03360509047524
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 33.90336050904752,
+          "J5": 40.04772320540863
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 33.96301451580831,
+          "J5": 40.12726188108968
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 33.96301451580831,
+          "J5": 40.12726188108968
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 98.11095645257507,
+      "J5": 98.15072579041559,
+      "mSR1": 78.62066679923113,
+      "mSR5": 82.77490554782263,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 88.68562338437064,
+          "J5": 90.79339828991847
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 95.74468085106383,
+          "J5": 96.00318154702724
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 97.33545436468482,
+          "J5": 97.53430105388745
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 98.11095645257507,
+          "J5": 98.15072579041559
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 84.86776695168025,
+          "J5": 88.12885265460329
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 91.9467090872937,
+          "J5": 93.45794392523365
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 92.92105786438655,
+          "J5": 94.2732153509644
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 93.04036587790814,
+          "J5": 94.37263869556571
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 49.075362895207796,
+          "J5": 59.09723603102008
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 50.546828395307216,
+          "J5": 60.469278186518196
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 50.58659773314774,
+          "J5": 60.509047524358714
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 50.58659773314774,
+          "J5": 60.509047524358714
+        }
+      ]
+    },
+    "missing_predictions": 62,
+    "seconds": 56.032307386398315,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/crog_sigmoid_f64df310fc"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/drog_sigmoid_incomplete_e24/predictions.npz",
+    "metadata": {
+      "architecture": "drog",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/drog_grasp_tools_v3_15k_unified_original300_sigmoid/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788220796332262315,
+      "checkpoint_size": 910235258,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/drog_v3_unified_original300_sigmoid_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "f2bea191c8dc1d30544ae808c89b6c2b6921a7a24b25c53806f48c4394a99ff8",
+    "prediction_sha256": "384dd837c309217c403e168bd57855df379b18a6ab555a5519cd1387d11fd610",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 59.95227679459138,
+      "J5": 60.68800954464108,
+      "mSR1": 48.69424007423609,
+      "mSR5": 53.461589447869024,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 54.38456949691788,
+          "J5": 56.98946112547226
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 58.99781268641877,
+          "J5": 59.93239212567111
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 59.77331477430901,
+          "J5": 60.52893219327898
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 59.95227679459138,
+          "J5": 60.68800954464108
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 52.972758003579244,
+          "J5": 55.97534301053887
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 57.446808510638306,
+          "J5": 58.93815867965798
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 57.943925233644855,
+          "J5": 59.33585205806323
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 57.963809902565124,
+          "J5": 59.3557367269835
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 30.045734738516604,
+          "J5": 41.34022668522569
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 31.57685424537681,
+          "J5": 42.79180751640485
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 31.636508252137602,
+          "J5": 42.83157685424538
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 31.636508252137602,
+          "J5": 42.83157685424538
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 98.30980314177768,
+      "J5": 98.36945714853847,
+      "mSR1": 77.91973221979187,
+      "mSR5": 84.75011599390204,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 87.47265858023464,
+          "J5": 91.05189898588189
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 96.00318154702724,
+          "J5": 96.75879896599722
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 97.91210976337243,
+          "J5": 98.03141777689402
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 98.30980314177768,
+          "J5": 98.36945714853847
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 84.96719029628157,
+          "J5": 89.58043348578246
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 93.43805925631338,
+          "J5": 95.46629548618016
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 94.6510240604494,
+          "J5": 96.42075959435276
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 94.73056273613044,
+          "J5": 96.54006760787432
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 44.999005766553985,
+          "J5": 61.98051302445814
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 47.46470471266653,
+          "J5": 64.18771127460727
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 47.54424338834758,
+          "J5": 64.30701928812886
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 47.54424338834758,
+          "J5": 64.30701928812886
+        }
+      ]
+    },
+    "missing_predictions": 40,
+    "seconds": 55.97791409492493,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/drog_sigmoid_incomplete_e24_f2bea191c8"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/etrg/predictions.npz",
+    "metadata": {
+      "architecture": "etrg",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/etrg_r50_rgb_grasp_tools_v3_15k_unified_original300/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788061805549063521,
+      "checkpoint_size": 941742014,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/etrg_r50_rgb_v3_unified_original300_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "0136478d18ff87f3498a89cfe8dcb9cbeeb5c7a2f45405d8d87c31faf48814b8",
+    "prediction_sha256": "f449e99a9eae3a3c2919e0ce8b9336c89a880817094429baea5c7c0b38e2953f",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 8.450984291111553,
+      "J5": 8.908331676277589,
+      "mSR1": 1.7548220322131638,
+      "mSR5": 1.9006429376284217,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 2.08789023662756,
+          "J5": 2.465698946112547
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 3.7582024259296083,
+          "J5": 4.17578047325512
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 6.303440047723205,
+          "J5": 6.6215947504474055
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 8.450984291111553,
+          "J5": 8.908331676277589
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 0.03976933784052495,
+          "J5": 0.03976933784052495
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 0.0795386756810499,
+          "J5": 0.11930801352157487
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 0.1590773513620998,
+          "J5": 0.21873135812288724
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 0.1789620202823623,
+          "J5": 0.2585006959634122
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 0.0,
+          "J5": 0.0
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 0.0,
+          "J5": 0.0
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 0.0,
+          "J5": 0.0
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 0.0,
+          "J5": 0.0
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 14.137999602306623,
+      "J5": 14.993040365877908,
+      "mSR1": 2.904818718101678,
+      "mSR5": 3.1417776894014717,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 3.241201034002784,
+          "J5": 3.7780870948498704
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 5.9455160071584805,
+          "J5": 6.561940743686617
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 10.399681845297277,
+          "J5": 10.956452575064626
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 14.137999602306623,
+          "J5": 14.993040365877908
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 0.11930801352157487,
+          "J5": 0.13919268244183733
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 0.1590773513620998,
+          "J5": 0.23861602704314974
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 0.3579240405647246,
+          "J5": 0.4374627162457745
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 0.41757804732551207,
+          "J5": 0.5170013919268244
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 0.019884668920262475,
+          "J5": 0.019884668920262475
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 0.019884668920262475,
+          "J5": 0.019884668920262475
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 0.019884668920262475,
+          "J5": 0.019884668920262475
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 0.019884668920262475,
+          "J5": 0.019884668920262475
+        }
+      ]
+    },
+    "missing_predictions": 0,
+    "seconds": 53.55962324142456,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/etrg_0136478d18"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/drogoff_v2_originalscale_v3/predictions.npz",
+    "metadata": {
+      "architecture": "drogoff",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/drogoff_v2_grasp_tools_v3_15k_original300/best_msr_model.pth",
+      "checkpoint_mtime_ns": 1787764385575135423,
+      "checkpoint_size": 918235334,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/drogoff_v2_grasp_tools_v3_15k_eval.yaml",
+      "evaluation_protocol": "crog_legacy",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "grasp_relative",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "16dfa2140da5393d0030bbf40c4ddd3d09b6064f4c573c8983bfaf9b47683d61",
+    "prediction_sha256": "abe9d1d9cf762ceae53d6b9b202ac0994f0970646afa10e0fb44740014a45e42",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 58.93815867965798,
+      "J5": 59.673891429707695,
+      "mSR1": 49.884006097965134,
+      "mSR5": 52.6413468549082,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 54.285146152316564,
+          "J5": 56.98946112547226
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 57.86438655796381,
+          "J5": 58.918274010737726
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 58.520580632332475,
+          "J5": 59.53469874726586
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 58.93815867965798,
+          "J5": 59.673891429707695
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 52.01829389540664,
+          "J5": 55.45834161861205
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 55.51799562537284,
+          "J5": 57.307615828196454
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 55.79638099025651,
+          "J5": 57.60588586200039
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 55.836150328097034,
+          "J5": 57.62577053092066
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 36.68721415788427,
+          "J5": 41.81745873931199
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 37.70133227281766,
+          "J5": 42.25492145555776
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 37.72121694173792,
+          "J5": 42.25492145555776
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 37.72121694173792,
+          "J5": 42.25492145555776
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 96.71902962815669,
+      "J5": 97.11672300656194,
+      "mSR1": 81.22390137204215,
+      "mSR5": 85.26711738582885,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 88.12885265460329,
+          "J5": 92.08590176973553
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 94.21356134420363,
+          "J5": 95.32710280373831
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 95.76456551998409,
+          "J5": 96.75879896599722
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 96.71902962815669,
+          "J5": 97.11672300656194
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 84.56949691787632,
+          "J5": 89.79916484390534
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 90.833167627759,
+          "J5": 93.0005965400676
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 91.44959236428714,
+          "J5": 93.65679061443628
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 91.54901570888845,
+          "J5": 93.69655995227679
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 58.93815867965798,
+          "J5": 67.26983495724797
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 60.82720222708292,
+          "J5": 68.16464505865977
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 60.84708689600318,
+          "J5": 68.16464505865977
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 60.84708689600318,
+          "J5": 68.16464505865977
+        }
+      ]
+    },
+    "missing_predictions": 105,
+    "seconds": 55.595563650131226,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/drogoff_v2_originalscale_v3_16dfa2140d"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/drogoff_native_lora_sigmoid/predictions.npz",
+    "metadata": {
+      "architecture": "drogoff",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/drogoff_native_v3_lora_r24_12l_grasp_tools_v3_15k_unified_original300_sigmoid_consistent/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788200780681771744,
+      "checkpoint_size": 882941146,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/drogoff_native_v3_lora_r24_12l_v3_unified_original300_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "grasp_relative",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "b437128067689097b45288e746a8dc7cd8779b167dd49f75586b8a1896d2209a",
+    "prediction_sha256": "6816c76ea9ce1eda1beb3876d2a741714478961d63bf7365673d3d06842839d8",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 59.47504474050507,
+      "J5": 60.250546828395315,
+      "mSR1": 52.59992046132431,
+      "mSR5": 55.86597733147744,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 54.34480015907736,
+          "J5": 56.83038377411016
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 58.32173394312985,
+          "J5": 59.3557367269835
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 59.09723603102008,
+          "J5": 60.03181547027242
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 59.47504474050507,
+          "J5": 60.250546828395315
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 53.271028037383175,
+          "J5": 56.29349771326307
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 57.586001193080136,
+          "J5": 58.87850467289719
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 58.04334857824617,
+          "J5": 59.25631338238219
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 58.103002585006955,
+          "J5": 59.276198051302444
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 42.05607476635514,
+          "J5": 49.19467090872937
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 43.607078942135615,
+          "J5": 50.32809703718433
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 43.64684827997613,
+          "J5": 50.34798170610459
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 43.64684827997613,
+          "J5": 50.34798170610459
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 97.73314774309007,
+      "J5": 97.85245575661166,
+      "mSR1": 85.45436468482801,
+      "mSR5": 89.6235169351097,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 88.58620003976934,
+          "J5": 91.3103996818453
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 95.34698747265858,
+          "J5": 95.88387353350566
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 96.79856830383774,
+          "J5": 97.21614635116326
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 97.73314774309007,
+          "J5": 97.85245575661166
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 86.93577251938756,
+          "J5": 90.53489759395507
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 94.49194670908729,
+          "J5": 95.58560349970173
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 95.36687214157884,
+          "J5": 96.38099025651223
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 95.50606482402067,
+          "J5": 96.48041360111354
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 66.89202624776297,
+          "J5": 77.19228474845895
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 69.23841718035395,
+          "J5": 79.00178962020283
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 69.27818651819447,
+          "J5": 79.02167428912308
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 69.27818651819447,
+          "J5": 79.02167428912308
+        }
+      ]
+    },
+    "missing_predictions": 12,
+    "seconds": 55.82700824737549,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/drogoff_native_lora_sigmoid_b437128067"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/ggcnnclip_grconv_film/predictions.npz",
+    "metadata": {
+      "architecture": "ggcnnclip",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/ggcnnclip_grasp_tools_v3_15k_original300_bs32_grconv_film/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1787915593155903774,
+      "checkpoint_size": 928919874,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/ggcnnclip_grasp_tools_v3_15k_original_scale.yaml",
+      "evaluation_protocol": "crog_legacy",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "e5faf61495c179bb39e41c1242c9c6ded4a28a46518bdf953dfa0d368db3b1cd",
+    "prediction_sha256": "0145aa12cd7ab33661205fdaa0cb963378754c7e442438443d121e4fae7d6223",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 5.468283953072181,
+      "J5": 7.277788824816067,
+      "mSR1": 1.4930072247630413,
+      "mSR5": 2.106117849804468,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 1.2328494730562736,
+          "J5": 1.9288128852654605
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 2.2867369258301853,
+          "J5": 3.2213163650825214
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 4.076357128653807,
+          "J5": 5.329091270630344
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 5.468283953072181,
+          "J5": 7.277788824816067
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 0.45734738516603696,
+          "J5": 0.7357327500497117
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 0.874925432491549,
+          "J5": 1.332272817657586
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 1.3919268244183733,
+          "J5": 2.0481208987870354
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 1.5708888447007359,
+          "J5": 2.3463909325909724
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 0.0994233446013124,
+          "J5": 0.13919268244183733
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 0.13919268244183733,
+          "J5": 0.27838536488367466
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 0.1590773513620998,
+          "J5": 0.3181547027241996
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 0.1590773513620998,
+          "J5": 0.3181547027241996
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 8.172598926227877,
+      "J5": 11.135414595346987,
+      "mSR1": 2.1608006893351894,
+      "mSR5": 3.100351295817591,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 1.6106581825412607,
+          "J5": 2.40604493935176
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 3.042354344800159,
+          "J5": 4.4143965002982695
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 5.9455160071584805,
+          "J5": 7.9936369059455155
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 8.172598926227877,
+          "J5": 11.135414595346987
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 0.6561940743686618,
+          "J5": 0.954464108172599
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 1.2328494730562736,
+          "J5": 1.9288128852654605
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 2.08789023662756,
+          "J5": 3.201431696162259
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 2.3861602704314975,
+          "J5": 3.6388944124080336
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 0.1590773513620998,
+          "J5": 0.2585006959634122
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 0.1988466892026248,
+          "J5": 0.3976933784052496
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 0.21873135812288724,
+          "J5": 0.4374627162457745
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 0.21873135812288724,
+          "J5": 0.4374627162457745
+        }
+      ]
+    },
+    "missing_predictions": 7,
+    "seconds": 52.497122049331665,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/ggcnnclip_grconv_film_e5faf61495"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/etrg_fixed_epoch32_20260910/predictions.npz",
+    "metadata": {
+      "architecture": "etrg",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/etrg_r50_rgb_grasp_tools_v3_15k_unified_original300_sigmoid_masked_bs16/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788364390251972303,
+      "checkpoint_size": 941744574,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/etrg_r50_rgb_v3_unified_original300_sigmoid_masked_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "434a148a30f269faab674cdd6bd4e5b070c2c58455c093927cff78ced565606e",
+    "prediction_sha256": "720d527fc6c1fc67add6c4a81925ea1782c2eebf6d06a0215fefd3df4365ed9c",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 54.84191688208392,
+      "J5": 55.319148936170215,
+      "mSR1": 38.25810300258501,
+      "mSR5": 40.99887320209452,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 42.036190097434876,
+          "J5": 43.38834758401273
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 52.29667926029031,
+          "J5": 52.793795983296874
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 54.285146152316564,
+          "J5": 54.762378206402865
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 54.84191688208392,
+          "J5": 55.319148936170215
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 39.133028435076554,
+          "J5": 41.34022668522569
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 47.86239809107178,
+          "J5": 49.73155696957646
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 48.916285543845696,
+          "J5": 50.765559753430104
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 48.956054881686214,
+          "J5": 50.84509842911116
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 16.623583217339434,
+          "J5": 21.932789819049514
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 18.015510041757803,
+          "J5": 23.62298667727182
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 18.05527937959833,
+          "J5": 23.742294690793397
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 18.07516404851859,
+          "J5": 23.742294690793397
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 89.20262477629748,
+      "J5": 89.60031815470273,
+      "mSR1": 61.95234307682111,
+      "mSR5": 65.92099158215682,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 67.17041161264665,
+          "J5": 69.19864784251342
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 83.81387949890635,
+          "J5": 84.3706502286737
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 87.9697753032412,
+          "J5": 88.42712268840724
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 89.20262477629748,
+          "J5": 89.60031815470273
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 63.21336249751441,
+          "J5": 66.6136408828793
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 78.06721018095048,
+          "J5": 80.27440843109962
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 80.03579240405647,
+          "J5": 82.3026446609664
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 80.11533107973752,
+          "J5": 82.4617220123285
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 26.724995028832772,
+          "J5": 34.539669914495924
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 29.011731954662956,
+          "J5": 37.62179359713661
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 29.051501292503477,
+          "J5": 37.82064028633923
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 29.051501292503477,
+          "J5": 37.82064028633923
+        }
+      ]
+    },
+    "missing_predictions": 177,
+    "seconds": 55.70055961608887,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/etrg_fixed_epoch32_20260910_434a148a30"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/ggcnn_fixed_epoch36_20260910/predictions.npz",
+    "metadata": {
+      "architecture": "ggcnnclip",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/ggcnnclip_grasp_tools_v3_15k_unified_original300_sigmoid_masked/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788386850704527819,
+      "checkpoint_size": 928920002,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/ggcnnclip_v3_unified_original300_sigmoid_masked_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "86be1bd3b0280660937a4687ae31fb898b5e285108bae9d424d537a47fe85a30",
+    "prediction_sha256": "06204c04bbd7f2eb584d2410345ffcadc2d558910563b88f85e5f9d0440af544",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 28.315768542453768,
+      "J5": 31.13939152913104,
+      "mSR1": 16.426393583880166,
+      "mSR5": 20.113342612845496,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 18.19447206204017,
+          "J5": 22.191290515012927
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 24.63710479220521,
+          "J5": 27.858421157287733
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 27.93795983296878,
+          "J5": 30.82123682640684
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 28.315768542453768,
+          "J5": 31.13939152913104
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 14.91350169019686,
+          "J5": 18.93020481208988
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 19.42732153509644,
+          "J5": 23.483793994829984
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 20.401670312189303,
+          "J5": 24.517796778683635
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 20.481208987870353,
+          "J5": 24.597335454364686
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 5.249552594949295,
+          "J5": 8.769138993835753
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 5.826207993636906,
+          "J5": 9.644064426327303
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 5.865977331477431,
+          "J5": 9.703718433088088
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 5.865977331477431,
+          "J5": 9.703718433088088
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 45.91370053688606,
+      "J5": 50.06959634122092,
+      "mSR1": 26.292503479817057,
+      "mSR5": 32.15516669980778,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 27.659574468085108,
+          "J5": 34.10220719825015
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 39.073374428315766,
+          "J5": 44.26327301650427
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 45.158083117916085,
+          "J5": 49.43328693577252
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 45.91370053688606,
+          "J5": 50.06959634122092
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 23.324716643467884,
+          "J5": 30.025850069596345
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 31.556969576456552,
+          "J5": 37.88029429310002
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 33.18751242791807,
+          "J5": 39.689799164843905
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 33.24716643467887,
+          "J5": 39.769337840524955
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 8.132829588387354,
+          "J5": 13.939152913103998
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 9.405448399284152,
+          "J5": 15.549811095645257
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 9.425333068204415,
+          "J5": 15.56969576456552
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 9.425333068204415,
+          "J5": 15.56969576456552
+        }
+      ]
+    },
+    "missing_predictions": 26,
+    "seconds": 54.24051880836487,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/ggcnn_fixed_epoch36_20260910_86be1bd3b0"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/grconvnetclip/predictions.npz",
+    "metadata": {
+      "architecture": "grconvnetclip",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/grconvnetclip_grasp_tools_v3_15k_unified_original300/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788130025795768499,
+      "checkpoint_size": 951347308,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/grconvnetclip_v3_unified_original300_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "7eacf4d7326530281d84ff78e8ba3156c4dfdf88fb78353c85519793f8ba850b",
+    "prediction_sha256": "e973c272b36e2a7b0100c1e6e329a9e2933a110eda07a3267d55e8f3addbcf62",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 30.701928812885264,
+      "J5": 31.835354941340228,
+      "mSR1": 17.859746801882416,
+      "mSR5": 20.272419964207597,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 20.003976933784053,
+          "J5": 22.7878305826208
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 27.102803738317753,
+          "J5": 28.653807914098227
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 30.2048120898787,
+          "J5": 31.318353549413402
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 30.701928812885264,
+          "J5": 31.835354941340228
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 16.563929210578642,
+          "J5": 19.82501491350169
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 21.9924438258103,
+          "J5": 24.597335454364686
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 23.086100616424737,
+          "J5": 25.59156890037781
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 23.22529329886657,
+          "J5": 25.730761582819646
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 4.911513223304833,
+          "J5": 7.595943527540267
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 5.468283953072181,
+          "J5": 8.311791608669717
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 5.527937959832969,
+          "J5": 8.51063829787234
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 5.527937959832969,
+          "J5": 8.51063829787234
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 49.49294094253331,
+      "J5": 50.646251739908536,
+      "mSR1": 28.08046662689733,
+      "mSR5": 31.717703983562014,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 30.88089083316763,
+          "J5": 35.43448001590774
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 42.99065420560748,
+          "J5": 45.237621793597135
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 48.677669516802546,
+          "J5": 49.9701729966196
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 49.49294094253331,
+          "J5": 50.646251739908536
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 25.83018492742096,
+          "J5": 31.27858421157288
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 34.8180552793796,
+          "J5": 39.01372042155498
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 36.74686816464506,
+          "J5": 40.72380194869755
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 36.90594551600716,
+          "J5": 40.882879300059656
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 7.059057466693179,
+          "J5": 10.976337243984888
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 7.814674885663154,
+          "J5": 12.030224696758799
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 7.874328892423941,
+          "J5": 12.209186717041161
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 7.874328892423941,
+          "J5": 12.209186717041161
+        }
+      ]
+    },
+    "missing_predictions": 2175,
+    "seconds": 52.151493549346924,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/grconvnetclip_7eacf4d732"
+  },
+  {
+    "status": "complete",
+    "source": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/msr_v3_test_unified/lgd/predictions.npz",
+    "metadata": {
+      "architecture": "lgd",
+      "checkpoint": "/mnt/ssd0/mengyuan/ToolRGS-latest/exp/grasp_tools/lgd_grasp_tools_v3_15k_unified_original300/best_j1_model.pth",
+      "checkpoint_mtime_ns": 1788129565234514277,
+      "checkpoint_size": 945554870,
+      "config": "/mnt/ssd0/mengyuan/ToolRGS-latest/config/grasp_tools/lgd_v3_unified_original300_retrain.yaml",
+      "evaluation_protocol": "toolrgs",
+      "format_version": 1,
+      "grasp_height": 20.0,
+      "max_topk": 5,
+      "min_distance": 2,
+      "num_samples": 5029,
+      "offset_decode_mode": "radius",
+      "quality_threshold": 0.4,
+      "size_coordinate": "original",
+      "size_factor": 300.0,
+      "split": "test"
+    },
+    "source_sha256": "f659a53a58a5163773e256a9378a0d9c67165767f545603e82d00aabe40596a0",
+    "prediction_sha256": "fc8962c2ab9533248eff69019b7257a0deee284bfeb1736e1fbd77764a000978",
+    "target_sha256": "58bdfbff19d81dd26fd839f2fa320525da527cda34e869c60df7d9e27dfc735e",
+    "geometry_version": "raster_xy_periodic180_v2",
+    "image_hw": [
+      720,
+      1280
+    ],
+    "evaluator_commit": "268d0430c96f43fd98033f47d2e058590a37b6ac",
+    "old": {
+      "n": 5029,
+      "J1": 44.20361900974349,
+      "J5": 44.72062040167032,
+      "mSR1": 27.57506462517399,
+      "mSR5": 29.217206866839007,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 38.07914098230265,
+          "J5": 38.55637303638895
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 42.573076158281964,
+          "J5": 43.09007755020879
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 43.80592563133824,
+          "J5": 44.322927023265066
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 44.20361900974349,
+          "J5": 44.72062040167032
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 29.21057864386558,
+          "J5": 31.21893020481209
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 32.4318950089481,
+          "J5": 34.63909325909724
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 32.76993438059257,
+          "J5": 34.91747862398091
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 32.78981904951282,
+          "J5": 34.937363292901175
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 8.550407635712865,
+          "J5": 10.797375223702526
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 8.828793000596539,
+          "J5": 11.135414595346987
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 8.828793000596539,
+          "J5": 11.135414595346987
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 8.828793000596539,
+          "J5": 11.135414595346987
+        }
+      ]
+    },
+    "corrected": {
+      "n": 5029,
+      "J1": 71.36607675482203,
+      "J5": 72.28077152515411,
+      "mSR1": 43.290581295154766,
+      "mSR5": 46.02140916020414,
+      "grid": [
+        {
+          "iou": 0.25,
+          "angle": 5.0,
+          "J1": 60.09146947703321,
+          "J5": 61.026048916285546
+        },
+        {
+          "iou": 0.25,
+          "angle": 10.0,
+          "J1": 67.8862596937761,
+          "J5": 68.74130045734739
+        },
+        {
+          "iou": 0.25,
+          "angle": 20.0,
+          "J1": 70.29230463312786,
+          "J5": 71.1672300656194
+        },
+        {
+          "iou": 0.25,
+          "angle": 30.0,
+          "J1": 71.36607675482203,
+          "J5": 72.28077152515411
+        },
+        {
+          "iou": 0.5,
+          "angle": 5.0,
+          "J1": 45.17796778683635,
+          "J5": 48.81686219924438
+        },
+        {
+          "iou": 0.5,
+          "angle": 10.0,
+          "J1": 50.805329091270636,
+          "J5": 54.682839530721814
+        },
+        {
+          "iou": 0.5,
+          "angle": 20.0,
+          "J1": 51.52117717240008,
+          "J5": 55.19984092264863
+        },
+        {
+          "iou": 0.5,
+          "angle": 30.0,
+          "J1": 51.560946510240605,
+          "J5": 55.23961026048916
+        },
+        {
+          "iou": 0.75,
+          "angle": 5.0,
+          "J1": 12.547226088685623,
+          "J5": 16.066812487572083
+        },
+        {
+          "iou": 0.75,
+          "angle": 10.0,
+          "J1": 12.746072777888248,
+          "J5": 16.345197852455755
+        },
+        {
+          "iou": 0.75,
+          "angle": 20.0,
+          "J1": 12.746072777888248,
+          "J5": 16.345197852455755
+        },
+        {
+          "iou": 0.75,
+          "angle": 30.0,
+          "J1": 12.746072777888248,
+          "J5": 16.345197852455755
+        }
+      ]
+    },
+    "missing_predictions": 626,
+    "seconds": 53.87901020050049,
+    "output": "/home/aorus/toolrgs_runs/geometry_rescore_20260912/lgd_f659a53a58"
+  }
+]
