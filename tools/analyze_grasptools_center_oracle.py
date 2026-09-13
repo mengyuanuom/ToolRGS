@@ -8,9 +8,12 @@ rotated IoU and the Fine-mSR-90 protocol; no model inference is performed.
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.grasp_raster import GEOMETRY_VERSION, grasp_matches
 
