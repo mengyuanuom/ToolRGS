@@ -1,0 +1,24 @@
+_base_: v3_drogoff_v1_grasp_tools_15k_original_scale.yaml
+
+TRAIN:
+  # Match the unified DROG run: quality and long-side width are optimized in
+  # the same bounded representation that is decoded at inference time.
+  grasp_quality_loss_activation: sigmoid
+  grasp_width_loss_activation: sigmoid
+  exp_name: drogoff_v1_grasp_tools_v3_15k_unified_original300_sigmoid
+  weight:
+  resume:
+
+TEST:
+  evaluation_protocol: toolrgs
+  grasp_quality_activation: sigmoid
+  grasp_size_activation: sigmoid
+  grasp_topk: [1, 5]
+  grasp_iou_threshold: 0.25
+  grasp_iou_thresholds: [0.25, 0.50, 0.75]
+  grasp_angle_threshold: 30.0
+  grasp_angle_thresholds: [5.0, 10.0, 20.0, 30.0]
+  restore_grasp_size_scale: False
+  offset_decode_mode: radius
+  offset_resample_geometry: True
+  visualize: False
