@@ -3,15 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .crog_clip import build_model
+from .crog import grasp_quality_for_loss, grasp_width_for_loss
 
 from .crog_layers import FPN, ProjectorOff, TransformerDecoder, MultiTaskProjectorOff
+from utils.config import resolve_grasp_training_activation
 from utils.pretrained import ensure_pretrained
 
 
 
 class CROGOFF(nn.Module):
     supports_offset = True
-    grasp_size_loss_activation = "clamp"
 
     def __init__(self, cfg):
         super().__init__()
@@ -21,6 +22,26 @@ class CROGOFF(nn.Module):
         self.use_pretrained_clip = cfg.use_pretrained_clip
         self.use_grasp_masks = cfg.use_grasp_masks
         self.offset_loss_weight = float(getattr(cfg, "offset_loss_weight", 1.0))
+        (
+            self.grasp_quality_train_activation,
+            self.grasp_quality_decode_activation,
+        ) = resolve_grasp_training_activation(
+            getattr(cfg, "grasp_quality_loss_activation", "raw"),
+            getattr(cfg, "grasp_quality_activation", "auto"),
+            name="grasp quality",
+        )
+        (
+            self.grasp_width_loss_activation,
+            self.grasp_size_decode_activation,
+        ) = resolve_grasp_training_activation(
+            getattr(cfg, "grasp_width_loss_activation", "raw"),
+            getattr(cfg, "grasp_size_activation", "auto"),
+            name="grasp width",
+        )
+        # Legacy attributes are decode aliases consumed by evaluation and
+        # checkpoint metadata. The train-space settings remain explicit above.
+        self.grasp_quality_loss_activation = self.grasp_quality_decode_activation
+        self.grasp_size_loss_activation = self.grasp_size_decode_activation
         
         # Vision & Text Encoder
         clip_pretrain = ensure_pretrained(cfg.clip_pretrain, "clip-rn50")
@@ -107,10 +128,20 @@ class CROGOFF(nn.Module):
                 weight = mask * 0.5 + 1
 
                 loss = F.binary_cross_entropy_with_logits(pred, mask, weight=weight)
-                grasp_qua_loss = F.smooth_l1_loss(grasp_qua_pred, grasp_qua_mask)
+                grasp_qua_loss = F.smooth_l1_loss(
+                    grasp_quality_for_loss(
+                        grasp_qua_pred, self.grasp_quality_train_activation
+                    ),
+                    grasp_qua_mask,
+                )
                 grasp_sin_loss = F.smooth_l1_loss(grasp_sin_pred, grasp_sin_mask)
                 grasp_cos_loss = F.smooth_l1_loss(grasp_cos_pred, grasp_cos_mask)
-                grasp_wid_loss = F.smooth_l1_loss(grasp_wid_pred, grasp_wid_mask)
+                grasp_wid_loss = F.smooth_l1_loss(
+                    grasp_width_for_loss(
+                        grasp_wid_pred, self.grasp_width_loss_activation
+                    ),
+                    grasp_wid_mask,
+                )
                 off_error = F.smooth_l1_loss(
                     grasp_off_pred, grasp_off_mask, reduction='none'
                 )
