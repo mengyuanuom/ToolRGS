@@ -1,4 +1,4 @@
-"""Analyze CROG center localization from a cached GraspTools test pass.
+"""Analyze model center localization from a cached GraspTools test pass.
 
 The controlled GT-center variant replaces only the top-1 prediction center by
 the nearest annotated grasp center.  Predicted angle, long side, and short side
@@ -155,10 +155,11 @@ def analyze_cache(cache, metadata, image_shape=(720, 1280)):
 
 def _write_summary(path, result):
     center_error = result["center_error_fraction_gt_width"]
+    architecture = str(result["metadata"].get("architecture", "model"))
     lines = [
         "variant\tJ@1\tFine-mSR-90@1",
         (
-            "CROG baseline\t"
+            f"{architecture} baseline\t"
             f"{100.0 * result['baseline']['J@1']:.4f}\t"
             f"{100.0 * result['baseline']['mSR@1']:.4f}"
         ),
