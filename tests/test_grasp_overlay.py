@@ -21,11 +21,11 @@ class GraspOverlayTest(unittest.TestCase):
             np.testing.assert_allclose(after.mean(axis=0), grasp[:2], atol=2e-5)
             self.assertEqual(grasp, original)
 
-    def test_jaws_magenta_connectors_yellow(self):
+    def test_jaws_deep_purple_connectors_yellow(self):
         image = np.zeros((240, 240, 3), np.uint8)
         draw_grasp_overlay(image, [120, 120, 80, 40, 0], 20)
         for x in (60, 180):
-            np.testing.assert_array_equal(image[120, x], [255, 0, 255])
+            np.testing.assert_array_equal(image[120, x], [180, 0, 128])
         for y in (100, 140):
             np.testing.assert_array_equal(image[y, 120], [0, 255, 255])
 

@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 
-JAW_COLOR = (255, 0, 255)  # #FF00FF
+JAW_COLOR = (180, 0, 128)  # Deep purple #8000B4 (OpenCV BGR)
 OPENING_COLOR = (0, 255, 255)  # #FFFF00
 
 
@@ -25,7 +25,7 @@ def display_grasp_corners(grasp, padding_per_side=20.0):
 
 
 def draw_grasp_overlay(image, grasp, padding_per_side=20.0):
-    """Draw yellow opening edges then thicker magenta jaws on an image."""
+    """Draw yellow opening edges then thicker deep-purple jaws on an image."""
     points = np.rint(display_grasp_corners(grasp, padding_per_side)).astype(np.int32)
     # boxPoints edges 0->1 and 2->3 span height (jaws), even for rotated boxes.
     for start in (1, 3):
