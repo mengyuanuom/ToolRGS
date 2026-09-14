@@ -22,6 +22,7 @@ from toolrgs.evaluation import DenseGraspPostProcessor  # registers evaluation c
 from toolrgs.registry import POSTPROCESSORS
 
 from .config import resolve_repo_path
+from .grasp_overlay import draw_grasp_overlay, validate_display_padding
 from .weights import ensure_deployment_checkpoint
 
 
@@ -188,6 +189,7 @@ class ToolRGSInference:
         mask_threshold: float,
         mask_expand_px: int,
         filter_grasps_by_mask: bool,
+        grasp_display_padding_px: float = 20.0,
     ) -> None:
         """Apply GUI post-processing controls without reloading model weights."""
         threshold = float(mask_threshold)
@@ -199,6 +201,7 @@ class ToolRGSInference:
         expand_px = int(mask_expand_px)
         if expand_px < 0:
             raise ValueError("mask_expand_px cannot be negative")
+        display_padding = validate_display_padding(grasp_display_padding_px)
 
         postprocessor_cfg = self.model_cfg.setdefault("postprocessor", {})
         postprocessor_cfg["grasp_height"] = height
@@ -206,6 +209,7 @@ class ToolRGSInference:
         self.model_cfg["mask_threshold"] = threshold
         self.model_cfg["mask_expand_px"] = expand_px
         self.model_cfg["filter_grasps_by_mask"] = bool(filter_grasps_by_mask)
+        self.model_cfg["grasp_display_padding_px"] = display_padding
         # Preserve compatibility with older deployment YAML files.
         self.model_cfg["gate_quality_by_mask"] = bool(filter_grasps_by_mask)
         self._build_postprocessor()
@@ -395,9 +399,10 @@ class ToolRGSInference:
             annotated = cv2.addWeighted(annotated, 0.72, overlay, 0.28, 0.0)
         for index, grasp in enumerate(grasps):
             x, y, grasp_width, grasp_height, theta = grasp
-            rectangle = opencv_grasp_rectangle(grasp)
-            points = np.intp(cv2.boxPoints(rectangle))
-            cv2.polylines(annotated, [points], True, (0, 255, 255), 3, cv2.LINE_AA)
+            draw_grasp_overlay(
+                annotated, grasp,
+                self.model_cfg.get("grasp_display_padding_px", 20.0),
+            )
             cv2.circle(annotated, (round(x), round(y)), 5, (0, 0, 255), -1)
             cv2.putText(
                 annotated,

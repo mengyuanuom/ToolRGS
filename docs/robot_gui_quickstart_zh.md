@@ -380,6 +380,18 @@ Faster R-CNN 权重来自本项目 3090 训练服务器并通过 Release SHA-256
 配置中明确标记为可信的这一条本地路径启用 MMEngine/PyTorch 2.6 兼容加载；不要对
 来源不明的 checkpoint 启用 `trusted_checkpoint`。
 
+## 抓取框显示配色与宽度补偿
+
+Grasping 页面模型选择区域的 **Display padding / side** 控制每侧的显示补偿，
+默认 **20 px**（原始相机图像像素）：沿预测的夹爪开合方向两端各延长 20 px，
+显示总宽度增加 40 px。设置为 0 可恢复预测框尺寸。中心、角度和短边不变。
+两侧夹爪短边用亮紫色 `#FF00FF`，开合方向连接边用黄色 `#FFFF00`。
+
+该补偿只影响显示，模型输出与发送给机器人的 `Width` 不增加。
+修改后下一次预测生效；切换模型时读取该模型的配置值。
+若需要重启后保留自定义值，可在对应模型 profile 下设置
+`grasp_display_padding_px: 20.0`。`Gripper height` 仍单独控制短边厚度。
+
 ## 8. 停止 GUI
 
 正常关闭窗口会释放 RealSense/GStreamer 和 TCP socket。异常退出后检查残留：

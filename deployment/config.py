@@ -71,6 +71,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "mask_expand_px": 0,
         "quality_threshold": 0.4,
         "num_grasps": 1,
+        "grasp_display_padding_px": 20.0,
         "postprocessor": {
             "type": "dense_grasp",
             "min_distance": 2,

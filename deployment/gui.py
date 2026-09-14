@@ -626,6 +626,20 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             )
             row.addWidget(self.grasp_height_input)
 
+            padding_label = QLabel("Display padding / side")
+            padding_label.setObjectName("FieldLabel")
+            row.addWidget(padding_label)
+            self.grasp_padding_input = QDoubleSpinBox()
+            self.grasp_padding_input.setRange(0.0, 300.0)
+            self.grasp_padding_input.setDecimals(1)
+            self.grasp_padding_input.setSingleStep(1.0)
+            self.grasp_padding_input.setSuffix(" px")
+            self.grasp_padding_input.setToolTip(
+                "Extend each jaw outward along the opening direction in source-image "
+                "pixels. Display only; model predictions and robot Width are unchanged."
+            )
+            row.addWidget(self.grasp_padding_input)
+
             self.use_mask_input = QCheckBox("Use mask")
             self.use_mask_input.setToolTip(
                 "Apply the thresholded segmentation mask during post-processing"
@@ -665,6 +679,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 self._apply_postprocessing_controls
             )
             self.grasp_height_input.valueChanged.connect(
+                self._apply_postprocessing_controls
+            )
+            self.grasp_padding_input.valueChanged.connect(
                 self._apply_postprocessing_controls
             )
             self.mask_threshold_input.valueChanged.connect(
@@ -723,6 +740,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
             postprocessor = dict(model_cfg.get("postprocessor", {}))
             controls = (
                 self.grasp_height_input,
+                self.grasp_padding_input,
                 self.use_mask_input,
                 self.mask_threshold_input,
                 self.mask_expand_input,
@@ -732,6 +750,9 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
                 control.blockSignals(True)
             self.grasp_height_input.setValue(
                 float(postprocessor.get("grasp_height", 20.0))
+            )
+            self.grasp_padding_input.setValue(
+                float(model_cfg.get("grasp_display_padding_px", 20.0))
             )
             self.use_mask_input.setChecked(
                 bool(model_cfg.get("use_mask_postprocessing", True))
@@ -767,6 +788,7 @@ def run_gui(config: Dict[str, Any], allow_robot: bool = False) -> int:
         def _apply_postprocessing_controls(self, *_args) -> None:
             self.inference.update_postprocessing(
                 grasp_height=self.grasp_height_input.value(),
+                grasp_display_padding_px=self.grasp_padding_input.value(),
                 use_mask=self.use_mask_input.isChecked(),
                 mask_threshold=self.mask_threshold_input.value(),
                 mask_expand_px=self.mask_expand_input.value(),
